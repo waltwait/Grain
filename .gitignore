@@ -1,0 +1,12 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+.tools/
+captures/
+output/*.apk
+output/*.apk.sha256
+app/src/debug/assets/luts/fujifilm/

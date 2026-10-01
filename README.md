@@ -1,0 +1,113 @@
+# Grain
+
+原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
+
+目前開發版本 **0.2.3**。功能包含大觀景窗、精簡相機控制、雙指與倍率變焦，以及即時 LUT 錄影；0.2.2 的建置、靜態檢查與 24 項 JVM 測試通過，真機對焦／UI／錄影驗證依使用者要求延後，詳見 [新版狀態](docs/ui-video-v020.md)。
+
+**0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
+
+**0.2.2** 將一般與單色 icon 的圖案縮小 12.5%，增加留白；點擊觀景窗會顯示對焦框與實際完成結果，滑動及雙指縮放不會觸發點擊對焦。自動曝光時一併測光，手動曝光保留 ISO／快門設定。手機端對焦、UI 與錄影驗證仍待進行。
+
+**0.2.3** App 名稱改為 Grain；新照片與影片使用 Grain 相簿及 GRAIN 檔名前綴。保留原有 App 識別碼、設定與匯入 LUT，既有照片不搬移。
+
+## 功能
+
+- 前後相機、點擊對焦、裝置支援的縮放與 Auto 模式閃光燈。
+- `.cube` 3D LUT 匯入、保存、切換、移除，以及 0–100% 強度。
+- GPU 即時濾鏡預覽；拍照後以相同 shader 處理照片，分塊輸出 JPEG 到 `Pictures/Grain`。
+- 拍攝優先選擇接近 12MP 的尺寸；濾鏡處理在解碼時以二次方降採樣限制在 12MP 以下，降低記憶體用量。原圖選存保留相機原始 JPEG。
+- 可同時儲存原圖；EXIF 保留時間與可用拍攝參數，輸出方向正規化。預設不記錄位置。
+- 匯入相簿照片套用目前濾鏡，另存成品。
+- 照片／錄影模式；影片套用即時 LUT、可選收音，儲存至 `Movies/Grain`。
+- 倍率按鈕、連續變焦滑桿、觀景窗雙指縮放；相機控制與 LUT 選擇收進底部面板。
+- 裝置能力檢測：Pro 模式快門／ISO、曝光補償、白平衡預設與鎖定，以及可變光圈。
+- Android 16 以上且鏡頭公開 CCT 能力時，提供 K 色溫與色偏。
+- 繁體中文、深色介面、直橫向適應；相機與處理流程不使用網路。
+
+內建「暖日、柔霧、銀影」是本專案自行生成的示範色調，不是富士官方底片模擬。
+
+## 建置
+
+以 Android Studio 開啟此目錄，Sync 後執行 `app`。需要 JDK 17、Android SDK Platform 37.0 與 Build Tools 36.0.0。專案使用 Gradle Wrapper 9.3.1、AGP 9.1.1、Kotlin 2.3.20、Compose BOM 2026.08.00、CameraX 1.6.2；Camera2 interop 集中在相機模組，以 ExperimentalCamera2Interop opt-in 使用。
+
+`local.properties` 是電腦專用設定，不加入 Git。Android Studio 通常會自動建立；手動建置時寫入自己的 SDK 位置：
+
+```properties
+sdk.dir=/path/to/Android/sdk
+```
+
+```sh
+./gradlew :app:assembleDebug
+./gradlew :app:testDebugUnitTest :app:lintDebug
+```
+
+APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使用 Android debug 簽章；正式上架另需發布簽章與真機驗證。
+
+已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
+
+目前個人富士測試版另存於 `output/Grain-0.2.3-personal-fuji-debug.apk`。APK 與官方 LUT 素材保留在本機，不提交到儲存庫。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+
+## 安裝與操作
+
+1. 手機開啟開發人員選項與 USB 偵錯，接到電腦；在手機確認偵錯授權。
+2. Android Studio 選擇手機並按 Run，或執行 `adb install -r app/build/outputs/apk/debug/app-debug.apk`。
+3. 第一次啟動允許相機權限；如果沒有相機，仍可從「匯入照片」使用離線濾鏡。
+4. 「＋ LUT」選擇解壓縮後的 `.cube`；檔案會複製到 App 私有儲存區。選擇濾鏡、調整強度後按「拍照」。
+5. 「調色」可設定 LUT 輸入空間與影像亮度。「設定」檢視目前鏡頭能力，開啟原圖選存。
+6. 支援手動曝光時可切到 Pro／M 調整 ISO 與快門。此時拍攝 EV 停用；調色亮度仍可獨立使用。
+7. 0.2.0 主畫面點上方濾鏡名稱選擇 LUT，右上控制按鈕進入 AUTO／PRO 與設定。點底部「錄影」再按紅色快門開始，方形停止按鈕完成存檔。首次收音會詢問麥克風權限。
+
+## LUT 與色彩設定
+
+支援純 3D CUBE，2–65 格點、`TITLE`、`DOMAIN_MIN`、`DOMAIN_MAX`、註解與科學記號；紅色索引變化最快。上限 24 MB。1D／混合 shaper LUT 明確拒絕。
+
+一般 creative LUT 使用 `sRGB / SDR`，但應先確認作者指定的輸入／輸出色彩空間符合。`.cube` 副檔名本身不包含完整色彩描述。
+
+一般原始碼與 release 版本採使用者自行匯入富士素材。依目前個人測試需求，另提供本機 debug 素材準備流程：保留官方檔案原樣，內建十款 F-Log2 33 格點 LUT，畫面會自動套用 F-Log2 近似適配。來源與授權研究見 [研究文件](docs/android-lut-camera-research.md)。
+
+```sh
+python3 scripts/prepare_personal_fuji_luts.py /path/to/gfx-eterna-55-3d-lut-v110.zip
+./gradlew :app:assembleDebug
+```
+
+ZIP 從 [富士官方 LUT 下載頁](https://www.fujifilm-x.com/global/support/download/lut/)取得。腳本校驗已研究版本的 SHA-256，將原始 CUBE 與來源校驗紀錄放進被 Git 忽略的 `app/src/debug/assets/luts/fujifilm`，不會放入 release APK。debug APK 含有官方素材，不應當作已取得公開散布或商用授權的版本。詳情見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+
+已提供 **F-Log／F-Log2／F-Log2C 近似適配**，可以實驗套用官方 film-simulation LUT：
+
+- 將手機 SDR 的 sRGB 解碼為線性值，以近似場景亮度處理。
+- 依官方原色座標轉到 F-Gamut／F-GamutC，再編碼相應 Log 曲線。
+- 套用 LUT，假設其輸出為 Rec.709 原色與 display gamma 2.2，轉回 sRGB。
+- 與原圖在共同的 sRGB 輸出空間混合強度。
+
+這不能反轉手機 ISP 的 tone mapping，也無法補回已裁切高光，不代表富士相機完整成像。請使用 film-simulation／display-output LUT；輸出仍是 Log 的技術轉換表不適用這個假設。已知 `#Gamma:` 標頭會提示輸入模式，仍應檢查「調色」中的設定。
+
+公式來源：[F-Log2 資料表](https://dl.fujifilm-x.com/support/lut/F-Log2_DataSheet_E_Ver.1.1.pdf)、[F-Log2C 資料表](https://dl.fujifilm-x.com/support/lut/F-Log2C_DataSheet_E_Ver.1.0.pdf)、[GFX ETERNA 55 白皮書](https://dl.fujifilm-x.com/support/lut/GFX_ETERNA_WhitePaper_260206_v101.pdf)。官方 LUT 的商用／散布權需另行確認。
+
+## 實作結構
+
+```text
+app/src/main/java/tw/luma/camera/
+  MainActivity.kt           Compose 入口與主題
+  CameraViewModel.kt        拍照、匯入、濾鏡狀態與儲存流程
+  camera/                  CameraX、Camera2 interop、能力與實際參數
+  gl/                      EGL、GPU LUT shader、預覽 Surface 與分塊輸出
+  lut/                     CUBE 解析、CPU 三線性參考、自製色調
+  storage/                 JPEG、EXIF、MediaStore 原子存檔與回滾
+  ui/                      相機畫面、手動面板與權限狀態
+```
+
+## 驗證範圍與待驗項目
+
+JVM 測試覆蓋 CUBE 索引順序、三線性內插、domain、65 格點、損壞檔案與色域矩陣。另附 5 個裝置 GPU 測試，檢查 shader 色彩、方向、強度及分塊邊界；連接手機後執行 `./gradlew :app:connectedDebugAndroidTest`。不能以 CPU 測試取代 GPU、鏡頭或畫質驗證。
+
+真機請依 [驗收清單](docs/device-validation.md)檢查。特別是：
+
+- 固定光圈鏡頭不能調整光圈；不支援手動參數的鏡頭不開放 Pro。
+- M 模式自動白平衡在裝置支援時鎖定；更完整的舊裝置 K 色溫校正與半自動優先模式尚未實作。
+- ISO／快門滑桿代表要求值；預覽上方顯示裝置回報值。需驗證照片 EXIF 與請求一致。
+- 相機預覽與 JPEG 可能採用不同 ISP 處理，即使共用 shader，成品仍可能有差異。
+- 慢快門預覽會降幀。GPU ES 3、記憶體、持續使用溫度與閃光燈行為需逐機測試。
+- 匯入照片目前限制 50MP 以下，超過 12MP 會降採樣；輸出為 SDR sRGB JPEG，沒有 RAW／HDR 保留流程。
+- 第一次版本只切換前後預設鏡頭；尚未提供所有實體超廣角／望遠鏡頭選擇。
+
+現階段不需要 Vercel。日後若另加官網或雲端服務，建議安裝 `npm i -g vercel`，以使用 `vercel env pull`、`vercel deploy` 與 `vercel logs`。
