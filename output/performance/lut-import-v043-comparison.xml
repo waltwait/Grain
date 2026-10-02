@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tw.luma.camera.lut.ImportComparisonTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-02T10:04:22.150Z" hostname="Mac" time="3.521">
+  <properties/>
+  <testcase name="compareFullImportAndCheckOfficialFloatBits" classname="tw.luma.camera.lut.ImportComparisonTest" time="3.519"/>
+  <system-out><![CDATA[GRAIN_REAL_LUTS checked_files=10 checked_float_values=1078110 bit_exact=true
+GRAIN_IMPORT_BENCH size=33 variant=v042 median_ns=25869833 median_allocated_bytes=17184064 samples_ns=18837625,19510000,19589584,27014833,26704417,25869833,27018708
+GRAIN_IMPORT_BENCH size=33 variant=v043 median_ns=12156958 median_allocated_bytes=3065608 samples_ns=12620083,12037500,12244709,12530208,12156958,11873167,12042958
+GRAIN_IMPORT_BENCH size=65 variant=v042 median_ns=183336167 median_allocated_bytes=130934584 samples_ns=163858125,189635584,183316583,185604250,180724459,183336167,185271500
+GRAIN_IMPORT_BENCH size=65 variant=v043 median_ns=82384042 median_allocated_bytes=23250432 samples_ns=87682542,80794583,83090875,81724500,82384042,81896292,82620125
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

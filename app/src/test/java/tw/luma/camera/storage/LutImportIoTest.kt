@@ -4,8 +4,62 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import org.junit.Assert.*
 import org.junit.Test
+import tw.luma.camera.lut.CubeLut
+import java.io.OutputStream
+import java.security.MessageDigest
 
 class LutImportIoTest {
+    private val cube = "\uFEFFTITLE \"測試 LUT\"\r\nLUT_3D_SIZE 2\r\n" + "0.1 0.2 0.3\r\n".repeat(8)
+
+    @Test fun parsesWhilePreservingAndHashingOriginalUtf8Bytes() {
+        val bytes = cube.toByteArray(Charsets.UTF_8)
+        val output = ByteArrayOutputStream()
+        val result = LutImportIo.parseAndCopy(ByteArrayInputStream(bytes), output, bytes.size, "Fallback")
+        assertArrayEquals(bytes, output.toByteArray())
+        assertEquals(MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }, result.id)
+        assertEquals("測試 LUT", result.lut.title)
+        assertArrayEquals(floatArrayOf(.1f, .2f, .3f), result.lut.sample(.4f, .6f, .8f), .00001f)
+    }
+    @Test fun parserCannotWriteBeyondImportByteLimit() {
+        val output = ByteArrayOutputStream()
+        val bytes = cube.toByteArray(Charsets.UTF_8)
+        assertThrows(IllegalArgumentException::class.java) { LutImportIo.parseAndCopy(ByteArrayInputStream(bytes), output, bytes.size - 1, "Fallback") }
+        assertTrue(output.size() <= bytes.size - 1)
+    }
+    @Test fun invalidCubeAndStorageFailuresAreNotAccepted() {
+        assertThrows(IllegalArgumentException::class.java) {
+            LutImportIo.parseAndCopy("LUT_3D_SIZE 2\n0 0 0\n".byteInputStream(), ByteArrayOutputStream(), CubeLut.MAX_FILE_BYTES, "Fallback")
+        }
+        val failingOutput = object : OutputStream() {
+            override fun write(value: Int) { throw java.io.IOException("Storage full") }
+        }
+        assertThrows(java.io.IOException::class.java) { LutImportIo.parseAndCopy(cube.byteInputStream(), failingOutput, CubeLut.MAX_FILE_BYTES, "Fallback") }
+    }
+    @Test fun streamingImportHandlesUtf8AcrossReadBoundaries() {
+        val bytes = ("#" + "測".repeat(3000) + "\r\n" + cube).toByteArray(Charsets.UTF_8)
+        val input = object : ByteArrayInputStream(bytes) {
+            override fun read(buffer: ByteArray, offset: Int, length: Int) = super.read(buffer, offset, minOf(length, 7))
+        }
+        val output = ByteArrayOutputStream()
+        val result = LutImportIo.parseAndCopy(input, output, bytes.size, "Fallback")
+        assertArrayEquals(bytes, output.toByteArray())
+        assertEquals("測試 LUT", result.lut.title)
+        assertArrayEquals(floatArrayOf(.1f, .2f, .3f), result.lut.sample(.4f, .6f, .8f), .00001f)
+    }
+    @Test fun streamingImportLeavesCallerOwnedStreamsOpen() {
+        var inputClosed = false
+        var outputClosed = false
+        val input = object : ByteArrayInputStream(cube.toByteArray(Charsets.UTF_8)) {
+            override fun close() { inputClosed = true; super.close() }
+        }
+        val output = object : ByteArrayOutputStream() {
+            override fun close() { outputClosed = true; super.close() }
+        }
+        LutImportIo.parseAndCopy(input, output, CubeLut.MAX_FILE_BYTES, "Fallback")
+        assertFalse(inputClosed)
+        assertFalse(outputClosed)
+        input.close(); output.close()
+    }
     @Test fun copiesExactLimitAndHashesOriginalBytes() {
         val output = ByteArrayOutputStream()
         val digest = LutImportIo.copyAndHash("abc".byteInputStream(), output, 3)

@@ -43,6 +43,59 @@ class CubeLut(
 
     companion object {
         const val MAX_FILE_BYTES = 24 * 1024 * 1024
+        private val decimalDivisors = doubleArrayOf(1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, 10000000.0, 100000000.0, 1000000000.0)
+        private fun whitespace(c: Char) = c == ' ' || c in '\t'..'\r'
+
+        /** Short decimal tokens avoid String/Float parser allocations, retaining exact float rounding. */
+        private fun number(line: String, start: Int, end: Int): Float {
+            var position = start
+            val negative = line[position] == '-'
+            if (negative || line[position] == '+') position++
+            var significand = 0
+            var digits = 0
+            var fraction = 0
+            var decimal = false
+            while (position < end) {
+                val c = line[position++]
+                if (c in '0'..'9' && digits < 9) {
+                    significand = significand * 10 + (c - '0')
+                    digits++
+                    if (decimal) fraction++
+                } else if (c == '.' && !decimal) decimal = true
+                else return line.substring(start, end).toFloat()
+            }
+            if (digits == 0) return line.substring(start, end).toFloat()
+            // Both integer operands are exactly represented in Double. Division has at most
+            // half a double ULP of error; near any float midpoint use the platform parser.
+            val magnitude = significand.toDouble() / decimalDivisors[fraction]
+            val candidate = if (negative) -magnitude else magnitude
+            val rounded = candidate.toFloat()
+            val roundedDouble = rounded.toDouble()
+            if (roundedDouble != candidate) {
+                val neighbor = if (roundedDouble < candidate) Math.nextUp(rounded) else Math.nextDown(rounded)
+                val midpoint = (roundedDouble + neighbor.toDouble()) / 2
+                if (kotlin.math.abs(candidate - midpoint) <= Math.ulp(candidate)) return line.substring(start, end).toFloat()
+            }
+            return rounded
+        }
+
+        private fun appendRgb(line: String, target: FloatArray, cursor: Int): Int {
+            require(cursor + 3 <= target.size) { "LUT 資料筆數或格式錯誤" }
+            var position = 0
+            for (channel in 0..2) {
+                while (position < line.length && whitespace(line[position])) position++
+                val start = position
+                while (position < line.length && !whitespace(line[position])) position++
+                require(position > start) { "LUT 資料筆數或格式錯誤" }
+                val value = number(line, start, position)
+                require(value.isFinite()) { "LUT 包含無效數值" }
+                target[cursor + channel] = value
+            }
+            while (position < line.length && whitespace(line[position])) position++
+            require(position == line.length) { "LUT 資料筆數或格式錯誤" }
+            return cursor + 3
+        }
+
         // Match CUBE's ASCII whitespace without constructing a matcher/list pipeline per row.
         private fun tokens(line: String): List<String> {
             val parts = ArrayList<String>(4)
@@ -67,42 +120,45 @@ class CubeLut(
             var min = floatArrayOf(0f, 0f, 0f)
             var max = floatArrayOf(1f, 1f, 1f)
             var encoding = LutEncoding.SRGB
-            reader.buffered().forEachLine { raw ->
-                characters += raw.length + 1
-                require(characters <= MAX_FILE_BYTES) { "LUT 檔案過大（上限 24 MB）" }
-                require(raw.length < 4096) { "LUT 包含過長的資料行" }
-                // Only known source metadata is inferred; arbitrary filenames are not trusted.
-                if (raw.trimStart().startsWith("#Gamma:", ignoreCase = true)) {
-                    val gamma = raw.substringAfter(':').trim().substringBefore(" to ", raw.substringAfter(':').trim())
-                    encoding = when (gamma.uppercase()) {
-                        "F-LOG2C", "F-LOG2 C" -> LutEncoding.FLOG2C
-                        "F-LOG2" -> LutEncoding.FLOG2
-                        "F-LOG" -> LutEncoding.FLOG
-                        else -> LutEncoding.SRGB
-                    }
-                }
-                val line = raw.substringBefore('#').trim().removePrefix("\uFEFF")
-                if (line.isNotEmpty()) {
-                    val parts = tokens(line)
-                    fun triple(): FloatArray {
-                        require(parts.size == 4) { "DOMAIN 格式錯誤" }
-                        return FloatArray(3) { parts[it + 1].toFloat().also { v -> require(v.isFinite()) } }
-                    }
-                    when (parts[0]) {
-                        "TITLE" -> title = line.removePrefix("TITLE").trim().trim('"').take(80)
-                        "LUT_3D_SIZE" -> {
-                            require(data == null && parts.size == 2) { "重複或無效的 LUT 維度" }
-                            size = parts[1].toInt()
-                            require(size in 2..65) { "目前支援 2–65 格點的 3D LUT" }
-                            data = FloatArray(size * size * size * 3)
+            reader.use { source ->
+                val lines = BoundedCubeLines(source)
+                while (true) {
+                    val raw = lines.next() ?: break
+                    characters += raw.length + 1
+                    require(characters <= MAX_FILE_BYTES) { "LUT 檔案過大（上限 24 MB）" }
+                    // Only known source metadata is inferred; arbitrary filenames are not trusted.
+                    if (raw.trimStart().startsWith("#Gamma:", ignoreCase = true)) {
+                        val gamma = raw.substringAfter(':').trim().substringBefore(" to ", raw.substringAfter(':').trim())
+                        encoding = when (gamma.uppercase()) {
+                            "F-LOG2C", "F-LOG2 C" -> LutEncoding.FLOG2C
+                            "F-LOG2" -> LutEncoding.FLOG2
+                            "F-LOG" -> LutEncoding.FLOG
+                            else -> LutEncoding.SRGB
                         }
-                        "DOMAIN_MIN" -> min = triple()
-                        "DOMAIN_MAX" -> max = triple()
-                        "LUT_1D_SIZE", "LUT_1D_INPUT_RANGE", "LUT_3D_INPUT_RANGE" -> error("目前不支援 1D／shaper LUT，請使用純 3D .cube")
-                        else -> {
-                            val target = requireNotNull(data) { "找不到 LUT_3D_SIZE" }
-                            require(parts.size == 3 && cursor + 3 <= target.size) { "LUT 資料筆數或格式錯誤" }
-                            for (part in parts) target[cursor++] = part.toFloat().also { require(it.isFinite()) { "LUT 包含無效數值" } }
+                    }
+                    val line = raw.substringBefore('#').trim().removePrefix("\uFEFF")
+                    if (line.isNotEmpty()) {
+                        if (line[0] in '0'..'9' || line[0] == '+' || line[0] == '-' || line[0] == '.') {
+                            cursor = appendRgb(line, requireNotNull(data) { "找不到 LUT_3D_SIZE" }, cursor)
+                        } else {
+                            val parts = tokens(line)
+                            fun triple(): FloatArray {
+                                require(parts.size == 4) { "DOMAIN 格式錯誤" }
+                                return FloatArray(3) { parts[it + 1].toFloat().also { v -> require(v.isFinite()) } }
+                            }
+                            when (parts[0]) {
+                                "TITLE" -> title = line.removePrefix("TITLE").trim().trim('"').take(80)
+                                "LUT_3D_SIZE" -> {
+                                    require(data == null && parts.size == 2) { "重複或無效的 LUT 維度" }
+                                    size = parts[1].toInt()
+                                    require(size in 2..65) { "目前支援 2–65 格點的 3D LUT" }
+                                    data = FloatArray(size * size * size * 3)
+                                }
+                                "DOMAIN_MIN" -> min = triple()
+                                "DOMAIN_MAX" -> max = triple()
+                                "LUT_1D_SIZE", "LUT_1D_INPUT_RANGE", "LUT_3D_INPUT_RANGE" -> error("目前不支援 1D／shaper LUT，請使用純 3D .cube")
+                                else -> cursor = appendRgb(line, requireNotNull(data) { "找不到 LUT_3D_SIZE" }, cursor)
+                            }
                         }
                     }
                 }
@@ -127,5 +183,44 @@ class CubeLut(
             generate("柔霧") { r, g, b -> floatArrayOf(.055f + .90f * r.pow(.94f), .052f + .90f * g.pow(.96f), .06f + .88f * b) },
             generate("銀影") { r, g, b -> val l = (.2126f * r + .7152f * g + .0722f * b); floatArrayOf(l, l, l) },
         )
+    }
+}
+
+/** Bounded lines, including CRLF split across reads; never builds an arbitrarily long line. */
+private class BoundedCubeLines(private val source: Reader) {
+    private val buffer = CharArray(8192)
+    private var position = 0
+    private var limit = 0
+    private var skipLf = false
+
+    fun next(): String? {
+        if (limit < 0) return null
+        var continuation: StringBuilder? = null
+        var length = 0
+        while (true) {
+            if (position == limit) {
+                limit = source.read(buffer)
+                position = 0
+                if (limit < 0) return continuation?.toString()
+                check(limit > 0) { "無法讀取 LUT 資料" }
+            }
+            if (skipLf) {
+                skipLf = false
+                if (buffer[position] == '\n') { position++; continue }
+            }
+            val start = position
+            while (position < limit && buffer[position] != '\n' && buffer[position] != '\r') position++
+            val count = position - start
+            length += count
+            require(length < 4096) { "LUT 包含過長的資料行" }
+            if (position < limit) {
+                skipLf = buffer[position++] == '\r'
+                return continuation?.append(buffer, start, count)?.toString() ?: String(buffer, start, count)
+            }
+            if (count > 0) {
+                val accumulated = continuation ?: StringBuilder(maxOf(80, length)).also { continuation = it }
+                accumulated.append(buffer, start, count)
+            }
+        }
     }
 }

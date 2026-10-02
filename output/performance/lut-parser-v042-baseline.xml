@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tw.luma.camera.lut.LutParserBenchmark" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-02T09:45:58.009Z" hostname="Mac" time="1.201">
+  <properties/>
+  <testcase name="measureRepresentativeAndMaximumGrid" classname="tw.luma.camera.lut.LutParserBenchmark" time="1.198"/>
+  <system-out><![CDATA[GRAIN_LUT_BENCH size=33 median_ns=14470417 median_allocated_bytes=15691952 samples_ns=20717375,21347792,14470417,11976208,11813875
+GRAIN_LUT_BENCH size=65 median_ns=110344833 median_allocated_bytes=119801920 samples_ns=109280708,108254042,110344833,113678584,114283542
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

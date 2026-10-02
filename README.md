@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.4.2**。相機參數與變焦滑桿改為左右拖動，往右增加、往左減少；保留透明控制列、中央單一變焦鍵與精簡頂部工具列。詳見 [橫向滑桿](docs/horizontal-controls-v042.md)與 [相機介面調整](docs/native-camera-ui-v041.md)。沿用 0.4.0 的內建相簿與效能優化，見 [效能紀錄](docs/performance-audit-v040.md)與 [內建相簿](docs/gallery-v040.md)。手機目前不在手邊，實機排版、流暢度與播放／對焦／錄影仍待驗證。
+目前開發版本 **0.4.3**。匯入 LUT 合併讀取、儲存、校驗與解析，減少小數解析的短暫配置；桌面比較耗時約減半，詳見 [匯入效能紀錄](docs/lut-import-v043.md)。相機參數與變焦使用左右滑桿，保留透明控制列、中央變焦鍵與精簡頂部工具列，見 [橫向滑桿](docs/horizontal-controls-v042.md)與 [相機介面調整](docs/native-camera-ui-v041.md)。沿用 0.4.0 的內建相簿與效能優化，見 [效能紀錄](docs/performance-audit-v040.md)與 [內建相簿](docs/gallery-v040.md)。手機目前不在手邊，實機匯入速度、排版、流暢度與拍攝功能仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -20,6 +20,8 @@
 **0.4.1** ISO／快門／曝光／白平衡使用常駐透明控制列，變焦獨立置中。點控制格向上浮出直式滑桿，開關時按鈕與觀景窗維持位置。頂部改用小型白色圖示與短底片名稱，暖金集中在選取狀態；新增小螢幕、橫向及大字體 Compose 設計預覽。
 
 **0.4.2** 點參數格或變焦鍵，向上浮出橫向滑桿，左右拖動調整。參數名稱與目前值顯示在滑桿上方，AUTO／0／1× 還原放在右側；開關時底部控制與觀景窗維持位置，錄影中仍可調整變焦。
+
+**0.4.3** LUT 在同一次來源讀取中複製原始 bytes、計算 SHA-256 並解析，成功才發布成品。RGB 資料直接掃描，常見小數減少暫時字串與清單；複雜數字與捨入邊界使用標準解析。保留檔案限制及格式校驗，匯入後一次更新選單與目前濾鏡。
 
 ## 功能
 
@@ -56,7 +58,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
-目前個人富士測試版另存於 `output/Grain-0.4.2-personal-fuji-debug.apk`。APK 與官方 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+目前個人富士測試版另存於 `output/Grain-0.4.3-personal-fuji-debug.apk`。APK 與官方 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
 ## 安裝與操作
 
