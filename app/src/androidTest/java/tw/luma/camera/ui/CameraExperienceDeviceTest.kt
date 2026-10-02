@@ -3,9 +3,12 @@ package tw.luma.camera.ui
 import android.Manifest
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.content.ContentValues
+import android.provider.MediaStore
 import android.media.MediaMetadataRetriever
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
@@ -106,6 +109,47 @@ class CameraExperienceDeviceTest {
             saved?.let { ui.activity.contentResolver.delete(it, null, null) }
             ui.runOnIdle { model.recordWithAudio(before.recordWithAudio); model.selectLut(before.selectedLut) }
         }
+    }
+
+    @Test fun galleryFiltersAndReturnsToLiveCamera() {
+        ready()
+        ui.onNodeWithTag("open-gallery").performClick()
+        ui.onNodeWithTag("grain-gallery").assertIsDisplayed()
+        ui.runOnIdle { assertFalse("Camera must be suspended in the gallery", model().state.value.ready) }
+        ui.onNodeWithTag("gallery-filter-2").performClick().assertIsSelected()
+        ui.onNodeWithTag("gallery-filter-1").performClick().assertIsSelected()
+        ui.onNodeWithTag("gallery-close").performClick()
+        ready()
+        ui.onNodeWithTag("camera-ready").assertExists()
+    }
+
+    @Test fun ownPhotoOpensInGrainAndCanZoomAndReset() {
+        ready()
+        val name = "GRAIN_TEST_${System.nanoTime()}.jpg"
+        val resolver = ui.activity.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, name)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+        val bitmap = Bitmap.createBitmap(160, 120, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(80, 120, 170)) }
+        try {
+            requireNotNull(resolver.openOutputStream(uri)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+            resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithContentDescription("照片 $name").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithTag("gallery-photo").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithTag("gallery-photo").performTouchInput { pinch(start0 = center - Offset(30f, 0f), start1 = center + Offset(30f, 0f), end0 = center - Offset(90f, 0f), end1 = center + Offset(90f, 0f)) }
+            ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已放大"))
+            ui.onNodeWithTag("gallery-photo").performTouchInput { doubleClick(center) }
+            ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "原始比例"))
+            ui.onNodeWithTag("viewer-back").performClick()
+            ui.onNodeWithTag("gallery-close").performClick()
+            ready()
+        } finally { bitmap.recycle(); resolver.delete(uri, null, null) }
     }
 
     private fun screenshot(name: String) {

@@ -13,6 +13,7 @@ import androidx.camera.core.SurfaceProcessor
 import androidx.camera.core.SurfaceRequest
 import androidx.core.util.Consumer
 import java.util.concurrent.Executor
+import tw.luma.camera.performance.grainTrace
 
 class LutSurfaceProcessor(private val targets: Int = CameraEffect.PREVIEW, private val onError: (Throwable) -> Unit) : SurfaceProcessor, AutoCloseable {
     private val thread = HandlerThread("Luma-preview-GL").apply { start() }
@@ -31,7 +32,7 @@ class LutSurfaceProcessor(private val targets: Int = CameraEffect.PREVIEW, priva
     val effect = object : CameraEffect(targets, executor, this, Consumer { onError(it) }) {}
 
     private fun initialize() {
-        if (egl == null) { egl = EglCore(); renderer = LutRenderer(true) }
+        if (egl == null) grainTrace("Grain.preview.initialize") { egl = EglCore(); renderer = LutRenderer(true) }
         egl!!.makeCurrent()
     }
 
@@ -48,15 +49,18 @@ class LutSurfaceProcessor(private val targets: Int = CameraEffect.PREVIEW, priva
             texture.setOnFrameAvailableListener({ frame ->
                 if (!closing && active === frame && inputs.containsKey(frame)) {
                     try {
-                        egl!!.makeCurrent()
-                        frame.updateTexImage(); frame.getTransformMatrix(originalTransform)
-                        val snapshot = settings
-                        for ((output, window) in outputs) {
-                            egl!!.makeCurrent(window)
-                            output.updateTransformMatrix(transformed, originalTransform)
-                            renderer!!.draw(id, output.size.width, output.size.height, snapshot, transformed)
-                            if (output.targets and CameraEffect.VIDEO_CAPTURE != 0) egl!!.timestamp(window, frame.timestamp)
-                            egl!!.swap(window)
+                        grainTrace("Grain.preview.frame") {
+                            egl!!.makeCurrent()
+                            grainTrace("Grain.preview.acquire") { frame.updateTexImage() }
+                            frame.getTransformMatrix(originalTransform)
+                            val snapshot = settings
+                            for ((output, window) in outputs) {
+                                egl!!.makeCurrent(window)
+                                output.updateTransformMatrix(transformed, originalTransform)
+                                grainTrace("Grain.preview.draw") { renderer!!.draw(id, output.size.width, output.size.height, snapshot, transformed) }
+                                if (output.targets and CameraEffect.VIDEO_CAPTURE != 0) egl!!.timestamp(window, frame.timestamp)
+                                grainTrace(if (output.targets and CameraEffect.VIDEO_CAPTURE != 0) "Grain.video.present" else "Grain.preview.present") { egl!!.swap(window) }
+                            }
                         }
                     } catch (e: Throwable) {
                         active = null

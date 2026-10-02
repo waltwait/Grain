@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import androidx.exifinterface.media.ExifInterface
 import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.gl.LutRenderer
+import tw.luma.camera.performance.grainTrace
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,7 +38,7 @@ object PhotoStorage {
             options.inSampleSize *= 2
         }
         options.inJustDecodeBounds = false
-        val decoded = BitmapFactory.decodeFile(source.absolutePath, options) ?: error("照片無法解碼")
+        val decoded = grainTrace("Grain.photo.decode") { BitmapFactory.decodeFile(source.absolutePath, options) } ?: error("照片無法解碼")
         var oriented: Bitmap? = null
         var filtered: Bitmap? = null
         val encoded = File.createTempFile("luma-output-", ".jpg", context.cacheDir)
@@ -46,8 +47,8 @@ object PhotoStorage {
             val matrix = Matrix().apply { if (exif.isFlipped) postScale(-1f, 1f); postRotate(rotation.toFloat()) }
             oriented = if (rotation != 0 || exif.isFlipped) Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true) else decoded
             if (oriented !== decoded) decoded.recycle()
-            filtered = LutRenderer.apply(oriented, filter)
-            encoded.outputStream().use { check(filtered.compress(Bitmap.CompressFormat.JPEG, 95, it)) { "照片編碼失敗" } }
+            filtered = grainTrace("Grain.photo.filter") { LutRenderer.apply(oriented, filter) }
+            grainTrace("Grain.photo.jpeg") { encoded.outputStream().use { check(filtered.compress(Bitmap.CompressFormat.JPEG, 95, it)) { "照片編碼失敗" } } }
             ExifInterface(encoded).apply {
                 for (tag in exifTags) exif.getAttribute(tag)?.let { setAttribute(tag, it) }
                 setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
@@ -82,7 +83,7 @@ object PhotoStorage {
         }
         val resolver = context.contentResolver
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: error("無法建立相簿照片")
-        try { requireNotNull(resolver.openOutputStream(uri)).use { output -> file.inputStream().use { it.copyTo(output) } } }
+        try { grainTrace("Grain.photo.mediaStore") { requireNotNull(resolver.openOutputStream(uri)).use { output -> file.inputStream().use { it.copyTo(output) } } } }
         catch (e: Throwable) { resolver.delete(uri, null, null); throw e }
         return uri
     }

@@ -136,6 +136,7 @@ class CameraEngine(
             }
             return
         }
+        val previous = settings
         settings = requested
         val control = current.cameraControl
         val bundle = CaptureRequestOptions.Builder()
@@ -163,7 +164,7 @@ class CameraEngine(
         futures += Camera2CameraControl.from(control).setCaptureRequestOptions(bundle.build())
         if (!isManual && caps.hasEv) futures += control.setExposureCompensationIndex(caps.exposureRange.clamp(requested.evIndex))
         val zoom = current.cameraInfo.zoomState.value
-        futures += control.setZoomRatio(requested.zoom.coerceIn(zoom?.minZoomRatio ?: 1f, zoom?.maxZoomRatio ?: 1f))
+        if (previous.zoom != requested.zoom) futures += control.setZoomRatio(requested.zoom.coerceIn(zoom?.minZoomRatio ?: 1f, zoom?.maxZoomRatio ?: 1f))
         imageCapture?.flashMode = if (requested.flash && !isManual && current.cameraInfo.hasFlashUnit()) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
         val token = ++applySequence
         var remaining = futures.size

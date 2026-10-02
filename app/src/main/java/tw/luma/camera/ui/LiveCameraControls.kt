@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -43,8 +46,10 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
     if (!state.ready) return
     val caps = state.capabilities
     val allowed = state.liveControlsEnabled
-    val controls = listOf(LiveControl.ISO, LiveControl.SHUTTER, LiveControl.EV, LiveControl.WB) +
-        (if (caps.adjustableAperture) listOf(LiveControl.APERTURE) else emptyList()) + LiveControl.ZOOM
+    val controls = remember(caps.adjustableAperture) {
+        listOf(LiveControl.ISO, LiveControl.SHUTTER, LiveControl.EV, LiveControl.WB) +
+            (if (caps.adjustableAperture) listOf(LiveControl.APERTURE) else emptyList()) + LiveControl.ZOOM
+    }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val sliderHeight = (maxHeight - 170.dp).coerceIn(80.dp, 190.dp)
         Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .65f))))
@@ -84,14 +89,14 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
                                     }
                                     select(null)
                                 }, enabled = enabled && active == control, contentPadding = PaddingValues(0.dp), modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text(if (control in listOf(LiveControl.ISO, LiveControl.SHUTTER, LiveControl.WB, LiveControl.APERTURE)) "AUTO" else if (control == LiveControl.ZOOM) "1×" else "0", style = MaterialTheme.typography.labelSmall)
+                                    Text(if (control == LiveControl.ISO || control == LiveControl.SHUTTER || control == LiveControl.WB || control == LiveControl.APERTURE) "AUTO" else if (control == LiveControl.ZOOM) "1×" else "0", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
                     }
                     Surface(onClick = {
                         if (active == control) select(null) else {
-                            if (control in listOf(LiveControl.ISO, LiveControl.SHUTTER, LiveControl.APERTURE) && !state.capture.manual) {
+                            if ((control == LiveControl.ISO || control == LiveControl.SHUTTER || control == LiveControl.APERTURE) && !state.capture.manual) {
                                 engine?.enterManual()?.let { manual ->
                                     val safeManual = if (state.mode == CaptureMode.VIDEO) {
                                         val shutter = manual.shutterNs.coerceAtMost(33_333_333L).coerceAtLeast(caps.shutterRange?.lower ?: 1L)
@@ -124,6 +129,11 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
 private fun ControlSlider(control: LiveControl, state: CameraUiState, model: CameraViewModel, height: androidx.compose.ui.unit.Dp, enabled: Boolean) {
     val caps = state.capabilities
     val capture = state.capture
+    // Collect live temperature only where it is displayed, not in the parent camera screen.
+    val actualKelvin = if (control == LiveControl.WB && caps.cctRange != null) {
+        val actual by model.actualCapture.collectAsStateWithLifecycle()
+        actual.kelvin
+    } else null
     fun log(value: Double, min: Double, max: Double, update: (Double) -> Unit) = SliderValue(LiveControlMath.position(value, min, max)) { update(LiveControlMath.value(it, min, max)) }
     val slider = when (control) {
         LiveControl.ISO -> caps.isoRange!!.let { r -> log(capture.iso.toDouble(), r.lower.toDouble(), r.upper.toDouble()) { v -> model.changeCapture { it.copy(iso = v.roundToInt()) } } }
@@ -134,7 +144,7 @@ private fun ControlSlider(control: LiveControl, state: CameraUiState, model: Cam
         LiveControl.ZOOM -> log(capture.zoom.toDouble(), state.minZoom.toDouble(), state.maxZoom.toDouble()) { model.zoom(it.toFloat()) }
         LiveControl.EV -> SliderValue(capture.evIndex.toFloat(), caps.exposureRange.lower.toFloat()..caps.exposureRange.upper.toFloat(), (caps.exposureRange.upper - caps.exposureRange.lower - 1).coerceAtLeast(0)) { v -> model.changeCapture { it.copy(evIndex = v.roundToInt()) } }
         LiveControl.APERTURE -> SliderValue(caps.apertures.indexOf(capture.aperture).coerceAtLeast(0).toFloat(), 0f..caps.apertures.lastIndex.toFloat(), (caps.apertures.size - 2).coerceAtLeast(0)) { v -> model.changeCapture { it.copy(aperture = caps.apertures[v.roundToInt()]) } }
-        LiveControl.WB -> caps.cctRange?.takeIf { it.upper > it.lower }?.let { r -> SliderValue((capture.kelvin ?: state.actual.kelvin ?: 5500).coerceIn(r.lower, r.upper).toFloat(), r.lower.toFloat()..r.upper.toFloat()) { v -> model.changeCapture { it.copy(kelvin = v.roundToInt(), wbLocked = false) } } }
+        LiveControl.WB -> caps.cctRange?.takeIf { it.upper > it.lower }?.let { r -> SliderValue((capture.kelvin ?: actualKelvin ?: 5500).coerceIn(r.lower, r.upper).toFloat(), r.lower.toFloat()..r.upper.toFloat()) { v -> model.changeCapture { it.copy(kelvin = v.roundToInt(), wbLocked = false) } } }
             ?: SliderValue(caps.whiteBalances.indexOfFirst { it.mode == capture.wbMode }.coerceAtLeast(0).toFloat(), 0f..caps.whiteBalances.lastIndex.toFloat(), (caps.whiteBalances.size - 2).coerceAtLeast(0)) { v -> model.changeCapture { it.copy(wbMode = caps.whiteBalances[v.roundToInt()].mode, kelvin = null, wbLocked = false) } }
     }
     VerticalControlSlider(slider.value, slider.onChange, slider.range, slider.steps, enabled,

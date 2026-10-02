@@ -43,6 +43,20 @@ class CubeLut(
 
     companion object {
         const val MAX_FILE_BYTES = 24 * 1024 * 1024
+        // Match CUBE's ASCII whitespace without constructing a matcher/list pipeline per row.
+        private fun tokens(line: String): List<String> {
+            val parts = ArrayList<String>(4)
+            var start = 0
+            for (i in line.indices) {
+                val c = line[i]
+                if (c == ' ' || c in '\t'..'\r') {
+                    if (i > start) parts.add(line.substring(start, i))
+                    start = i + 1
+                }
+            }
+            if (start < line.length) parts.add(line.substring(start))
+            return parts
+        }
 
         fun parse(reader: Reader, fallbackTitle: String = "匯入 LUT"): CubeLut {
             var title = fallbackTitle.take(80)
@@ -69,7 +83,7 @@ class CubeLut(
                 }
                 val line = raw.substringBefore('#').trim().removePrefix("\uFEFF")
                 if (line.isNotEmpty()) {
-                    val parts = line.split(Regex("\\s+"))
+                    val parts = tokens(line)
                     fun triple(): FloatArray {
                         require(parts.size == 4) { "DOMAIN 格式錯誤" }
                         return FloatArray(3) { parts[it + 1].toFloat().also { v -> require(v.isFinite()) } }

@@ -60,6 +60,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import tw.luma.camera.gallery.GalleryViewModel
 import tw.luma.camera.CameraUiState
 import tw.luma.camera.CameraViewModel
 import tw.luma.camera.camera.CameraEngine
@@ -75,8 +77,10 @@ import kotlin.math.roundToInt
 
 @Composable
 fun CameraScreen(model: CameraViewModel) {
-    val state by model.state.collectAsStateWithLifecycle()
+    val state by model.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val galleryModel: GalleryViewModel = viewModel()
+    var galleryOpen by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current
     val snackbar = remember { SnackbarHostState() }
     var permitted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -104,6 +108,11 @@ fun CameraScreen(model: CameraViewModel) {
     } }
     val openPhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     val openLut = { lutImport.launch(arrayOf("*/*")) }
+    if (galleryOpen) {
+        GalleryScreen(galleryModel, { galleryOpen = false }, { galleryOpen = false; openPhoto() })
+        return
+    }
+    val openGallery = { model.pausePreview(); galleryOpen = true }
     val shutter = {
         activeControl = null
         val active = engine
@@ -228,7 +237,7 @@ fun CameraScreen(model: CameraViewModel) {
             val landscape = maxWidth > maxHeight && maxWidth > 600.dp
             val preview: @Composable (Modifier) -> Unit = { modifier ->
                 Box(modifier) {
-                    PreviewArea(state, view, permitted, Modifier.fillMaxSize(),
+                    PreviewArea(state, model, view, permitted, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
                     if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { feedback ->
@@ -239,7 +248,7 @@ fun CameraScreen(model: CameraViewModel) {
                         }
                     }
                     if (permitted && state.cameraError == null) {
-                        CameraToolbar(state, Modifier.align(Alignment.TopCenter)) { activeControl = null; panel = it }
+                        CameraToolbar(state, model, Modifier.align(Alignment.TopCenter)) { activeControl = null; panel = it }
                         exposureFeedback?.let { ExposureIndicator(it, state.capabilities.exposureStep) }
                         LiveCameraControls(state, model, engine, activeControl, { activeControl = it }, Modifier.align(Alignment.BottomCenter))
                     }
@@ -247,10 +256,10 @@ fun CameraScreen(model: CameraViewModel) {
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openPhoto, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
+                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
             } else Column(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openPhoto, { panel = "settings" }, Modifier.fillMaxWidth(), false)
+                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.fillMaxWidth(), false)
             }
         }
     }
@@ -316,7 +325,7 @@ private fun FocusIndicator(feedback: FocusFeedback, onFinished: () -> Unit) {
 }
 
 @Composable
-private fun PreviewArea(state: CameraUiState, view: PreviewView, granted: Boolean, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
+private fun PreviewArea(state: CameraUiState, model: CameraViewModel, view: PreviewView, granted: Boolean, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
     Box(modifier.background(Color.Black).testTag("viewfinder"), contentAlignment = Alignment.Center) {
         if (granted) {
             AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "相機即時預覽，可點擊對焦及雙指變焦" })
@@ -339,12 +348,28 @@ private fun PreviewArea(state: CameraUiState, view: PreviewView, granted: Boolea
             TextButton(onClick = appSettings) { Text("開啟權限設定") }
         }
         if (state.ready) Box(Modifier.size(1.dp).testTag("camera-ready"))
-        if (state.capture.manual && state.ready && !state.recording) Text("ISO ${state.actual.iso ?: "—"}  ·  ${shutterLabel(state.actual.shutterNs)}", Modifier.align(Alignment.TopCenter).padding(top = 72.dp).background(Color.Black.copy(alpha = .55f), CircleShape).padding(horizontal = 12.dp, vertical = 6.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+        if (state.capture.manual && state.ready && !state.recording) ActualCaptureBadge(model, Modifier.align(Alignment.TopCenter).padding(top = 72.dp).background(Color.Black.copy(alpha = .55f), CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
     }
 }
 
 @Composable
-private fun CameraToolbar(state: CameraUiState, modifier: Modifier, panel: (String) -> Unit) {
+private fun ActualCaptureBadge(model: CameraViewModel, modifier: Modifier) {
+    val actual by model.actualCapture.collectAsStateWithLifecycle()
+    Text("ISO ${actual.iso ?: "—"}  ·  ${shutterLabel(actual.shutterNs)}", modifier, color = Color.White, style = MaterialTheme.typography.labelSmall)
+}
+
+@Composable
+private fun RecordingClock(model: CameraViewModel, status: RecordingStatus) {
+    val time by model.recordingTime.collectAsStateWithLifecycle()
+    Text(when (status) {
+        RecordingStatus.STARTING -> "準備錄影"
+        RecordingStatus.STOPPING -> "儲存中"
+        else -> time
+    }, color = Color.White, modifier = Modifier.testTag("recording-time"), fontWeight = FontWeight.SemiBold)
+}
+
+@Composable
+private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, modifier: Modifier, panel: (String) -> Unit) {
     Row(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .65f), Color.Transparent))).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Black.copy(alpha = .45f), shape = CircleShape, modifier = Modifier.heightIn(min = 48.dp), onClick = { panel("settings") }, enabled = !state.recording) {
             Box(Modifier.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) { Text(state.videoQuality, color = Color.White, style = MaterialTheme.typography.labelMedium) }
@@ -353,7 +378,7 @@ private fun CameraToolbar(state: CameraUiState, modifier: Modifier, panel: (Stri
         if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
             Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(7.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(8.dp))
-                Text(if (state.recordingStatus == RecordingStatus.STARTING) "準備錄影" else if (state.recordingStatus == RecordingStatus.STOPPING) "儲存中" else ZoomControls.recordingTime(state.recordingNs), color = Color.White, modifier = Modifier.testTag("recording-time"), fontWeight = FontWeight.SemiBold)
+                RecordingClock(model, state.recordingStatus)
             }
         } else Surface(onClick = { panel("filters") }, shape = CircleShape, color = Color.Black.copy(alpha = .5f), enabled = !state.busy, modifier = Modifier.widthIn(max = 235.dp).heightIn(min = 48.dp).testTag("filter-picker")) {
             Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -367,11 +392,7 @@ private fun CameraToolbar(state: CameraUiState, modifier: Modifier, panel: (Stri
 }
 
 @Composable
-private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, importPhoto: () -> Unit, tools: () -> Unit, modifier: Modifier, landscape: Boolean) {
-    val context = LocalContext.current
-    val album: () -> Unit = {
-        state.savedUri?.let { uri -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, state.savedMime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }.onFailure { model.message("檔案已儲存，可從系統相簿開啟") } } ?: importPhoto()
-    }
+private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, tools: () -> Unit, modifier: Modifier, landscape: Boolean) {
     val enabled = !state.busy && !state.recording
     val modes: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
@@ -393,7 +414,7 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
         }
     }
     val gallery: @Composable () -> Unit = {
-        Surface(onClick = album, enabled = enabled, shape = RoundedCornerShape(12.dp), color = Color(0xFF202124), modifier = Modifier.size(48.dp).semantics { contentDescription = "開啟上次照片或影片" }) {
+        Surface(onClick = openGallery, enabled = enabled, shape = RoundedCornerShape(12.dp), color = Color(0xFF202124), modifier = Modifier.size(48.dp).testTag("open-gallery").semantics { contentDescription = "開啟 Grain 相簿" }) {
             state.thumbnail?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: Box(contentAlignment = Alignment.Center) { CameraGlyph("gallery", Modifier.size(25.dp)) }
         }
     }

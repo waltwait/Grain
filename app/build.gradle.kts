@@ -10,8 +10,8 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 8
-        versionName = "0.3.0"
+        versionCode = 10
+        versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
@@ -44,6 +44,8 @@ dependencies {
     implementation("androidx.camera:camera-view:1.6.2")
     implementation("androidx.camera:camera-video:1.6.2")
     implementation("androidx.exifinterface:exifinterface:1.4.2")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-ui-compose:1.11.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")

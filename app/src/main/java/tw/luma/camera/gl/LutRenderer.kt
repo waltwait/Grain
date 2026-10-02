@@ -16,6 +16,7 @@ import tw.luma.camera.lut.CubeLut
 import tw.luma.camera.lut.LutEncoding
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import tw.luma.camera.performance.grainTrace
 import kotlin.math.ceil
 import kotlin.math.sqrt
 
@@ -64,6 +65,11 @@ class EglCore : AutoCloseable {
 
 class LutRenderer(private val external: Boolean) : AutoCloseable {
     private val program: Int
+    private val position: Int
+    private val uv: Int
+    private var appliedSettings: FilterSettings? = null
+    private val defaultMin = floatArrayOf(0f, 0f, 0f)
+    private val defaultMax = floatArrayOf(1f, 1f, 1f)
     private val lutTexture = texture(GLES30.GL_TEXTURE_2D)
     private var uploaded: CubeLut? = null
     private var columns = 1
@@ -106,7 +112,12 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
             }
             void main() {
                 vec3 original = texture2D(uImage, vUv).rgb;
-                vec3 adjusted = clamp(encodeSrgb(decodeSrgb(original) * exp2(uBrightness)), 0.0, 1.0);
+                vec3 adjusted = original;
+                if (uBrightness != 0.0) adjusted = clamp(encodeSrgb(decodeSrgb(original) * exp2(uBrightness)), 0.0, 1.0);
+                if (uSize < 2.0 || uStrength <= 0.0) {
+                    gl_FragColor = vec4(adjusted, 1.0);
+                    return;
+                }
                 vec3 inputColor = adjusted;
                 if (uEncoding != 0) inputColor = encodeLog(uGamut * decodeSrgb(adjusted));
                 vec3 mapped = adjusted;
@@ -134,6 +145,11 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
         GLES30.glDeleteShader(vs); GLES30.glDeleteShader(fs)
         val status = IntArray(1); GLES30.glGetProgramiv(program, GLES30.GL_LINK_STATUS, status, 0)
         check(status[0] != 0) { "無法連結濾鏡 shader：${GLES30.glGetProgramInfoLog(program)}" }
+        position = GLES30.glGetAttribLocation(program, "aPosition")
+        uv = GLES30.glGetAttribLocation(program, "aUv")
+        GLES30.glUseProgram(program)
+        GLES30.glUniform1i(uniform("uImage"), 0)
+        GLES30.glUniform1i(uniform("uLut"), 1)
         upload(null)
     }
 
@@ -161,30 +177,29 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
     }
 
     fun draw(image: Int, width: Int, height: Int, settings: FilterSettings, transform: FloatArray = identity) {
-        if (uploaded !== settings.lut) upload(settings.lut)
+        if (uploaded !== settings.lut) grainTrace("Grain.lut.upload") { upload(settings.lut) }
         GLES30.glViewport(0, 0, width, height)
         GLES30.glUseProgram(program)
-        val position = GLES30.glGetAttribLocation(program, "aPosition")
-        val uv = GLES30.glGetAttribLocation(program, "aUv")
         vertices.position(0); GLES30.glVertexAttribPointer(position, 2, GLES30.GL_FLOAT, false, 16, vertices)
         vertices.position(2); GLES30.glVertexAttribPointer(uv, 2, GLES30.GL_FLOAT, false, 16, vertices)
         GLES30.glEnableVertexAttribArray(position); GLES30.glEnableVertexAttribArray(uv)
         GLES30.glUniformMatrix4fv(uniform("uTransform"), 1, false, transform, 0)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(if (external) GLES11Ext.GL_TEXTURE_EXTERNAL_OES else GLES30.GL_TEXTURE_2D, image)
-        GLES30.glUniform1i(uniform("uImage"), 0)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE1); GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, lutTexture)
-        GLES30.glUniform1i(uniform("uLut"), 1)
-        val n = settings.lut?.size ?: 0
-        GLES30.glUniform1f(uniform("uSize"), n.toFloat())
-        GLES30.glUniform1f(uniform("uColumns"), columns.toFloat())
-        GLES30.glUniform1f(uniform("uRows"), if (n == 0) 1f else ceil(n.toDouble() / columns).toFloat())
-        GLES30.glUniform1f(uniform("uStrength"), settings.strength.coerceIn(0f, 1f))
-        GLES30.glUniform1f(uniform("uBrightness"), settings.brightnessEv)
-        GLES30.glUniform1i(uniform("uEncoding"), if (settings.lut == null) 0 else settings.encoding.ordinal)
-        GLES30.glUniform3fv(uniform("uMin"), 1, settings.lut?.domainMin ?: floatArrayOf(0f, 0f, 0f), 0)
-        GLES30.glUniform3fv(uniform("uMax"), 1, settings.lut?.domainMax ?: floatArrayOf(1f, 1f, 1f), 0)
-        GLES30.glUniformMatrix3fv(uniform("uGamut"), 1, false, ColorMatrices.forEncoding(settings.encoding), 0)
+        if (appliedSettings != settings) {
+            val n = settings.lut?.size ?: 0
+            GLES30.glUniform1f(uniform("uSize"), n.toFloat())
+            GLES30.glUniform1f(uniform("uColumns"), columns.toFloat())
+            GLES30.glUniform1f(uniform("uRows"), if (n == 0) 1f else ceil(n.toDouble() / columns).toFloat())
+            GLES30.glUniform1f(uniform("uStrength"), settings.strength.coerceIn(0f, 1f))
+            GLES30.glUniform1f(uniform("uBrightness"), settings.brightnessEv)
+            GLES30.glUniform1i(uniform("uEncoding"), if (settings.lut == null) 0 else settings.encoding.ordinal)
+            GLES30.glUniform3fv(uniform("uMin"), 1, settings.lut?.domainMin ?: defaultMin, 0)
+            GLES30.glUniform3fv(uniform("uMax"), 1, settings.lut?.domainMax ?: defaultMax, 0)
+            GLES30.glUniformMatrix3fv(uniform("uGamut"), 1, false, ColorMatrices.forEncoding(settings.encoding), 0)
+            appliedSettings = settings
+        }
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
         GLES30.glDisableVertexAttribArray(position); GLES30.glDisableVertexAttribArray(uv)
         check(GLES30.glGetError() == GLES30.GL_NO_ERROR) { "GPU 濾鏡處理失敗" }
@@ -204,13 +219,14 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
 
         /** Tile export avoids a full-resolution input/output pair of GPU textures. */
         fun apply(bitmap: Bitmap, settings: FilterSettings): Bitmap {
-            if (settings.lut == null && settings.brightnessEv == 0f) return bitmap
+            if ((settings.lut == null || settings.strength <= 0f) && settings.brightnessEv == 0f) return bitmap
             EglCore().use {
                 LutRenderer(false).use { renderer ->
                     val max = IntArray(1); GLES30.glGetIntegerv(GLES30.GL_MAX_TEXTURE_SIZE, max, 0)
                     val tileSize = minOf(1024, max[0])
                     require(tileSize > 0) { "GPU 無法處理圖片" }
                     val result = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+                    val readback = RgbaReadback(minOf(tileSize, bitmap.width) * minOf(tileSize, bitmap.height))
                     val input = texture(GLES30.GL_TEXTURE_2D)
                     val output = texture(GLES30.GL_TEXTURE_2D)
                     val fb = IntArray(1); GLES30.glGenFramebuffers(1, fb, 0)
@@ -226,17 +242,11 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
                             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fb[0])
                             GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, output, 0)
                             check(GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER) == GLES30.GL_FRAMEBUFFER_COMPLETE)
-                            renderer.draw(input, w, h, settings)
-                            val pixels = ByteBuffer.allocateDirect(w * h * 4)
-                            GLES30.glReadPixels(0, 0, w, h, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, pixels)
-                            // Input row zero maps to FBO row zero; readback therefore retains bitmap row order.
-                            val colors = IntArray(w * h)
-                            pixels.position(0)
-                            for (i in colors.indices) {
-                                val r = pixels.get().toInt() and 255; val g = pixels.get().toInt() and 255; val b = pixels.get().toInt() and 255
-                                pixels.get()
-                                colors[i] = (255 shl 24) or (r shl 16) or (g shl 8) or b
-                            }
+                            grainTrace("Grain.photo.tile.draw") { renderer.draw(input, w, h, settings) }
+                            readback.pixels.clear()
+                            grainTrace("Grain.photo.tile.readback") { GLES30.glReadPixels(0, 0, w, h, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, readback.pixels) }
+                            // Input row zero maps to FBO row zero; readback retains bitmap row order.
+                            val colors = grainTrace("Grain.photo.tile.unpack") { readback.decode(w * h) }
                             result.setPixels(colors, 0, w, left, top, w, h)
                         }
                         return result

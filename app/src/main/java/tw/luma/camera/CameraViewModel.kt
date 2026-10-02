@@ -11,6 +11,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
+import tw.luma.camera.camera.ZoomControls
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tw.luma.camera.camera.ActualCapture
@@ -23,7 +28,8 @@ import tw.luma.camera.lut.BundledLutLibrary
 import tw.luma.camera.storage.PhotoStorage
 import androidx.camera.video.VideoRecordEvent
 import java.io.File
-import java.security.MessageDigest
+import tw.luma.camera.storage.LutImportIo
+import tw.luma.camera.performance.grainTrace
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -67,6 +73,14 @@ data class CameraUiState(
 class CameraViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(CameraUiState())
     val state: StateFlow<CameraUiState> = _state
+    // Camera metadata and recorder events must not invalidate the whole camera screen.
+    val uiState = state.map { it.copy(actual = ActualCapture(), recordingNs = 0) }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CameraUiState())
+    val actualCapture = state.map { it.actual }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActualCapture())
+    val recordingTime = state.map { it.recordingNs.coerceAtLeast(0) / 1_000_000_000L }.distinctUntilChanged()
+        .map { ZoomControls.recordingTime(it * 1_000_000_000L) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ZoomControls.recordingTime(0))
     private val prefs = application.getSharedPreferences("luma", 0)
     private val lutDirectory = File(application.filesDir, "luts").apply { mkdirs() }
     private val captureExecutor = Executors.newSingleThreadExecutor()
@@ -77,7 +91,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             val entries = withContext(Dispatchers.IO) {
                 val builtIns = CubeLut.builtIns().mapIndexed { i, lut -> LutEntry("builtin-$i", lut) }
-                val official = runCatching { BundledLutLibrary.load(application.assets).map { (id, lut) -> LutEntry(id, lut) } }
+                val official = runCatching { grainTrace("Grain.lut.loadBundled") { BundledLutLibrary.load(application.assets) }.map { (id, lut) -> LutEntry(id, lut) } }
                     .onFailure { message(it.message ?: "內建 LUT 載入失敗") }.getOrDefault(emptyList())
                 val imported = lutDirectory.listFiles()?.filter { it.extension == "cube" }?.mapNotNull { file ->
                     runCatching { file.reader().use { LutEntry(file.nameWithoutExtension,
@@ -97,11 +111,20 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         if (libraryReady) prefs.edit().putString("selectedLut", entry?.id).apply()
     }
 
-    fun changeFilter(transform: (FilterSettings) -> FilterSettings) { _state.update { it.copy(filter = transform(it.filter)) } }
-    fun changeCapture(transform: (CaptureSettings) -> CaptureSettings) { _state.update { it.copy(capture = transform(it.capture)) } }
+    fun changeFilter(transform: (FilterSettings) -> FilterSettings) { _state.update {
+        val next = transform(it.filter)
+        if (next == it.filter) it else it.copy(filter = next)
+    } }
+    fun changeCapture(transform: (CaptureSettings) -> CaptureSettings) { _state.update {
+        val next = transform(it.capture)
+        if (next == it.capture) it else it.copy(capture = next)
+    } }
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = false)) } }
-    fun zoom(value: Float) { _state.update { if (it.liveControlsEnabled) it.copy(capture = it.capture.copy(zoom = value.coerceIn(it.minZoom, it.maxZoom))) else it } }
+    fun zoom(value: Float) { _state.update {
+        val zoom = value.coerceIn(it.minZoom, it.maxZoom)
+        if (it.liveControlsEnabled && zoom != it.capture.zoom) it.copy(capture = it.capture.copy(zoom = zoom)) else it
+    } }
     fun recordWithAudio(enabled: Boolean) { if (!_state.value.recording) { _state.update { it.copy(recordWithAudio = enabled) }; prefs.edit().putBoolean("recordWithAudio", enabled).apply() } }
     fun videoQuality(value: String) { _state.update { it.copy(videoQuality = value) } }
     fun toggleGrid() { _state.update { it.copy(grid = !it.grid) }; prefs.edit().putBoolean("grid", _state.value.grid).apply() }
@@ -109,6 +132,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun message(text: String) { _state.update { it.copy(message = text) } }
     fun clearMessage() { _state.update { it.copy(message = null) } }
     fun cameraError(text: String) { _state.update { it.copy(ready = false, cameraError = text) } }
+    fun pausePreview() { _state.update { it.copy(ready = false, actual = ActualCapture()) } }
     fun retry() { _state.update { it.copy(cameraError = null, ready = false) } }
     fun actual(value: ActualCapture) { _state.update { it.copy(actual = value) } }
 
@@ -126,23 +150,16 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 val entry = withContext(Dispatchers.IO) {
                     val resolver = getApplication<Application>().contentResolver
                     val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else "匯入 LUT" } ?: "匯入 LUT"
-                    val bytes = requireNotNull(resolver.openInputStream(uri)).use { stream ->
-                        val output = java.io.ByteArrayOutputStream()
-                        val buffer = ByteArray(8192)
-                        while (true) {
-                            val n = stream.read(buffer); if (n < 0) break
-                            require(output.size() + n <= CubeLut.MAX_FILE_BYTES) { "LUT 檔案超過 24 MB" }
-                            output.write(buffer, 0, n)
+                    val temp = File.createTempFile("import-", ".tmp", lutDirectory)
+                    try {
+                        val id = requireNotNull(resolver.openInputStream(uri)).use { input ->
+                            grainTrace("Grain.lut.importCopy") { temp.outputStream().use { output -> LutImportIo.copyAndHash(input, output, CubeLut.MAX_FILE_BYTES) } }
                         }
-                        output.toByteArray()
-                    }
-                    val lut = CubeLut.parse(bytes.toString(Charsets.UTF_8).reader(), name.removeSuffix(".cube"))
-                    val id = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-                    val temp = File(lutDirectory, "$id.tmp")
-                    temp.writeBytes(bytes)
-                    check(temp.renameTo(File(lutDirectory, "$id.cube"))) { "LUT 儲存失敗" }
-                    prefs.edit().putString("lutTitle-$id", lut.title).apply()
-                    LutEntry(id, lut, true)
+                        val lut = grainTrace("Grain.lut.importParse") { temp.reader(Charsets.UTF_8).use { CubeLut.parse(it, name.removeSuffix(".cube")) } }
+                        check(temp.renameTo(File(lutDirectory, "$id.cube"))) { "LUT 儲存失敗" }
+                        prefs.edit().putString("lutTitle-$id", lut.title).apply()
+                        LutEntry(id, lut, true)
+                    } finally { temp.delete() }
                 }
                 _state.update { it.copy(luts = it.luts.filterNot { previous -> previous.id == entry.id } + entry) }
                 selectLut(entry.id)
