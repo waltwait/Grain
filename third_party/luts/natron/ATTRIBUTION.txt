@@ -1,0 +1,32 @@
+Kodak film emulation Hald CLUTs
+
+Creator: Pat David
+Original author page: https://patdavid.net/2013/08/film-emulation-presets-in-gmic-gimp/
+Distribution: Natron HaldCLUT Presets, https://github.com/NatronGitHub/clut
+Pinned source revision: af7b50d4caf6244fb6895a647f5b6a84efe7931a (2016-09-16)
+
+License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+License terms and disclaimer: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+Retain this attribution and the upstream README when sharing these assets.
+
+Included source images:
+negative_new/kodak_portra_160.png
+negative_new/kodak_portra_400.png
+negative_new/kodak_portra_800.png
+colorslide/kodak_ektachrome_100_vs.png
+bw/kodak_tri-x_400.png
+
+Format conversion by the Grain project, 2026-10-02:
+The original 512x512 RGB Hald images were repacked into 64x64x64 RGB lookup tables.
+All 8-bit source samples and their ordering are preserved without resampling,
+additional grading, or a color-space conversion. Android converts each channel
+to float with byte / 255 and uses its existing trilinear LUT renderer.
+The converted tables are distributed under CC BY-SA 4.0.
+
+Input/output are used as sRGB SDR, following the RawTherapee film-simulation
+collection convention: https://rawpedia.rawtherapee.com/Film_Simulation
+Visual results on actual Android preview/photo/video pipelines remain to be checked.
+
+These are community creative approximations, not Kodak official LUTs or calibrated
+reproductions. No grain or halation is included. The descriptive film-stock names
+do not imply affiliation with or endorsement by Kodak. See upstream README.

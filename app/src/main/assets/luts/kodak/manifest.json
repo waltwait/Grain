@@ -1,0 +1,67 @@
+[
+  {
+    "id": "kodak-portra-160",
+    "title": "Portra 160",
+    "grid": 64,
+    "author": "Pat David",
+    "license": "CC BY-SA 4.0",
+    "source": "https://github.com/NatronGitHub/clut/blob/af7b50d4caf6244fb6895a647f5b6a84efe7931a/negative_new/kodak_portra_160.png",
+    "source_sha256": "aa1e2343d81aa711a736b086007423b948c64406fc3c73f25f888f5e3c08e0eb",
+    "asset_sha256": "91f7c7a94ac8d9cdae47929c82eb074a12240ccc9f4c6928920476915ad27118",
+    "conversion": "Original 8-bit RGB samples repacked without resampling or grading changes",
+    "input": "sRGB SDR (RawTherapee film-simulation collection convention)",
+    "output": "sRGB SDR"
+  },
+  {
+    "id": "kodak-portra-400",
+    "title": "Portra 400",
+    "grid": 64,
+    "author": "Pat David",
+    "license": "CC BY-SA 4.0",
+    "source": "https://github.com/NatronGitHub/clut/blob/af7b50d4caf6244fb6895a647f5b6a84efe7931a/negative_new/kodak_portra_400.png",
+    "source_sha256": "1e55696363f4bb45222616e000e9e099a538fbb116605eea7b75852200d6d3f0",
+    "asset_sha256": "7a60cc4eab494d2bbfb54d15d9b95d747187830c1d1d241a5af8d02a910e0d6d",
+    "conversion": "Original 8-bit RGB samples repacked without resampling or grading changes",
+    "input": "sRGB SDR (RawTherapee film-simulation collection convention)",
+    "output": "sRGB SDR"
+  },
+  {
+    "id": "kodak-portra-800",
+    "title": "Portra 800",
+    "grid": 64,
+    "author": "Pat David",
+    "license": "CC BY-SA 4.0",
+    "source": "https://github.com/NatronGitHub/clut/blob/af7b50d4caf6244fb6895a647f5b6a84efe7931a/negative_new/kodak_portra_800.png",
+    "source_sha256": "62573754ec195d05a3ae4e1efbad9a70541871efe6e9c9787503bd37c7f8e742",
+    "asset_sha256": "69c4abbb4959e05dace30776dd8c71245ceb8be29d93a608edccc091e018fe58",
+    "conversion": "Original 8-bit RGB samples repacked without resampling or grading changes",
+    "input": "sRGB SDR (RawTherapee film-simulation collection convention)",
+    "output": "sRGB SDR"
+  },
+  {
+    "id": "kodak-ektachrome-100-vs",
+    "title": "Ektachrome 100 VS",
+    "grid": 64,
+    "author": "Pat David",
+    "license": "CC BY-SA 4.0",
+    "source": "https://github.com/NatronGitHub/clut/blob/af7b50d4caf6244fb6895a647f5b6a84efe7931a/colorslide/kodak_ektachrome_100_vs.png",
+    "source_sha256": "82b0fcc53b1ab2dd4a6fe8b3cd863b30632d4d252eea722fa77d3650fa6db62e",
+    "asset_sha256": "e9ee8a4ac1c7426d000f3ed65620cbec39e86d00961ba5901fc5bf9ddc76af1d",
+    "conversion": "Original 8-bit RGB samples repacked without resampling or grading changes",
+    "input": "sRGB SDR (RawTherapee film-simulation collection convention)",
+    "output": "sRGB SDR"
+  },
+  {
+    "id": "kodak-tri-x-400",
+    "title": "Tri-X 400",
+    "grid": 64,
+    "author": "Pat David",
+    "license": "CC BY-SA 4.0",
+    "source": "https://github.com/NatronGitHub/clut/blob/af7b50d4caf6244fb6895a647f5b6a84efe7931a/bw/kodak_tri-x_400.png",
+    "source_sha256": "d433777bf24806dca52c4b510b63947eca968b8220ed188170306482d2772d9c",
+    "asset_sha256": "27f1bd3a5d7d7f6a912c61de1f0a3819e5694e8e240d38e8e158912a914eee3e",
+    "conversion": "Original 8-bit RGB samples repacked without resampling or grading changes",
+    "input": "sRGB SDR (RawTherapee film-simulation collection convention)",
+    "output": "sRGB SDR"
+  }
+]

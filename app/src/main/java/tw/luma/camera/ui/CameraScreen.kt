@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -470,6 +471,7 @@ private fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.Wh
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, navigate: (String) -> Unit, importLut: () -> Unit, importPhoto: () -> Unit, dismiss: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = dismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
             val caps = state.capabilities
@@ -484,6 +486,20 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     }
                     state.filter.lut?.let { lut ->
                         Spacer(Modifier.height(12.dp)); Text(lut.title, style = MaterialTheme.typography.titleMedium)
+                        state.luts.find { it.id == state.selectedLut }?.let { entry ->
+                            entry.description?.let { description ->
+                                Text(description, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                            }
+                            if (entry.sourceUrl != null || entry.licenseUrl != null) Row {
+                                entry.sourceUrl?.let { url -> TextButton(onClick = {
+                                    runCatching { uriHandler.openUri(url) }.onFailure { model.message("無法開啟來源網頁") }
+                                }) { Text("作者與來源") } }
+                                entry.licenseUrl?.let { url -> TextButton(onClick = {
+                                    runCatching { uriHandler.openUri(url) }.onFailure { model.message("無法開啟授權網頁") }
+                                }) { Text("授權說明") } }
+                            }
+                        }
                         Text("強度 ${(state.filter.strength * 100).roundToInt()}%", Modifier.padding(top = 12.dp))
                         Slider(state.filter.strength, { value -> model.changeFilter { it.copy(strength = value) } }, modifier = Modifier.testTag("filter-strength"))
                         if (state.filter.encoding != LutEncoding.SRGB) Text("Log 近似適配，色彩與富士機身可能不同。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -1,2 +1,5 @@
 * text=auto
 *.bat text eol=crlf
+# Preserve the verbatim upstream LUT attribution README, including trailing blank lines.
+third_party/luts/natron/README.md whitespace=-blank-at-eof
+app/src/main/assets/luts/kodak/README.md whitespace=-blank-at-eof

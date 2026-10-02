@@ -9,4 +9,7 @@ local.properties
 captures/
 output/*.apk
 output/*.apk.sha256
+output/*.zip
+output/luts/
+scripts/__pycache__/
 app/src/debug/assets/luts/fujifilm/

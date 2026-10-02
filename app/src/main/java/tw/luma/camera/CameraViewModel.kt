@@ -25,6 +25,8 @@ import tw.luma.camera.camera.CaptureSettings
 import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.lut.CubeLut
 import tw.luma.camera.lut.BundledLutLibrary
+import tw.luma.camera.lut.OriginalLutLibrary
+import tw.luma.camera.lut.KodakLutLibrary
 import tw.luma.camera.storage.PhotoStorage
 import androidx.camera.video.VideoRecordEvent
 import java.io.File
@@ -35,7 +37,8 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-data class LutEntry(val id: String, val lut: CubeLut, val imported: Boolean = false)
+data class LutEntry(val id: String, val lut: CubeLut, val imported: Boolean = false,
+    val description: String? = null, val sourceUrl: String? = null, val licenseUrl: String? = null)
 enum class CaptureMode { PHOTO, VIDEO }
 enum class RecordingStatus { IDLE, STARTING, RECORDING, STOPPING }
 
@@ -90,6 +93,14 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         _state.update { it.copy(saveOriginal = prefs.getBoolean("saveOriginal", false), grid = prefs.getBoolean("grid", true), recordWithAudio = prefs.getBoolean("recordWithAudio", true)) }
         viewModelScope.launch {
             val entries = withContext(Dispatchers.IO) {
+                val originals = runCatching { grainTrace("Grain.lut.loadOriginals") {
+                    OriginalLutLibrary.load { application.assets.open(it) }
+                }.map { LutEntry(it.id, it.lut, description = it.description) } }
+                    .onFailure { message(it.message ?: "Grain Originals 載入失敗") }.getOrDefault(emptyList())
+                val kodak = runCatching { grainTrace("Grain.lut.loadKodak") {
+                    KodakLutLibrary.load { application.assets.open(it) }
+                }.map { LutEntry(it.id, it.lut, description = it.description, sourceUrl = it.sourceUrl, licenseUrl = it.licenseUrl) } }
+                    .onFailure { message(it.message ?: "Kodak 模擬 LUT 載入失敗") }.getOrDefault(emptyList())
                 val builtIns = CubeLut.builtIns().mapIndexed { i, lut -> LutEntry("builtin-$i", lut) }
                 val official = runCatching { grainTrace("Grain.lut.loadBundled") { BundledLutLibrary.load(application.assets) }.map { (id, lut) -> LutEntry(id, lut) } }
                     .onFailure { message(it.message ?: "內建 LUT 載入失敗") }.getOrDefault(emptyList())
@@ -97,7 +108,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                     runCatching { file.reader().use { LutEntry(file.nameWithoutExtension,
                         CubeLut.parse(it, prefs.getString("lutTitle-${file.nameWithoutExtension}", "匯入 LUT") ?: "匯入 LUT"), true) } }.getOrNull()
                 }.orEmpty()
-                official + builtIns + imported
+                kodak + originals + official + builtIns + imported
             }
             _state.update { it.copy(luts = entries) }
             libraryReady = true

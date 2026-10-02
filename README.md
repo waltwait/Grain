@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.4.3**。匯入 LUT 合併讀取、儲存、校驗與解析，減少小數解析的短暫配置；桌面比較耗時約減半，詳見 [匯入效能紀錄](docs/lut-import-v043.md)。相機參數與變焦使用左右滑桿，保留透明控制列、中央變焦鍵與精簡頂部工具列，見 [橫向滑桿](docs/horizontal-controls-v042.md)與 [相機介面調整](docs/native-camera-ui-v041.md)。沿用 0.4.0 的內建相簿與效能優化，見 [效能紀錄](docs/performance-audit-v040.md)與 [內建相簿](docs/gallery-v040.md)。手機目前不在手邊，實機匯入速度、排版、流暢度與拍攝功能仍待驗證。
+目前開發版本 **0.4.4**。新增六款 Grain Originals 與五款現成 Kodak 社群底片模擬，見 [濾鏡與來源紀錄](docs/film-luts-v044.md)。沿用 0.4.3 的串流匯入優化、左右參數滑桿與內建相簿，見 [匯入效能紀錄](docs/lut-import-v043.md)、[橫向滑桿](docs/horizontal-controls-v042.md)與 [內建相簿](docs/gallery-v040.md)。手機目前不在手邊，實機畫質、載入速度、流暢度與拍攝功能仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -23,6 +23,8 @@
 
 **0.4.3** LUT 在同一次來源讀取中複製原始 bytes、計算 SHA-256 並解析，成功才發布成品。RGB 資料直接掃描，常見小數減少暫時字串與清單；複雜數字與捨入邊界使用標準解析。保留檔案限制及格式校驗，匯入後一次更新選單與目前濾鏡。
 
+**0.4.4** 內建 Daylight、Warm Portrait、Chrome Street、Golden Hour、Night Cinema、Silver，以及 Pat David／Natron 的 Kodak Portra 160／400／800、Ektachrome 100 VS、Tri-X 400 社群模擬。使用預先轉好的二進位 LUT，在背景載入，拍攝沿用既有 GPU 查表；Kodak 項目顯示作者、來源與授權連結。
+
 ## 功能
 
 - 前後相機、點擊對焦、裝置支援的縮放與 Auto 模式閃光燈。
@@ -37,7 +39,7 @@
 - Android 16 以上且鏡頭公開 CCT 能力時，提供 K 色溫與色偏。
 - 繁體中文、深色介面、直橫向適應；相機與處理流程不使用網路。
 
-內建「暖日、柔霧、銀影」是本專案自行生成的示範色調，不是富士官方底片模擬。
+Grain Originals 是本專案原創調色，適用 sRGB SDR，並非特定底片的量測重現。「暖日、柔霧、銀影」保留為舊版示範色調。Kodak 項目是 Pat David 的社群近似模擬，來源為 [Natron HaldCLUT](https://github.com/NatronGitHub/clut)，依 CC BY-SA 4.0 保留作者與授權；原始素材、版本與轉換說明見 [來源標示](third_party/luts/natron/ATTRIBUTION.txt)。
 
 ## 建置
 
@@ -58,7 +60,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
-目前個人富士測試版另存於 `output/Grain-0.4.3-personal-fuji-debug.apk`。APK 與官方 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+目前個人富士測試版另存於 `output/Grain-0.4.4-personal-fuji-debug.apk`，含新底片色調。APK 與官方富士 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
 ## 安裝與操作
 
