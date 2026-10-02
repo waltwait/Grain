@@ -510,6 +510,8 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     }
                 }
                 "filter" -> {
+                    SoftwareWhiteBalanceSliders(state.filter, !state.busy, model::changeFilter)
+                    TextButton(onClick = { model.changeFilter { tw.luma.camera.camera.WhiteBalanceControls.reset(it) } }) { Text("重設冷暖與色偏") }
                     Text("影像亮度：%+.1f EV".format(Locale.US, state.filter.brightnessEv))
                     Slider(state.filter.brightnessEv, { value -> model.changeFilter { it.copy(brightnessEv = value) } }, valueRange = -2f..2f)
                     Text("這是拍攝後的調色，不會改變快門或 ISO。", style = MaterialTheme.typography.bodySmall)
@@ -532,16 +534,14 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     if (caps.awbLock && state.capture.kelvin == null && state.capture.wbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO) {
                         ToggleRow("鎖定自動白平衡", state.capture.wbLocked, !state.capture.manual) { checked -> model.changeCapture { it.copy(wbLocked = checked) } }
                     }
-                    if (state.capture.kelvin != null) {
-                        Text("白平衡色偏 ${state.capture.tint}")
-                        Slider(state.capture.tint.toFloat(), { value -> model.changeCapture { it.copy(tint = value.roundToInt()) } }, valueRange = -50f..50f)
-                    }
                     ToggleRow("同時儲存原圖", state.saveOriginal, !state.busy, model::saveOriginal)
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }
                     if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
                     OutlinedButton(onClick = importPhoto, enabled = !state.busy && !state.recording) { Text("匯入照片套用濾鏡") }
                     Spacer(Modifier.height(16.dp))
                     Text("鏡頭能力", style = MaterialTheme.typography.titleMedium)
+                    Text("Grain ${tw.luma.camera.BuildConfig.VERSION_NAME} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
+                        style = MaterialTheme.typography.bodySmall)
                     Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n直接色溫：${caps.cctRange?.let { "${it.lower}–${it.upper} K" } ?: "未提供"}", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
                     Text("照片：Pictures/Grain\n影片：Movies/Grain\n富士底片模擬採近似色彩適配；個人測試版含十款官方 LUT。", style = MaterialTheme.typography.bodySmall)
                 }

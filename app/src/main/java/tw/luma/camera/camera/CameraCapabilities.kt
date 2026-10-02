@@ -71,7 +71,7 @@ data class CaptureSettings(
     val flash: Boolean = false,
 )
 
-data class ActualCapture(val iso: Int? = null, val shutterNs: Long? = null, val aperture: Float? = null, val kelvin: Int? = null)
+data class ActualCapture(val iso: Int? = null, val shutterNs: Long? = null, val aperture: Float? = null, val kelvin: Int? = null, val tint: Int? = null)
 
 fun shutterLabel(ns: Long?): String {
     if (ns == null || ns <= 0) return "—"

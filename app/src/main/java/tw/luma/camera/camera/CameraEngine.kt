@@ -84,7 +84,9 @@ class CameraEngine(
                     Camera2Interop.Extender(builder).setSessionCaptureCallback(object : CameraCaptureSession.CaptureCallback() {
                         override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
                             latest = ActualCapture(result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY), result.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME),
-                                result.get(android.hardware.camera2.CaptureResult.LENS_APERTURE), if (Build.VERSION.SDK_INT >= 36) result.get(android.hardware.camera2.CaptureResult.COLOR_CORRECTION_COLOR_TEMPERATURE) else null)
+                                result.get(android.hardware.camera2.CaptureResult.LENS_APERTURE),
+                                if (Build.VERSION.SDK_INT >= 36) result.get(android.hardware.camera2.CaptureResult.COLOR_CORRECTION_COLOR_TEMPERATURE) else null,
+                                if (Build.VERSION.SDK_INT >= 36) result.get(android.hardware.camera2.CaptureResult.COLOR_CORRECTION_COLOR_TINT) else null)
                             val now = SystemClock.elapsedRealtime()
                             if (now - lastResultAt > 300) { lastResultAt = now; val snapshot = latest; main.execute { if (!closed && token == generation) onActual(snapshot) } }
                         }

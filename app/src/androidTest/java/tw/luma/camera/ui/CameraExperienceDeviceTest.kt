@@ -35,6 +35,48 @@ class CameraExperienceDeviceTest {
     private fun model() = ViewModelProvider(ui.activity)[CameraViewModel::class.java]
     private fun ready() { ui.waitUntil(30_000) { model().state.value.ready } }
 
+    @Test fun whiteBalanceGradingAndResetKeepExposureAndSelectedFilm() {
+        ready()
+        val model = model()
+        val before = model.state.value
+        try {
+            ui.runOnIdle { model.selectLut("builtin-1") }
+            val selected = model.state.value
+            val frame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
+            adjustWhiteBalance(40f, -20f)
+            ui.runOnIdle {
+                assertEquals(40f, model.state.value.filter.warmth)
+                assertEquals(-20f, model.state.value.filter.tint)
+                assertEquals(selected.capture, model.state.value.capture)
+                assertEquals(selected.selectedLut, model.state.value.selectedLut)
+            }
+            assertEquals(frame, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
+            ui.onNodeWithTag("live-reset-wb").performScrollTo().performClick()
+            ui.runOnIdle {
+                assertEquals(0f, model.state.value.filter.warmth)
+                assertEquals(0f, model.state.value.filter.tint)
+                assertEquals(0, model.state.value.capture.tint)
+                assertNull(model.state.value.capture.kelvin)
+                assertEquals(selected.capture.iso, model.state.value.capture.iso)
+                assertEquals(selected.capture.shutterNs, model.state.value.capture.shutterNs)
+                assertSame(selected.filter.lut, model.state.value.filter.lut)
+            }
+            screenshot("grain-white-balance-ui.png")
+            ui.onNodeWithTag("control-wb").performClick()
+        } finally {
+            ui.runOnIdle { model.selectLut(before.selectedLut); model.changeFilter { before.filter }; model.changeCapture { before.capture } }
+        }
+    }
+
+    private fun adjustWhiteBalance(warmth: Float, tint: Float) {
+        ui.onNodeWithTag("control-wb").assertIsEnabled().performClick()
+        if (model().state.value.capabilities.cctRange?.let { it.upper > it.lower } == true) {
+            ui.onNodeWithTag("wb-mode-grading").performScrollTo().performClick()
+        }
+        ui.onNodeWithTag("wb-warmth").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(warmth) }
+        ui.onNodeWithTag("wb-grading-tint").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(tint) }
+    }
+
     @Test fun portraitViewfinderIsLargeAndZoomControlsWork() {
         ready()
         val state = model().state.value
@@ -101,6 +143,15 @@ class CameraExperienceDeviceTest {
                 ui.waitUntil(5_000) { model.state.value.capture.zoom > sliderZoom && model.state.value.recordingNs > duration + 1_000_000_000L }
                 assertEquals(RecordingStatus.RECORDING, model.state.value.recordingStatus)
             }
+            val elapsed = model.state.value.recordingNs
+            adjustWhiteBalance(30f, 20f)
+            ui.waitUntil(5_000) { model.state.value.recordingNs > elapsed + 1_000_000_000L }
+            ui.runOnIdle {
+                assertEquals(RecordingStatus.RECORDING, model.state.value.recordingStatus)
+                assertEquals(30f, model.state.value.filter.warmth)
+                assertEquals(20f, model.state.value.filter.tint)
+            }
+            ui.onNodeWithTag("control-wb").performClick()
             screenshot("luma-video-ui.png")
             ui.onNodeWithTag("shutter").performClick()
             ui.waitUntil(20_000) { !model.state.value.recording && model.state.value.savedUri != before.savedUri && model.state.value.savedMime == "video/mp4" }
@@ -124,7 +175,7 @@ class CameraExperienceDeviceTest {
         } finally {
             // This test owns only the clip it just created; never touch existing user media.
             saved?.let { ui.activity.contentResolver.delete(it, null, null) }
-            ui.runOnIdle { model.recordWithAudio(before.recordWithAudio); model.selectLut(before.selectedLut) }
+            ui.runOnIdle { model.recordWithAudio(before.recordWithAudio); model.selectLut(before.selectedLut); model.changeFilter { before.filter } }
         }
     }
 

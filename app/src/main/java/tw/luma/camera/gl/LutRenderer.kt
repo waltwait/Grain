@@ -25,7 +25,11 @@ data class FilterSettings(
     val strength: Float = 1f,
     val brightnessEv: Float = 0f,
     val encoding: LutEncoding = LutEncoding.SRGB,
-)
+    val warmth: Float = 0f,
+    val tint: Float = 0f,
+) {
+    val isNoOp get() = (lut == null || strength <= 0f) && brightnessEv == 0f && warmth == 0f && tint == 0f
+}
 
 /** All methods run on the owning GL thread. Separate contexts are used for preview and export. */
 class EglCore : AutoCloseable {
@@ -95,7 +99,8 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
             uniform sampler2D uLut;
             uniform float uSize, uColumns, uRows, uStrength, uBrightness;
             uniform int uEncoding;
-            uniform vec3 uMin, uMax;
+            uniform vec3 uMin, uMax, uWhiteBalance;
+            uniform int uAdjustWhiteBalance;
             uniform mat3 uGamut;
             varying vec2 vUv;
             vec3 decodeSrgb(vec3 v) { return mix(v / 12.92, pow((v + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), v)); }
@@ -113,7 +118,11 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
             void main() {
                 vec3 original = texture2D(uImage, vUv).rgb;
                 vec3 adjusted = original;
-                if (uBrightness != 0.0) adjusted = clamp(encodeSrgb(decodeSrgb(original) * exp2(uBrightness)), 0.0, 1.0);
+                if (uBrightness != 0.0 || uAdjustWhiteBalance != 0) {
+                    vec3 linear = decodeSrgb(original) * exp2(uBrightness);
+                    if (uAdjustWhiteBalance != 0) linear *= uWhiteBalance;
+                    adjusted = clamp(encodeSrgb(linear), 0.0, 1.0);
+                }
                 if (uSize < 2.0 || uStrength <= 0.0) {
                     gl_FragColor = vec4(adjusted, 1.0);
                     return;
@@ -194,6 +203,8 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
             GLES30.glUniform1f(uniform("uRows"), if (n == 0) 1f else ceil(n.toDouble() / columns).toFloat())
             GLES30.glUniform1f(uniform("uStrength"), settings.strength.coerceIn(0f, 1f))
             GLES30.glUniform1f(uniform("uBrightness"), settings.brightnessEv)
+            GLES30.glUniform1i(uniform("uAdjustWhiteBalance"), if (settings.warmth == 0f && settings.tint == 0f) 0 else 1)
+            GLES30.glUniform3fv(uniform("uWhiteBalance"), 1, WhiteBalanceColorMath.gains(settings.warmth, settings.tint), 0)
             GLES30.glUniform1i(uniform("uEncoding"), if (settings.lut == null) 0 else settings.encoding.ordinal)
             GLES30.glUniform3fv(uniform("uMin"), 1, settings.lut?.domainMin ?: defaultMin, 0)
             GLES30.glUniform3fv(uniform("uMax"), 1, settings.lut?.domainMax ?: defaultMax, 0)
@@ -219,7 +230,7 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
 
         /** Tile export avoids a full-resolution input/output pair of GPU textures. */
         fun apply(bitmap: Bitmap, settings: FilterSettings): Bitmap {
-            if ((settings.lut == null || settings.strength <= 0f) && settings.brightnessEv == 0f) return bitmap
+            if (settings.isNoOp) return bitmap
             EglCore().use {
                 LutRenderer(false).use { renderer ->
                     val max = IntArray(1); GLES30.glGetIntegerv(GLES30.GL_MAX_TEXTURE_SIZE, max, 0)

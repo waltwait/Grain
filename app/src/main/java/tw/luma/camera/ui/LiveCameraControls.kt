@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -67,10 +69,10 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
         when (control) {
             LiveControl.ISO, LiveControl.SHUTTER, LiveControl.APERTURE -> model.changeCapture { it.copy(manual = false, wbLocked = false) }
             LiveControl.EV -> model.changeCapture { it.copy(evIndex = 0) }
-            LiveControl.WB -> model.changeCapture { it.copy(kelvin = null, wbMode = android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO, wbLocked = false) }
+            LiveControl.WB -> model.resetWhiteBalance()
             LiveControl.ZOOM -> model.zoom(1f)
         }
-        select(null)
+        if (control != LiveControl.WB) select(null)
     }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier)
 }
 
@@ -148,17 +150,19 @@ internal fun NativeCameraControls(
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = anchorHeight + 6.dp).width(popupWidth)) {
                 Surface(shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .78f),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = .12f))) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    Column(Modifier.heightIn(max = (maxHeight - anchorHeight - 12.dp).coerceAtLeast(96.dp))
+                        .verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(popupControl.title, Modifier.padding(end = 8.dp),
                                 style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .7f))
                             Text(popupControl.value(state), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             TextButton(onClick = { reset(popupControl) }, enabled = enabled, contentPadding = PaddingValues(0.dp),
-                                modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) {
+                                modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).testTag("live-reset-${popupControl.name.lowercase()}")) {
                                 Text(when (popupControl) {
                                     LiveControl.EV -> "0"
                                     LiveControl.ZOOM -> "1×"
+                                    LiveControl.WB -> "重設"
                                     else -> "AUTO"
                                 }, style = MaterialTheme.typography.labelSmall)
                             }
@@ -179,7 +183,7 @@ private fun LiveControl.supported(state: CameraUiState): Boolean {
         LiveControl.ISO -> caps.manualSensor && caps.isoRange?.let { it.upper > it.lower } == true
         LiveControl.SHUTTER -> caps.manualSensor && caps.shutterRange?.let { it.upper > it.lower } == true
         LiveControl.EV -> caps.hasEv && !state.capture.manual
-        LiveControl.WB -> caps.whiteBalances.size > 1 || caps.cctRange?.let { it.upper > it.lower } == true
+        LiveControl.WB -> true
         LiveControl.APERTURE -> caps.adjustableAperture
         LiveControl.ZOOM -> state.maxZoom > state.minZoom
     }
@@ -194,7 +198,10 @@ private fun LiveControl.value(state: CameraUiState): String {
         LiveControl.ISO -> remember(capture.manual, capture.iso) { if (capture.manual) capture.iso.toString() else "AUTO" }
         LiveControl.SHUTTER -> remember(capture.manual, capture.shutterNs) { if (capture.manual) shutterLabel(capture.shutterNs).removeSuffix(" s") else "AUTO" }
         LiveControl.EV -> remember(capture.manual, capture.evIndex, caps.exposureStep) { if (capture.manual) "M" else "%+.1f".format(Locale.US, capture.evIndex * caps.exposureStep) }
-        LiveControl.WB -> remember(capture.kelvin, capture.wbMode, caps.whiteBalances) { capture.kelvin?.let { "$it K" } ?: caps.whiteBalances.find { it.mode == capture.wbMode }?.label ?: "自動" }
+        LiveControl.WB -> remember(capture.kelvin, capture.wbMode, caps.whiteBalances, state.filter.warmth, state.filter.tint) {
+            capture.kelvin?.let { "$it K" } ?: if (state.filter.warmth != 0f || state.filter.tint != 0f) "微調"
+            else caps.whiteBalances.find { it.mode == capture.wbMode }?.label ?: "自動"
+        }
         LiveControl.APERTURE -> remember(capture.aperture, caps.apertures) { "f/%.1f".format(Locale.US, capture.aperture ?: caps.apertures.first()) }
         LiveControl.ZOOM -> remember(capture.zoom) { ZoomControls.label(capture.zoom) }
     }
@@ -204,11 +211,12 @@ private fun LiveControl.value(state: CameraUiState): String {
 private fun ControlSlider(control: LiveControl, state: CameraUiState, model: CameraViewModel, width: androidx.compose.ui.unit.Dp, enabled: Boolean) {
     val caps = state.capabilities
     val capture = state.capture
-    // Collect live temperature only where it is displayed, not in the parent camera screen.
-    val actualKelvin = if (control == LiveControl.WB && caps.cctRange != null) {
+    if (control == LiveControl.WB) {
+        // Metadata updates only invalidate the open white-balance panel.
         val actual by model.actualCapture.collectAsStateWithLifecycle()
-        actual.kelvin
-    } else null
+        WhiteBalancePanel(capture, state.filter, caps, actual, enabled, model::changeCapture, model::changeFilter)
+        return
+    }
     fun log(value: Double, min: Double, max: Double, update: (Double) -> Unit) = SliderValue(LiveControlMath.position(value, min, max)) { update(LiveControlMath.value(it, min, max)) }
     val slider = when (control) {
         LiveControl.ISO -> caps.isoRange!!.let { r -> log(capture.iso.toDouble(), r.lower.toDouble(), r.upper.toDouble()) { v -> model.changeCapture { it.copy(iso = v.roundToInt()) } } }
@@ -219,8 +227,7 @@ private fun ControlSlider(control: LiveControl, state: CameraUiState, model: Cam
         LiveControl.ZOOM -> log(capture.zoom.toDouble(), state.minZoom.toDouble(), state.maxZoom.toDouble()) { model.zoom(it.toFloat()) }
         LiveControl.EV -> SliderValue(capture.evIndex.toFloat(), caps.exposureRange.lower.toFloat()..caps.exposureRange.upper.toFloat(), (caps.exposureRange.upper - caps.exposureRange.lower - 1).coerceAtLeast(0)) { v -> model.changeCapture { it.copy(evIndex = v.roundToInt()) } }
         LiveControl.APERTURE -> SliderValue(caps.apertures.indexOf(capture.aperture).coerceAtLeast(0).toFloat(), 0f..caps.apertures.lastIndex.toFloat(), (caps.apertures.size - 2).coerceAtLeast(0)) { v -> model.changeCapture { it.copy(aperture = caps.apertures[v.roundToInt()]) } }
-        LiveControl.WB -> caps.cctRange?.takeIf { it.upper > it.lower }?.let { r -> SliderValue((capture.kelvin ?: actualKelvin ?: 5500).coerceIn(r.lower, r.upper).toFloat(), r.lower.toFloat()..r.upper.toFloat()) { v -> model.changeCapture { it.copy(kelvin = v.roundToInt(), wbLocked = false) } } }
-            ?: SliderValue(caps.whiteBalances.indexOfFirst { it.mode == capture.wbMode }.coerceAtLeast(0).toFloat(), 0f..caps.whiteBalances.lastIndex.toFloat(), (caps.whiteBalances.size - 2).coerceAtLeast(0)) { v -> model.changeCapture { it.copy(wbMode = caps.whiteBalances[v.roundToInt()].mode, kelvin = null, wbLocked = false) } }
+        LiveControl.WB -> return
     }
     HorizontalControlSlider(slider.value, slider.onChange, slider.range, slider.steps, enabled,
         Modifier.width(width).testTag("live-slider-${control.name.lowercase()}").semantics { contentDescription = "${control.title}，左右滑動調整" })

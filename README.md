@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.4.4**。新增六款 Grain Originals 與五款現成 Kodak 社群底片模擬，見 [濾鏡與來源紀錄](docs/film-luts-v044.md)。沿用 0.4.3 的串流匯入優化、左右參數滑桿與內建相簿，見 [匯入效能紀錄](docs/lut-import-v043.md)、[橫向滑桿](docs/horizontal-controls-v042.md)與 [內建相簿](docs/gallery-v040.md)。手機目前不在手邊，實機畫質、載入速度、流暢度與拍攝功能仍待驗證。
+目前開發版本 **0.4.5**。WB 浮窗加入冷暖、綠／洋紅色偏與完整重設；鏡頭支援時另提供 K 色溫、±50 K 微調及實際色溫／色偏回報，見 [白平衡細調](docs/white-balance-v045.md)。沿用六款 Grain Originals、五款 Kodak 社群模擬、LUT 串流匯入、左右滑桿與內建相簿。本次未連接手機；使用者回報 Samsung S24／Android 16，實機色彩與錄影仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -25,6 +25,8 @@
 
 **0.4.4** 內建 Daylight、Warm Portrait、Chrome Street、Golden Hour、Night Cinema、Silver，以及 Pat David／Natron 的 Kodak Portra 160／400／800、Ektachrome 100 VS、Tri-X 400 社群模擬。使用預先轉好的二進位 LUT，在背景載入，拍攝沿用既有 GPU 查表；Kodak 項目顯示作者、來源與授權連結。
 
+**0.4.5** 白平衡改用專用浮窗；冷暖／色偏調色不再依賴鏡頭的 CCT 能力。支援直接色溫時可切換 K 控制與冷暖調色，加入 ±50 K、相機預設、可用時的 AWB 鎖定及完整重設。調色在 LUT 前套用，濾鏡關閉或強度為 0 仍生效；照片、影片與匯入照片共用 shader。設定底部顯示版本與手機資訊。
+
 ## 功能
 
 - 前後相機、點擊對焦、裝置支援的縮放與 Auto 模式閃光燈。
@@ -37,6 +39,7 @@
 - 單一倍率按鈕、向上浮出的橫向變焦滑桿、觀景窗雙指縮放；錄影中仍可調整。常用相機控制常駐觀景窗下方，LUT 與更多設定使用底部面板。
 - 裝置能力檢測：Pro 模式快門／ISO、曝光補償、白平衡預設與鎖定，以及可變光圈。
 - Android 16 以上且鏡頭公開 CCT 能力時，提供 K 色溫與色偏。
+- 不需 CCT 的冷暖／綠洋紅調色，可在錄影中調整；與相機白平衡分開，使用相對刻度。
 - 繁體中文、深色介面、直橫向適應；相機與處理流程不使用網路。
 
 Grain Originals 是本專案原創調色，適用 sRGB SDR，並非特定底片的量測重現。「暖日、柔霧、銀影」保留為舊版示範色調。Kodak 項目是 Pat David 的社群近似模擬，來源為 [Natron HaldCLUT](https://github.com/NatronGitHub/clut)，依 CC BY-SA 4.0 保留作者與授權；原始素材、版本與轉換說明見 [來源標示](third_party/luts/natron/ATTRIBUTION.txt)。
@@ -116,7 +119,7 @@ app/src/main/java/tw/luma/camera/
 
 ## 驗證範圍與待驗項目
 
-JVM 測試覆蓋 CUBE 索引順序、三線性內插、domain、65 格點、損壞檔案與色域矩陣。另附 8 個裝置 GPU 測試，檢查 shader 色彩、方向、強度及分塊邊界；連接手機後執行 `./gradlew :app:connectedDebugAndroidTest`。不能以 CPU 測試取代 GPU、鏡頭或畫質驗證。
+JVM 測試覆蓋 CUBE 索引順序、三線性內插、domain、65 格點、損壞檔案、色域矩陣、白平衡方向／中性亮度及重設。另附裝置 GPU／操作測試，檢查 shader 色彩、方向、強度、分塊邊界、白平衡套用順序及錄影控制；連接手機後執行 `./gradlew :app:connectedDebugAndroidTest`。不能以 CPU 測試取代 GPU、鏡頭或畫質驗證。
 
 真機請依 [驗收清單](docs/device-validation.md)檢查。特別是：
 

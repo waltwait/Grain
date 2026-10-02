@@ -22,6 +22,7 @@ import tw.luma.camera.camera.ActualCapture
 import tw.luma.camera.camera.CameraCapabilities
 import tw.luma.camera.camera.CameraEngine
 import tw.luma.camera.camera.CaptureSettings
+import tw.luma.camera.camera.WhiteBalanceControls
 import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.lut.CubeLut
 import tw.luma.camera.lut.BundledLutLibrary
@@ -129,6 +130,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun changeCapture(transform: (CaptureSettings) -> CaptureSettings) { _state.update {
         val next = transform(it.capture)
         if (next == it.capture) it else it.copy(capture = next)
+    } }
+    fun resetWhiteBalance() { _state.update {
+        it.copy(capture = WhiteBalanceControls.reset(it.capture), filter = WhiteBalanceControls.reset(it.filter))
     } }
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = false)) } }

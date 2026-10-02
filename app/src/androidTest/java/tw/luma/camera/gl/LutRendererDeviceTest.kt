@@ -82,6 +82,36 @@ class LutRendererDeviceTest {
         for (color in colors) assertColor(Color.rgb(90, 90, 90), color)
     }
 
+    @Test fun whiteBalanceAloneIsAppliedToExportWithNoLut() {
+        val input = Bitmap.createBitmap(intArrayOf(Color.rgb(64, 64, 64)), 1, 1, Bitmap.Config.ARGB_8888)
+        val output = LutRenderer.apply(input, FilterSettings(warmth = 100f))
+        try {
+            assertNotSame("WB grading must not take the no-op export path", input, output)
+            assertColor(Color.rgb(73, 62, 53), output.getPixel(0, 0))
+        } finally { input.recycle(); if (output !== input) output.recycle() }
+    }
+
+    @Test fun whiteBalancePrecedesTheLutAndSurvivesZeroStrength() {
+        val swap = CubeLut.generate("Swap", 2) { r, g, b -> floatArrayOf(b, r, g) }
+        val settings = listOf(
+            FilterSettings(lut = swap, warmth = 100f),
+            FilterSettings(lut = swap, strength = 0f, warmth = 100f, encoding = LutEncoding.FLOG2),
+        )
+        val colors = drawSequence(Color.rgb(64, 64, 64), settings)
+        assertColor(Color.rgb(53, 73, 62), colors[0])
+        assertColor(Color.rgb(73, 62, 53), colors[1])
+    }
+
+    @Test fun changingWhiteBalanceOnTheSameRendererCannotLeaveStaleGains() {
+        val colors = drawSequence(Color.rgb(64, 64, 64), listOf(
+            FilterSettings(warmth = 100f), FilterSettings(), FilterSettings(tint = 100f), FilterSettings(),
+        ))
+        assertColor(Color.rgb(73, 62, 53), colors[0])
+        assertColor(Color.rgb(64, 64, 64), colors[1])
+        assertColor(Color.rgb(73, 60, 73), colors[2])
+        assertColor(Color.rgb(64, 64, 64), colors[3])
+    }
+
     @Test fun tileBoundaryPreservesBothRightAndBottomEdges() {
         val pixels = IntArray(1025 * 1025) { i ->
             when {
