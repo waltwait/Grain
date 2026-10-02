@@ -44,24 +44,28 @@ private fun LargeTypeCameraChromePreview() = CameraChromePreview(LiveControl.WB)
 @Composable
 private fun CameraTemperatureChromePreview() = CameraChromePreview(LiveControl.WB, cct = true)
 
+@Preview(name = "WB · Camera2 gains K", widthDp = 360, heightDp = 640)
+@Composable
+private fun Camera2TemperatureChromePreview() = CameraChromePreview(LiveControl.WB, gains = true)
+
 @Preview(name = "WB · landscape", widthDp = 640, heightDp = 300)
 @Composable
 private fun LandscapeWhiteBalanceChromePreview() = CameraChromePreview(LiveControl.WB)
 
 @Composable
-private fun CameraChromePreview(initialControl: LiveControl, cct: Boolean = false) {
+private fun CameraChromePreview(initialControl: LiveControl, cct: Boolean = false, gains: Boolean = false) {
     var active by remember { mutableStateOf<LiveControl?>(initialControl) }
-    var state by remember(initialControl, cct) {
+    var state by remember(initialControl, cct, gains) {
         mutableStateOf(CameraUiState(
             ready = true, minZoom = .5f, maxZoom = 8f,
-            capture = CaptureSettings(manual = initialControl == LiveControl.ISO, iso = 400, shutterNs = 8_000_000, kelvin = if (cct) 5600 else null),
-            filter = FilterSettings(warmth = if (cct) 0f else 20f, tint = if (cct) 0f else -10f),
+            capture = CaptureSettings(manual = initialControl == LiveControl.ISO, iso = 400, shutterNs = 8_000_000, kelvin = if (cct || gains) 5600 else null),
+            filter = FilterSettings(warmth = if (cct || gains) 0f else 20f, tint = if (cct || gains) 0f else -10f),
             capabilities = CameraCapabilities(
                 manualSensor = true, isoRange = Range(100, 6400), shutterRange = Range(100_000L, 1_000_000_000L),
                 exposureRange = Range(-6, 6), exposureStep = 1f / 3f,
                 whiteBalances = listOf(WhiteBalance(CaptureRequest.CONTROL_AWB_MODE_AUTO, "自動"),
                     WhiteBalance(CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT, "日光")),
-                cctRange = if (cct) Range(2856, 12000) else null, awbLock = true,
+                cctRange = if (cct) Range(2856, 12000) else null, awbLock = true, manualWhiteBalance = gains,
             ),
         ))
     }

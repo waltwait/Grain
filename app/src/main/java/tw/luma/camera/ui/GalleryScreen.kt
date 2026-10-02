@@ -161,7 +161,9 @@ private fun ColumnScope.GalleryViewer(items: List<GalleryItem>, initialPage: Int
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = { zoomed = false; scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } }, enabled = pager.currentPage > 0) { Text("‹ 上一張") }
-        Text(if (item.video) "影片 · ${durationLabel(item.durationMs)}" else "雙指縮放 · 雙擊還原", modifier = Modifier.weight(1f), maxLines = 2, textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
+        if (item.video) Text("影片 · ${durationLabel(item.durationMs)}", modifier = Modifier.weight(1f), maxLines = 2,
+            textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
+        else Spacer(Modifier.weight(1f))
         TextButton(onClick = { zoomed = false; scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } }, enabled = pager.currentPage < items.lastIndex) { Text("下一張 ›") }
     }
 }

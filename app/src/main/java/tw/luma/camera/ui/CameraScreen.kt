@@ -145,11 +145,11 @@ fun CameraScreen(model: CameraViewModel) {
         if (permitted) {
             val targets = CameraEffect.PREVIEW or if (state.mode == CaptureMode.VIDEO) CameraEffect.VIDEO_CAPTURE else 0
             val processor = LutSurfaceProcessor(targets) { error -> ContextCompat.getMainExecutor(context).execute { model.cameraError(error.message ?: "GPU 預覽失敗") } }
-            val next = CameraEngine(context, lifecycle, view, processor, model::ready, model::actual, model::cameraError, model::videoQuality)
+            val next = CameraEngine(context, lifecycle, view, processor, model::ready, model::actual, model::cameraError,
+                model::videoQuality, model::message)
             owned = next; engine = next; processor.settings = state.filter
             var multiTouch = false
             var startExposure = 0
-            var manualHintShown = false
             val scale = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
                     if (model.state.value.liveControlsEnabled) model.zoom(model.state.value.capture.zoom * detector.scaleFactor)
@@ -181,7 +181,6 @@ fun CameraScreen(model: CameraViewModel) {
                     val dy = event.y - start.y
                     if (multiTouch || !snapshot.liveControlsEnabled || abs(dy) <= abs(event.x - start.x)) return false
                     if (snapshot.capture.manual) {
-                        if (!manualHintShown) { model.message("手動曝光請調整 ISO 或快門"); manualHintShown = true }
                         return true
                     }
                     val caps = snapshot.capabilities
@@ -199,7 +198,6 @@ fun CameraScreen(model: CameraViewModel) {
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                     multiTouch = false
                     startExposure = model.state.value.capture.evIndex
-                    manualHintShown = false
                 }
                 if (event.pointerCount > 1) {
                     multiTouch = true
@@ -502,7 +500,6 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                         }
                         Text("強度 ${(state.filter.strength * 100).roundToInt()}%", Modifier.padding(top = 12.dp))
                         Slider(state.filter.strength, { value -> model.changeFilter { it.copy(strength = value) } }, modifier = Modifier.testTag("filter-strength"))
-                        if (state.filter.encoding != LutEncoding.SRGB) Text("Log 近似適配，色彩與富士機身可能不同。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
@@ -514,14 +511,12 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     TextButton(onClick = { model.changeFilter { tw.luma.camera.camera.WhiteBalanceControls.reset(it) } }) { Text("重設冷暖與色偏") }
                     Text("影像亮度：%+.1f EV".format(Locale.US, state.filter.brightnessEv))
                     Slider(state.filter.brightnessEv, { value -> model.changeFilter { it.copy(brightnessEv = value) } }, valueRange = -2f..2f)
-                    Text("這是拍攝後的調色，不會改變快門或 ISO。", style = MaterialTheme.typography.bodySmall)
                     if (state.filter.lut != null) {
                         Spacer(Modifier.height(16.dp)); Text("LUT 輸入色彩", style = MaterialTheme.typography.titleMedium)
                         LutEncoding.entries.forEach { encoding -> Row(verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(state.filter.encoding == encoding, { model.changeFilter { it.copy(encoding = encoding) } })
                             TextButton(onClick = { model.changeFilter { it.copy(encoding = encoding) } }) { Text(encoding.label) }
                         } }
-                        Text("一般 LUT 請依作者指定的輸入空間設定。Log 適配將手機 SDR 近似轉為場景亮度，並假設 LUT 輸出 gamma 2.2；無法重現完整富士機身處理。", style = MaterialTheme.typography.bodySmall)
                         if (state.luts.any { it.id == state.selectedLut && it.imported }) TextButton(onClick = { model.deleteSelectedLut(); dismiss() }) { Text("移除這個匯入 LUT") }
                     }
                 }
@@ -529,7 +524,6 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     if (state.mode == CaptureMode.VIDEO) {
                         Text("${state.videoQuality} · SDR · 即時 LUT", style = MaterialTheme.typography.titleMedium)
                         ToggleRow("錄製聲音", state.recordWithAudio, !state.recording, model::recordWithAudio)
-                        Text("首次錄影會詢問麥克風權限；未授權仍可錄製無聲影片。", style = MaterialTheme.typography.bodySmall)
                     }
                     if (caps.awbLock && state.capture.kelvin == null && state.capture.wbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO) {
                         ToggleRow("鎖定自動白平衡", state.capture.wbLocked, !state.capture.manual) { checked -> model.changeCapture { it.copy(wbLocked = checked) } }
@@ -539,11 +533,28 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
                     OutlinedButton(onClick = importPhoto, enabled = !state.busy && !state.recording) { Text("匯入照片套用濾鏡") }
                     Spacer(Modifier.height(16.dp))
-                    Text("鏡頭能力", style = MaterialTheme.typography.titleMedium)
-                    Text("Grain ${tw.luma.camera.BuildConfig.VERSION_NAME} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
-                        style = MaterialTheme.typography.bodySmall)
-                    Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n直接色溫：${caps.cctRange?.let { "${it.lower}–${it.upper} K" } ?: "未提供"}", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
-                    Text("照片：Pictures/Grain\n影片：Movies/Grain\n富士底片模擬採近似色彩適配；個人測試版含十款官方 LUT。", style = MaterialTheme.typography.bodySmall)
+                    var deviceInfo by remember { mutableStateOf(false) }
+                    TextButton(onClick = { deviceInfo = !deviceInfo }, modifier = Modifier.testTag("device-info-toggle")) {
+                        Text("裝置資訊 ${if (deviceInfo) "▴" else "▾"}")
+                    }
+                    if (deviceInfo) {
+                        Text("Grain ${tw.luma.camera.BuildConfig.VERSION_NAME} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
+                            style = MaterialTheme.typography.bodySmall)
+                        val wb = when (caps.whiteBalanceBackend) {
+                            tw.luma.camera.camera.WhiteBalanceBackend.CCT -> "直接 CCT · ${caps.cctRange?.lower}–${caps.cctRange?.upper} K"
+                            tw.luma.camera.camera.WhiteBalanceBackend.GAINS -> "Camera2 RGGB · 2000–10000 K（估算）"
+                            tw.luma.camera.camera.WhiteBalanceBackend.GRADING -> "冷暖調色"
+                        }
+                        val wbResult = if (caps.whiteBalanceBackend != tw.luma.camera.camera.WhiteBalanceBackend.GAINS) "" else "\n白平衡回報：${when {
+                            state.capture.kelvin == null -> if (state.actual.manualWbReady) "已就緒" else "等待鏡頭"
+                            state.actual.manualWbApplied == true && state.actual.manualWbTargetKelvin == state.capture.kelvin -> "已套用"
+                            state.actual.manualWbApplied == false -> "與設定不一致"
+                            else -> "等待鏡頭"
+                        }}"
+                        Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n色溫控制：$wb$wbResult",
+                            Modifier.padding(vertical = 12.dp).testTag("device-info"), style = MaterialTheme.typography.bodyMedium)
+                        Text("照片：Pictures/Grain\n影片：Movies/Grain", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

@@ -31,7 +31,7 @@ internal fun WhiteBalancePanel(
     onCapture: ((CaptureSettings) -> CaptureSettings) -> Unit,
     onFilter: ((FilterSettings) -> FilterSettings) -> Unit,
 ) {
-    val range = caps.cctRange?.takeIf { it.upper > it.lower }
+    val range = caps.kelvinRange
     var cameraTemperature by remember(caps.id, range) { mutableStateOf(range != null) }
     if (range != null) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -59,7 +59,8 @@ internal fun WhiteBalancePanel(
         }
     }
     if (cameraTemperature && range != null) {
-        val kelvin = (capture.kelvin ?: actual.kelvin ?: 5500).coerceIn(range.lower, range.upper)
+        val kelvin = (capture.kelvin ?: actual.kelvin?.takeIf { caps.whiteBalanceBackend == tw.luma.camera.camera.WhiteBalanceBackend.CCT }
+            ?: 5500).coerceIn(range.lower, range.upper)
         fun setKelvin(value: Float) = onCapture {
             it.copy(kelvin = WhiteBalanceControls.kelvin(value, range.lower, range.upper), wbLocked = false)
         }
@@ -80,13 +81,8 @@ internal fun WhiteBalancePanel(
         HorizontalControlSlider(capture.tint.toFloat(), { value -> onCapture { it.copy(tint = value.roundToInt()) } },
             -50f..50f, 99, enabled && capture.kelvin != null,
             Modifier.fillMaxWidth().testTag("wb-camera-tint").semantics { contentDescription = "相機白平衡色偏，左右滑動調整" })
-        Text(if (capture.kelvin == null) "滑動色溫或按 ± 可固定 K 值，再調整色偏。"
-            else actual.kelvin?.let { "鏡頭回報：$it K${actual.tint?.let { tint -> " · 色偏 $tint" }.orEmpty()}" } ?: "等待鏡頭回報色溫",
-            style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = .65f))
     } else {
         SoftwareWhiteBalanceSliders(filter, enabled, onFilter)
-        Text("冷暖與色偏為調色，套用於預覽、照片和影片。", style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = .65f), modifier = Modifier.testTag("wb-grading-note"))
     }
     if (caps.awbLock && capture.kelvin == null && capture.wbMode == CaptureRequest.CONTROL_AWB_MODE_AUTO) {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {

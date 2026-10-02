@@ -181,7 +181,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 _state.update { it.copy(luts = it.luts.filterNot { previous -> previous.id == entry.id } + entry,
                     selectedLut = entry.id, filter = it.filter.copy(lut = entry.lut, encoding = entry.lut.suggestedEncoding)) }
                 prefs.edit().putString("selectedLut", entry.id).apply()
-                message(if (entry.lut.suggestedEncoding != tw.luma.camera.lut.LutEncoding.SRGB) "已匯入 ${entry.lut.title}。Log 適配為近似效果，請檢查膚色與曝光。" else "已匯入 ${entry.lut.title}；請確認輸入色彩設定符合 LUT。")
+                message("已匯入 ${entry.lut.title}")
             } catch (e: Exception) { message(e.message ?: "LUT 匯入失敗") }
             finally { _state.update { it.copy(busy = false) } }
         }

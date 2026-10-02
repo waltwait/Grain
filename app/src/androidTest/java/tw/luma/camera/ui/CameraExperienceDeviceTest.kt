@@ -35,6 +35,42 @@ class CameraExperienceDeviceTest {
     private fun model() = ViewModelProvider(ui.activity)[CameraViewModel::class.java]
     private fun ready() { ui.waitUntil(30_000) { model().state.value.ready } }
 
+    @Test fun camera2TemperatureWithoutCctAppliesAndReturnsToAuto() {
+        ready()
+        val model = model()
+        val before = model.state.value
+        org.junit.Assume.assumeTrue(before.capabilities.whiteBalanceBackend == tw.luma.camera.camera.WhiteBalanceBackend.GAINS)
+        try {
+            ui.runOnIdle { model.resetWhiteBalance() }
+            ui.waitUntil(10_000) { model.state.value.actual.manualWbReady }
+            ui.onNodeWithTag("control-wb").performClick()
+            ui.onNodeWithTag("wb-mode-camera").assertExists()
+            for (kelvin in listOf(3000, 3050, 7500)) {
+                ui.onNodeWithTag("live-slider-wb").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(kelvin.toFloat()) }
+                ui.waitUntil(10_000) {
+                    val state = model.state.value
+                    state.capture.kelvin == kelvin && state.actual.manualWbApplied == true &&
+                        state.actual.manualWbTargetKelvin == kelvin && state.actual.awbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_OFF
+                }
+                ui.runOnIdle {
+                    assertEquals(before.capture.iso, model.state.value.capture.iso)
+                    assertEquals(before.capture.shutterNs, model.state.value.capture.shutterNs)
+                    assertEquals(before.selectedLut, model.state.value.selectedLut)
+                }
+            }
+            ui.onNodeWithTag("live-reset-wb").performScrollTo().performClick()
+            ui.waitUntil(10_000) {
+                val state = model.state.value
+                state.capture.kelvin == null && state.actual.awbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO &&
+                    state.actual.manualWbTargetKelvin == null
+            }
+            screenshot("grain-camera2-white-balance.png")
+            ui.onNodeWithTag("control-wb").performClick()
+        } finally {
+            ui.runOnIdle { model.changeCapture { before.capture }; model.changeFilter { before.filter } }
+        }
+    }
+
     @Test fun whiteBalanceGradingAndResetKeepExposureAndSelectedFilm() {
         ready()
         val model = model()
@@ -70,7 +106,7 @@ class CameraExperienceDeviceTest {
 
     private fun adjustWhiteBalance(warmth: Float, tint: Float) {
         ui.onNodeWithTag("control-wb").assertIsEnabled().performClick()
-        if (model().state.value.capabilities.cctRange?.let { it.upper > it.lower } == true) {
+        if (model().state.value.capabilities.kelvinRange != null) {
             ui.onNodeWithTag("wb-mode-grading").performScrollTo().performClick()
         }
         ui.onNodeWithTag("wb-warmth").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(warmth) }

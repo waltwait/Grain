@@ -7,7 +7,10 @@ import android.provider.MediaStore
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.hardware.camera2.params.ColorSpaceTransform
+import android.hardware.camera2.params.RggbChannelVector
 import android.os.Build
 import android.os.SystemClock
 import android.view.Surface
@@ -50,6 +53,7 @@ class CameraEngine(
     private val onActual: (ActualCapture) -> Unit,
     private val onError: (String) -> Unit,
     private val onVideoQuality: (String) -> Unit = {},
+    private val onControlError: (String) -> Unit = onError,
 ) : AutoCloseable {
     private val main = ContextCompat.getMainExecutor(context)
     private var provider: ProcessCameraProvider? = null
@@ -64,6 +68,15 @@ class CameraEngine(
     private var focusSequence = 0
     private var closed = false
     private var lastResultAt = 0L
+    private data class WbReference(val control: ManualWhiteBalance, val transform: ColorSpaceTransform)
+    private data class WbRequest(val gains: FloatArray, val transform: ColorSpaceTransform, val kelvin: Int,
+        val startedAt: Long, var warned: Boolean = false)
+    private var wbReference: WbReference? = null
+    private var wbRequest: WbRequest? = null
+    private var waitingForWhiteBalance = false
+    private var wbWaitSince = 0L
+    private var wbWaitWarned = false
+    private var hasAppliedSettings = false
     @Volatile private var latest = ActualCapture()
     var applying: Boolean = false
         private set
@@ -72,6 +85,11 @@ class CameraEngine(
         focusSequence++
         val token = ++generation
         camera = null
+        wbReference = null
+        wbRequest = null
+        waitingForWhiteBalance = false
+        hasAppliedSettings = false
+        lastResultAt = 0L
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             if (!closed && token == generation) {
@@ -83,12 +101,11 @@ class CameraEngine(
                         .setResolutionStrategy(ResolutionStrategy(android.util.Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
                     Camera2Interop.Extender(builder).setSessionCaptureCallback(object : CameraCaptureSession.CaptureCallback() {
                         override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
-                            latest = ActualCapture(result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY), result.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME),
-                                result.get(android.hardware.camera2.CaptureResult.LENS_APERTURE),
-                                if (Build.VERSION.SDK_INT >= 36) result.get(android.hardware.camera2.CaptureResult.COLOR_CORRECTION_COLOR_TEMPERATURE) else null,
-                                if (Build.VERSION.SDK_INT >= 36) result.get(android.hardware.camera2.CaptureResult.COLOR_CORRECTION_COLOR_TINT) else null)
                             val now = SystemClock.elapsedRealtime()
-                            if (now - lastResultAt > 300) { lastResultAt = now; val snapshot = latest; main.execute { if (!closed && token == generation) onActual(snapshot) } }
+                            if (now - lastResultAt <= 300) return
+                            lastResultAt = now
+                            // Color metadata is read at UI cadence, not for every preview/video frame.
+                            main.execute { if (!closed && token == generation) captureResult(request, result, now) }
                         }
                     })
                     val preview = builder.build().also { it.setSurfaceProvider(view.surfaceProvider) }
@@ -116,9 +133,47 @@ class CameraEngine(
         }, main)
     }
 
-    fun apply(requested: CaptureSettings) {
+    private fun captureResult(request: CaptureRequest, result: TotalCaptureResult, now: Long) {
+        val gains = result.get(CaptureResult.COLOR_CORRECTION_GAINS)?.channels()
+        val transform = result.get(CaptureResult.COLOR_CORRECTION_TRANSFORM)
+        val resultAwb = result.get(CaptureResult.CONTROL_AWB_MODE)
+        if (caps.manualWhiteBalance && (settings.kelvin == null || waitingForWhiteBalance) &&
+            resultAwb != null && resultAwb != CaptureRequest.CONTROL_AWB_MODE_OFF &&
+            request.get(CaptureRequest.CONTROL_AWB_MODE) != CaptureRequest.CONTROL_AWB_MODE_OFF && gains != null && transform != null) {
+            ManualWhiteBalance.create(gains, transform.values(), caps.sensorColorCalibration)?.let {
+                wbReference = WbReference(it, transform)
+                if (waitingForWhiteBalance && settings.kelvin != null) apply(settings, force = true)
+            }
+        }
+        val expected = wbRequest
+        // Ignore in-flight results from a superseded request, including return-to-auto frames.
+        val applied = if (expected != null && request.get(CaptureRequest.CONTROL_AWB_MODE) == CaptureRequest.CONTROL_AWB_MODE_OFF &&
+            request.get(CaptureRequest.COLOR_CORRECTION_GAINS)?.channels()?.contentEquals(expected.gains) == true &&
+            request.get(CaptureRequest.COLOR_CORRECTION_TRANSFORM) == expected.transform) {
+            resultAwb == CaptureRequest.CONTROL_AWB_MODE_OFF && gains != null && transform != null && ManualWhiteBalance.matches(expected.gains, gains) &&
+                transform.values().zip(expected.transform.values()).all { (a, b) -> kotlin.math.abs(a - b) < .03 }
+        } else null
+        if (applied == false && expected != null && !expected.warned && now - expected.startedAt > 2000) {
+            expected.warned = true
+            onControlError("鏡頭未套用手動白平衡")
+        }
+        if (waitingForWhiteBalance && !wbWaitWarned && now - wbWaitSince > 2500) {
+            wbWaitWarned = true
+            onControlError("鏡頭尚未回報手動白平衡資料")
+        }
+        latest = ActualCapture(result.get(CaptureResult.SENSOR_SENSITIVITY), result.get(CaptureResult.SENSOR_EXPOSURE_TIME),
+            result.get(CaptureResult.LENS_APERTURE),
+            if (Build.VERSION.SDK_INT >= 36) result.get(CaptureResult.COLOR_CORRECTION_COLOR_TEMPERATURE) else null,
+            if (Build.VERSION.SDK_INT >= 36) result.get(CaptureResult.COLOR_CORRECTION_COLOR_TINT) else null,
+            wbReference != null, applied, resultAwb, if (applied == true) expected?.kelvin else null)
+        onActual(latest)
+    }
+
+    fun apply(requested: CaptureSettings) = apply(requested, force = false)
+
+    private fun apply(requested: CaptureSettings, force: Boolean) {
         val current = camera ?: return
-        if (settings.copy(zoom = requested.zoom, evIndex = requested.evIndex) == requested) {
+        if (!force && hasAppliedSettings && settings.copy(zoom = requested.zoom, evIndex = requested.evIndex) == requested) {
             val previous = settings
             settings = requested
             val zoom = current.cameraInfo.zoomState.value
@@ -140,6 +195,7 @@ class CameraEngine(
         }
         val previous = settings
         settings = requested
+        hasAppliedSettings = true
         val control = current.cameraControl
         val bundle = CaptureRequestOptions.Builder()
         val isManual = requested.manual && caps.manualSensor
@@ -151,16 +207,34 @@ class CameraEngine(
             if (caps.maxFrameDuration > 0) bundle.setCaptureRequestOption(CaptureRequest.SENSOR_FRAME_DURATION, maxOf(shutter, 33_333_333).coerceAtMost(caps.maxFrameDuration))
             if (caps.adjustableAperture && requested.aperture in caps.apertures) bundle.setCaptureRequestOption(CaptureRequest.LENS_APERTURE, requested.aperture!!)
         }
-        val cct = Build.VERSION.SDK_INT >= 36 && requested.kelvin != null && caps.cctRange != null
+        val cct = Build.VERSION.SDK_INT >= 36 && requested.kelvin != null && caps.whiteBalanceBackend == WhiteBalanceBackend.CCT
+        val manualWb = requested.kelvin != null && caps.whiteBalanceBackend == WhiteBalanceBackend.GAINS
+        val reference = wbReference
+        val wasWaiting = waitingForWhiteBalance
+        waitingForWhiteBalance = manualWb && reference == null
+        if (waitingForWhiteBalance && !wasWaiting) { wbWaitSince = SystemClock.elapsedRealtime(); wbWaitWarned = false }
+        wbRequest = null
         if (cct) {
+            if (caps.awbLock) bundle.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, false)
             bundle.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_OFF)
             bundle.setCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_MODE, CameraMetadata.COLOR_CORRECTION_MODE_CCT)
             bundle.setCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_COLOR_TEMPERATURE, caps.cctRange!!.clamp(requested.kelvin))
             bundle.setCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_COLOR_TINT, requested.tint.coerceIn(-50, 50))
+        } else if (manualWb && reference != null) {
+            val gains = reference.control.gains(requested.kelvin, requested.tint)
+            bundle.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_OFF)
+            if (caps.awbLock) bundle.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, false)
+            bundle.setCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_MODE, CaptureRequest.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX)
+            bundle.setCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_GAINS, RggbChannelVector(gains[0], gains[1], gains[2], gains[3]))
+            bundle.setCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_TRANSFORM, reference.transform)
+            wbRequest = WbRequest(gains, reference.transform, requested.kelvin, SystemClock.elapsedRealtime())
         } else {
-            val wb = requested.wbMode.takeIf { mode -> caps.whiteBalances.any { it.mode == mode } } ?: CaptureRequest.CONTROL_AWB_MODE_AUTO
+            val wb = if (waitingForWhiteBalance) CaptureRequest.CONTROL_AWB_MODE_AUTO else
+                requested.wbMode.takeIf { mode -> caps.whiteBalances.any { it.mode == mode } } ?: CaptureRequest.CONTROL_AWB_MODE_AUTO
             bundle.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, wb)
-            if (caps.awbLock) bundle.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, requested.wbLocked || (isManual && wb == CaptureRequest.CONTROL_AWB_MODE_AUTO))
+            if (caps.manualWhiteBalance) bundle.setCaptureRequestOption(CaptureRequest.COLOR_CORRECTION_MODE, CaptureRequest.COLOR_CORRECTION_MODE_FAST)
+            if (caps.awbLock) bundle.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK,
+                !waitingForWhiteBalance && (requested.wbLocked || (isManual && wb == CaptureRequest.CONTROL_AWB_MODE_AUTO)))
         }
         val futures = mutableListOf<com.google.common.util.concurrent.ListenableFuture<*>>()
         futures += Camera2CameraControl.from(control).setCaptureRequestOptions(bundle.build())
@@ -220,7 +294,7 @@ class CameraEngine(
 
     fun startVideo(audio: Boolean, callback: (VideoRecordEvent) -> Unit) {
         check(!closed && recording == null) { "錄影正在進行或相機已關閉" }
-        check(!applying) { "拍攝參數正在套用，請稍後再錄" }
+        check(!applying && !waitingForWhiteBalance) { "拍攝參數正在套用，請稍後再錄" }
         val capture = checkNotNull(videoCapture) { "錄影模式尚未就緒" }
         capture.targetRotation = view.display?.rotation ?: Surface.ROTATION_0
         val name = "GRAIN_${java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())}.mp4"
@@ -243,7 +317,7 @@ class CameraEngine(
     fun capture(file: File, executor: Executor, callback: (Result<ActualCapture>) -> Unit) {
         val capture = imageCapture
         if (capture == null || closed) { callback(Result.failure(IllegalStateException("相機尚未就緒"))); return }
-        if (applying) { callback(Result.failure(IllegalStateException("拍攝參數正在套用，請稍後再拍"))); return }
+        if (applying || waitingForWhiteBalance) { callback(Result.failure(IllegalStateException("拍攝參數正在套用，請稍後再拍"))); return }
         capture.targetRotation = view.display?.rotation ?: Surface.ROTATION_0
         capture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), executor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(result: ImageCapture.OutputFileResults) { callback(Result.success(latest)) }
@@ -255,3 +329,5 @@ class CameraEngine(
 }
 
 enum class FocusOutcome { FOCUSED, NOT_FOCUSED, METERED, UNAVAILABLE }
+
+private fun RggbChannelVector.channels() = floatArrayOf(red, greenEven, greenOdd, blue)

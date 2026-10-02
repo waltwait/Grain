@@ -3,6 +3,8 @@ package tw.luma.camera.camera
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.params.ColorSpaceTransform
 import android.os.Build
 import android.util.Range
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -24,16 +26,22 @@ data class CameraCapabilities(
     val exposureRange: Range<Int> = Range(0, 0),
     val exposureStep: Float = 0f,
     val aeLock: Boolean = false,
+    val manualWhiteBalance: Boolean = false,
+    val sensorColorCalibration: SensorColorCalibration? = null,
 ) {
     val adjustableAperture get() = manualSensor && apertures.size > 1
     val hasEv get() = exposureRange.lower != exposureRange.upper
+    val whiteBalanceBackend get() = WhiteBalanceBackend.choose(cctRange?.let { it.upper > it.lower } == true, manualWhiteBalance)
+    val kelvinRange get() = cctRange?.takeIf { it.upper > it.lower } ?: if (manualWhiteBalance) Range(2000, 10000) else null
 
     companion object {
         fun read(info: CameraInfo, context: android.content.Context): CameraCapabilities {
             val camera = Camera2CameraInfo.from(info)
             fun <T> get(key: CameraCharacteristics.Key<T>): T? = camera.getCameraCharacteristic(key)
             val manager = context.getSystemService(android.hardware.camera2.CameraManager::class.java)
-            val requestKeys = manager.getCameraCharacteristics(camera.cameraId).availableCaptureRequestKeys.orEmpty()
+            val characteristics = manager.getCameraCharacteristics(camera.cameraId)
+            val requestKeys = characteristics.availableCaptureRequestKeys.orEmpty()
+            val resultKeys = characteristics.availableCaptureResultKeys.orEmpty()
             val sensor = get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)?.contains(CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR) == true &&
                 get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES)?.contains(CaptureRequest.CONTROL_AE_MODE_OFF) == true &&
                 CaptureRequest.SENSOR_EXPOSURE_TIME in requestKeys && CaptureRequest.SENSOR_SENSITIVITY in requestKeys
@@ -46,13 +54,32 @@ data class CameraCapabilities(
                 get(CameraCharacteristics.COLOR_CORRECTION_AVAILABLE_MODES)?.contains(CameraMetadata.COLOR_CORRECTION_MODE_CCT) == true &&
                 CaptureRequest.COLOR_CORRECTION_COLOR_TEMPERATURE in requestKeys && CaptureRequest.COLOR_CORRECTION_COLOR_TINT in requestKeys)
                 get(CameraCharacteristics.COLOR_CORRECTION_COLOR_TEMPERATURE_RANGE) else null
+            val manualWb = get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+                ?.contains(CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_POST_PROCESSING) == true &&
+                CaptureRequest.CONTROL_AWB_MODE_OFF in modes &&
+                CaptureRequest.COLOR_CORRECTION_GAINS in requestKeys && CaptureRequest.COLOR_CORRECTION_TRANSFORM in requestKeys &&
+                CaptureResult.COLOR_CORRECTION_GAINS in resultKeys && CaptureResult.COLOR_CORRECTION_TRANSFORM in resultKeys
+            fun nativeTransform(color: ColorSpaceTransform?, calibration: ColorSpaceTransform?): DoubleArray? {
+                val c = color?.values() ?: return null
+                val combined = calibration?.let { ColorMatrix.multiply(it.values(), c) } ?: c
+                return combined.takeIf { ColorMatrix.inverse(it) != null }
+            }
+            fun illuminant(value: Int?): Int? = when (value) {
+                1, 20 -> 5500; 3, 24 -> 3200; 17 -> 2856; 18 -> 4874; 19 -> 6774
+                21 -> 6500; 22 -> 7500; 23 -> 5000; else -> null
+            }
+            val first = nativeTransform(get(CameraCharacteristics.SENSOR_COLOR_TRANSFORM1), get(CameraCharacteristics.SENSOR_CALIBRATION_TRANSFORM1))
+            val second = nativeTransform(get(CameraCharacteristics.SENSOR_COLOR_TRANSFORM2), get(CameraCharacteristics.SENSOR_CALIBRATION_TRANSFORM2))
+            val calibration = first?.let { SensorColorCalibration(it, illuminant(get(CameraCharacteristics.SENSOR_REFERENCE_ILLUMINANT1)),
+                second, illuminant(get(CameraCharacteristics.SENSOR_REFERENCE_ILLUMINANT2)?.toInt())) }
             val exposure = info.exposureState
             return CameraCapabilities(camera.cameraId, sensor,
                 get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE), get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE),
                 get(CameraCharacteristics.SENSOR_INFO_MAX_FRAME_DURATION) ?: 0,
                 if (CaptureRequest.LENS_APERTURE in requestKeys) get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)?.toList().orEmpty() else emptyList(),
                 allWb.filter { it.mode in modes }, get(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE) == true, cct,
-                exposure.exposureCompensationRange, exposure.exposureCompensationStep.toFloat(), get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true)
+                exposure.exposureCompensationRange, exposure.exposureCompensationStep.toFloat(), get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true,
+                manualWb, calibration)
         }
     }
 }
@@ -71,7 +98,12 @@ data class CaptureSettings(
     val flash: Boolean = false,
 )
 
-data class ActualCapture(val iso: Int? = null, val shutterNs: Long? = null, val aperture: Float? = null, val kelvin: Int? = null, val tint: Int? = null)
+data class ActualCapture(val iso: Int? = null, val shutterNs: Long? = null, val aperture: Float? = null, val kelvin: Int? = null,
+    val tint: Int? = null, val manualWbReady: Boolean = false, val manualWbApplied: Boolean? = null, val awbMode: Int? = null,
+    /** Target whose gain request was confirmed; not a measured color temperature. */
+    val manualWbTargetKelvin: Int? = null)
+
+internal fun ColorSpaceTransform.values() = DoubleArray(9) { getElement(it % 3, it / 3).toDouble() }
 
 fun shutterLabel(ns: Long?): String {
     if (ns == null || ns <= 0) return "—"

@@ -10,8 +10,8 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 15
-        versionName = "0.4.5"
+        versionCode = 16
+        versionName = "0.4.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }

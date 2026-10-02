@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.4.5**。WB 浮窗加入冷暖、綠／洋紅色偏與完整重設；鏡頭支援時另提供 K 色溫、±50 K 微調及實際色溫／色偏回報，見 [白平衡細調](docs/white-balance-v045.md)。沿用六款 Grain Originals、五款 Kodak 社群模擬、LUT 串流匯入、左右滑桿與內建相簿。本次未連接手機；使用者回報 Samsung S24／Android 16，實機色彩與錄影仍待驗證。
+目前開發版本 **0.4.6**。白平衡補上 Camera2 手動 RGGB 增益路線：沒有 Android 16 直接 CCT 的鏡頭，也能在公開手動白平衡能力時提供估算 K 色溫與色偏；保留直接 CCT 與冷暖調色。移除相簿手勢、白平衡與設定操作說明，裝置資訊預設收合，見 [色溫相容修正](docs/white-balance-v046.md)。沿用既有底片 LUT、左右滑桿及相簿；使用者截圖確認 S24／SM-S9210／Android 16 的 0.4.5 沒有直接 CCT。本次未連接手機，新的手動路線與實機色彩仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -27,6 +27,8 @@
 
 **0.4.5** 白平衡改用專用浮窗；冷暖／色偏調色不再依賴鏡頭的 CCT 能力。支援直接色溫時可切換 K 控制與冷暖調色，加入 ±50 K、相機預設、可用時的 AWB 鎖定及完整重設。調色在 LUT 前套用，濾鏡關閉或強度為 0 仍生效；照片、影片與匯入照片共用 shader。設定底部顯示版本與手機資訊。
 
+**0.4.6** 補上 Camera2 AWB OFF／RGGB gains／color transform 手動白平衡，不再把缺少 Android 16 CCT 當作沒有手動色溫。公開手動後處理與必要 request／result keys 時提供 2000–10000 K、50 K 微調及色偏；K 為感光元件模型的估算值。優先使用感光元件色彩校正矩陣，否則以鏡頭回報的 AWB 增益／矩陣建立近似控制；檢查實際套用回報，回到自動時清除手動增益與矩陣。移除可見操作說明並收合裝置資訊，保留無障礙描述與濾鏡來源／授權。
+
 ## 功能
 
 - 前後相機、點擊對焦、裝置支援的縮放與 Auto 模式閃光燈。
@@ -39,6 +41,7 @@
 - 單一倍率按鈕、向上浮出的橫向變焦滑桿、觀景窗雙指縮放；錄影中仍可調整。常用相機控制常駐觀景窗下方，LUT 與更多設定使用底部面板。
 - 裝置能力檢測：Pro 模式快門／ISO、曝光補償、白平衡預設與鎖定，以及可變光圈。
 - Android 16 以上且鏡頭公開 CCT 能力時，提供 K 色溫與色偏。
+- 沒有直接 CCT、但公開 Camera2 手動白平衡時，提供估算 K 色溫／色偏，並核對相機回報。
 - 不需 CCT 的冷暖／綠洋紅調色，可在錄影中調整；與相機白平衡分開，使用相對刻度。
 - 繁體中文、深色介面、直橫向適應；相機與處理流程不使用網路。
 
@@ -63,7 +66,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
-目前個人富士測試版另存於 `output/Grain-0.4.4-personal-fuji-debug.apk`，含新底片色調。APK 與官方富士 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+目前個人富士測試版另存於 `output/Grain-0.4.6-personal-fuji-debug.apk`。APK 與官方富士 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
 ## 安裝與操作
 
