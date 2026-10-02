@@ -56,8 +56,12 @@ class CameraExperienceDeviceTest {
             assertEquals("Opening a slider must not move the control strip", strip, expandedStrip)
             val slider = ui.onNodeWithTag("live-slider-zoom").fetchSemanticsNode().boundsInRoot
             assertTrue("The floating slider must not cover zoom", slider.bottom <= zoom.top + 2f)
-            ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeUp(startY = height * .8f, endY = height * .2f) }
+            assertTrue("Camera adjustments must use a horizontal slider", slider.width > slider.height * 3f)
+            ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeRight(startX = width * .2f, endX = width * .8f) }
             ui.waitUntil(5_000) { abs(model().state.value.capture.zoom - state.capture.zoom) > .01f }
+            val rightZoom = model().state.value.capture.zoom
+            ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeLeft(startX = width * .8f, endX = width * .2f) }
+            ui.waitUntil(5_000) { model().state.value.capture.zoom < rightZoom - .01f }
             ui.onNodeWithTag("control-zoom").performClick()
             ui.runOnIdle { model().zoom(1f) }
         }

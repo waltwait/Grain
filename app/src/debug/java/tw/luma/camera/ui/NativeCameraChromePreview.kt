@@ -5,7 +5,6 @@ import android.util.Range
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -58,8 +57,8 @@ private fun CameraChromePreview(initialControl: LiveControl) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF393E3A), Color(0xFF151918))))) {
             NativeCameraToolbar(state, Modifier.align(Alignment.TopCenter), panel = {}) { Text("00:00", color = Color.White) }
             NativeCameraControls(state, active, select = { active = it }, reset = { active = null },
-                slider = { _, height, enabled ->
-                    VerticalControlSlider(.5f, {}, 0f..1f, 0, enabled, Modifier.height(height).width(48.dp))
+                slider = { _, width, enabled ->
+                    HorizontalControlSlider(.5f, {}, 0f..1f, 0, enabled, Modifier.width(width))
                 }, modifier = Modifier.align(Alignment.BottomCenter))
         }
     }

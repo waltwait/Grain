@@ -29,14 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import tw.luma.camera.CameraUiState
 import tw.luma.camera.CameraViewModel
@@ -73,7 +71,7 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
             LiveControl.ZOOM -> model.zoom(1f)
         }
         select(null)
-    }, slider = { control, height, enabled -> ControlSlider(control, state, model, height, enabled) }, modifier = modifier)
+    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier)
 }
 
 /** One floating slider, with fixed anchors so opening it never moves the buttons or viewfinder. */
@@ -100,8 +98,7 @@ internal fun NativeCameraControls(
     val lowerGradient = remember { Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .5f))) }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val anchorHeight = with(density) { stripHeight.toDp() + zoomHeight.toDp() }
-        val sliderHeight = (maxHeight - anchorHeight - 140.dp).coerceIn(48.dp, 176.dp)
-        val popupWidth = minOf(88.dp, maxWidth - 16.dp)
+        val popupWidth = minOf(480.dp, maxWidth - 24.dp)
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(lowerGradient)) {
             Box(Modifier.fillMaxWidth().onSizeChanged { zoomHeight = it.height }.padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
                 val selected = active == LiveControl.ZOOM
@@ -144,29 +141,29 @@ internal fun NativeCameraControls(
             }
         }
         if (popupControl != null && popupControl.supported(state)) {
-            val index = controls.indexOf(popupControl)
-            val popupLeft = if (popupControl == LiveControl.ZOOM) (maxWidth - popupWidth) / 2 else
-                (12.dp + (maxWidth - 24.dp - 4.dp * (controls.size - 1)) / controls.size * (index + .5f) + 4.dp * index - popupWidth / 2)
-                    .coerceIn(8.dp, (maxWidth - popupWidth - 8.dp).coerceAtLeast(8.dp))
-            val anchor = anchorHeight
             val enabled = state.liveControlsEnabled && active == popupControl
             AnimatedVisibility(visible = active != null && state.liveControlsEnabled,
                 enter = fadeIn(tween(100)) + slideInVertically(tween(100, easing = LinearOutSlowInEasing)) { it / 12 },
                 exit = fadeOut(tween(90)) + slideOutVertically(tween(90, easing = LinearOutSlowInEasing)) { it / 16 },
-                modifier = Modifier.align(Alignment.BottomStart).offset(x = popupLeft).padding(bottom = anchor + 6.dp).width(popupWidth)) {
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = anchorHeight + 6.dp).width(popupWidth)) {
                 Surface(shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .78f),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = .12f))) {
-                    Column(Modifier.padding(top = 10.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(popupControl.value(state), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        slider(popupControl, sliderHeight, enabled)
-                        TextButton(onClick = { reset(popupControl) }, enabled = enabled, contentPadding = PaddingValues(0.dp), modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(when (popupControl) {
-                                LiveControl.EV -> "0"
-                                LiveControl.ZOOM -> "1×"
-                                else -> "AUTO"
-                            }, style = MaterialTheme.typography.labelSmall)
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(popupControl.title, Modifier.padding(end = 8.dp),
+                                style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .7f))
+                            Text(popupControl.value(state), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            TextButton(onClick = { reset(popupControl) }, enabled = enabled, contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) {
+                                Text(when (popupControl) {
+                                    LiveControl.EV -> "0"
+                                    LiveControl.ZOOM -> "1×"
+                                    else -> "AUTO"
+                                }, style = MaterialTheme.typography.labelSmall)
+                            }
                         }
+                        slider(popupControl, popupWidth - 24.dp, enabled)
                     }
                 }
             }
@@ -204,7 +201,7 @@ private fun LiveControl.value(state: CameraUiState): String {
 }
 
 @Composable
-private fun ControlSlider(control: LiveControl, state: CameraUiState, model: CameraViewModel, height: androidx.compose.ui.unit.Dp, enabled: Boolean) {
+private fun ControlSlider(control: LiveControl, state: CameraUiState, model: CameraViewModel, width: androidx.compose.ui.unit.Dp, enabled: Boolean) {
     val caps = state.capabilities
     val capture = state.capture
     // Collect live temperature only where it is displayed, not in the parent camera screen.
@@ -225,21 +222,17 @@ private fun ControlSlider(control: LiveControl, state: CameraUiState, model: Cam
         LiveControl.WB -> caps.cctRange?.takeIf { it.upper > it.lower }?.let { r -> SliderValue((capture.kelvin ?: actualKelvin ?: 5500).coerceIn(r.lower, r.upper).toFloat(), r.lower.toFloat()..r.upper.toFloat()) { v -> model.changeCapture { it.copy(kelvin = v.roundToInt(), wbLocked = false) } } }
             ?: SliderValue(caps.whiteBalances.indexOfFirst { it.mode == capture.wbMode }.coerceAtLeast(0).toFloat(), 0f..caps.whiteBalances.lastIndex.toFloat(), (caps.whiteBalances.size - 2).coerceAtLeast(0)) { v -> model.changeCapture { it.copy(wbMode = caps.whiteBalances[v.roundToInt()].mode, kelvin = null, wbLocked = false) } }
     }
-    VerticalControlSlider(slider.value, slider.onChange, slider.range, slider.steps, enabled,
-        Modifier.height(height).width(48.dp).testTag("live-slider-${control.name.lowercase()}").semantics { contentDescription = control.title })
+    HorizontalControlSlider(slider.value, slider.onChange, slider.range, slider.steps, enabled,
+        Modifier.width(width).testTag("live-slider-${control.name.lowercase()}").semantics { contentDescription = "${control.title}，左右滑動調整" })
 }
 
 private data class SliderValue(val value: Float, val range: ClosedFloatingPointRange<Float> = 0f..1f, val steps: Int = 0, val onChange: (Float) -> Unit)
 
-/** Rotate the stable Material slider, including measurement and touch coordinates. */
+/** Keep a direct horizontal drag; right always increases the requested value. */
 @Composable
-internal fun VerticalControlSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>, steps: Int, enabled: Boolean, modifier: Modifier) {
-    // Up always increases, independent of the user's horizontal writing direction.
+internal fun HorizontalControlSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>, steps: Int, enabled: Boolean, modifier: Modifier) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Slider(value.coerceIn(range.start, range.endInclusive), onChange, enabled = enabled, valueRange = range, steps = steps,
-        modifier = modifier.layout { measurable, constraints ->
-            val placeable = measurable.measure(Constraints.fixed(constraints.maxHeight, constraints.maxWidth))
-            layout(placeable.height, placeable.width) { placeable.placeWithLayer((placeable.height - placeable.width) / 2, (placeable.width - placeable.height) / 2) { rotationZ = -90f } }
-        })
+            modifier = modifier.heightIn(min = 48.dp))
     }
 }
