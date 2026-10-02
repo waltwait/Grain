@@ -2,19 +2,27 @@ package tw.luma.camera.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
@@ -22,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -43,85 +52,154 @@ enum class LiveControl(val title: String) { ISO("ISO"), SHUTTER("快門"), EV("�
 
 @Composable
 internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier) {
+    NativeCameraControls(state, active, select = { next ->
+        if (next != null && next.entersManual && !state.capture.manual) {
+            engine?.enterManual()?.let { manual ->
+                val caps = state.capabilities
+                val safeManual = if (state.mode == CaptureMode.VIDEO) {
+                    val shutter = manual.shutterNs.coerceAtMost(33_333_333L).coerceAtLeast(caps.shutterRange?.lower ?: 1L)
+                    val iso = (manual.iso.toDouble() * manual.shutterNs / shutter).roundToInt()
+                    manual.copy(shutterNs = shutter, iso = caps.isoRange?.clamp(iso) ?: iso)
+                } else manual
+                model.changeCapture { safeManual }
+            }
+        }
+        select(next)
+    }, reset = { control ->
+        when (control) {
+            LiveControl.ISO, LiveControl.SHUTTER, LiveControl.APERTURE -> model.changeCapture { it.copy(manual = false, wbLocked = false) }
+            LiveControl.EV -> model.changeCapture { it.copy(evIndex = 0) }
+            LiveControl.WB -> model.changeCapture { it.copy(kelvin = null, wbMode = android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO, wbLocked = false) }
+            LiveControl.ZOOM -> model.zoom(1f)
+        }
+        select(null)
+    }, slider = { control, height, enabled -> ControlSlider(control, state, model, height, enabled) }, modifier = modifier)
+}
+
+/** One floating slider, with fixed anchors so opening it never moves the buttons or viewfinder. */
+@Composable
+internal fun NativeCameraControls(
+    state: CameraUiState,
+    active: LiveControl?,
+    select: (LiveControl?) -> Unit,
+    reset: (LiveControl) -> Unit,
+    slider: @Composable (LiveControl, androidx.compose.ui.unit.Dp, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     if (!state.ready) return
-    val caps = state.capabilities
-    val allowed = state.liveControlsEnabled
-    val controls = remember(caps.adjustableAperture) {
+    val controls = remember(state.capabilities.adjustableAperture) {
         listOf(LiveControl.ISO, LiveControl.SHUTTER, LiveControl.EV, LiveControl.WB) +
-            (if (caps.adjustableAperture) listOf(LiveControl.APERTURE) else emptyList()) + LiveControl.ZOOM
+            if (state.capabilities.adjustableAperture) listOf(LiveControl.APERTURE) else emptyList()
     }
+    var lastControl by remember { mutableStateOf<LiveControl?>(null) }
+    LaunchedEffect(active) { if (active != null) lastControl = active }
+    val popupControl = active ?: lastControl
+    val density = LocalDensity.current
+    var stripHeight by remember(density) { mutableIntStateOf(with(density) { 56.dp.roundToPx() }) }
+    var zoomHeight by remember(density) { mutableIntStateOf(with(density) { 52.dp.roundToPx() }) }
+    val lowerGradient = remember { Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .5f))) }
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val sliderHeight = (maxHeight - 170.dp).coerceIn(80.dp, 190.dp)
-        Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .65f))))
-            .padding(horizontal = 8.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
-            controls.forEach { control ->
-                val supported = when (control) {
-                    LiveControl.ISO -> caps.manualSensor && caps.isoRange?.let { it.upper > it.lower } == true
-                    LiveControl.SHUTTER -> caps.manualSensor && caps.shutterRange?.let { it.upper > it.lower } == true
-                    LiveControl.EV -> caps.hasEv && !state.capture.manual
-                    LiveControl.WB -> caps.whiteBalances.size > 1 || caps.cctRange?.let { it.upper > it.lower } == true
-                    LiveControl.APERTURE -> caps.adjustableAperture
-                    LiveControl.ZOOM -> state.maxZoom > state.minZoom
-                }
-                val enabled = allowed && supported
-                val value = when (control) {
-                    LiveControl.ISO -> if (state.capture.manual) state.capture.iso.toString() else "AUTO"
-                    LiveControl.SHUTTER -> if (state.capture.manual) shutterLabel(state.capture.shutterNs).removeSuffix(" s") else "AUTO"
-                    LiveControl.EV -> if (state.capture.manual) "M" else "%+.1f".format(Locale.US, state.capture.evIndex * caps.exposureStep)
-                    LiveControl.WB -> state.capture.kelvin?.let { "$it K" } ?: caps.whiteBalances.find { it.mode == state.capture.wbMode }?.label ?: "自動"
-                    LiveControl.APERTURE -> "f/%.1f".format(Locale.US, state.capture.aperture ?: caps.apertures.first())
-                    LiveControl.ZOOM -> ZoomControls.label(state.capture.zoom)
-                }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    AnimatedVisibility(visible = active == control && enabled,
-                        enter = expandVertically(animationSpec = tween(160), expandFrom = Alignment.Bottom) + fadeIn(tween(100)),
-                        exit = shrinkVertically(animationSpec = tween(120), shrinkTowards = Alignment.Bottom) + fadeOut(tween(100))) {
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color.Black.copy(alpha = .82f), modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()) {
-                            Column(Modifier.padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(value, maxLines = 1, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                ControlSlider(control, state, model, sliderHeight, enabled && active == control)
-                                TextButton(onClick = {
-                                    when (control) {
-                                        LiveControl.ISO, LiveControl.SHUTTER, LiveControl.APERTURE -> model.changeCapture { it.copy(manual = false, wbLocked = false) }
-                                        LiveControl.EV -> model.changeCapture { it.copy(evIndex = 0) }
-                                        LiveControl.WB -> model.changeCapture { it.copy(kelvin = null, wbMode = android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO, wbLocked = false) }
-                                        LiveControl.ZOOM -> model.zoom(1f)
-                                    }
-                                    select(null)
-                                }, enabled = enabled && active == control, contentPadding = PaddingValues(0.dp), modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text(if (control == LiveControl.ISO || control == LiveControl.SHUTTER || control == LiveControl.WB || control == LiveControl.APERTURE) "AUTO" else if (control == LiveControl.ZOOM) "1×" else "0", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
+        val anchorHeight = with(density) { stripHeight.toDp() + zoomHeight.toDp() }
+        val sliderHeight = (maxHeight - anchorHeight - 140.dp).coerceIn(48.dp, 176.dp)
+        val popupWidth = minOf(88.dp, maxWidth - 16.dp)
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(lowerGradient)) {
+            Box(Modifier.fillMaxWidth().onSizeChanged { zoomHeight = it.height }.padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
+                val selected = active == LiveControl.ZOOM
+                val enabled = state.liveControlsEnabled && LiveControl.ZOOM.supported(state)
+                val value = LiveControl.ZOOM.value(state)
+                Surface(onClick = { select(if (selected) null else LiveControl.ZOOM) }, enabled = enabled,
+                    shape = CircleShape, color = Color.Black.copy(alpha = .28f),
+                    border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .24f)),
+                    modifier = Modifier.size(48.dp).testTag("control-zoom").semantics {
+                        contentDescription = "變焦 $value"
+                    }) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(value, style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .55f))
                     }
-                    Surface(onClick = {
-                        if (active == control) select(null) else {
-                            if ((control == LiveControl.ISO || control == LiveControl.SHUTTER || control == LiveControl.APERTURE) && !state.capture.manual) {
-                                engine?.enterManual()?.let { manual ->
-                                    val safeManual = if (state.mode == CaptureMode.VIDEO) {
-                                        val shutter = manual.shutterNs.coerceAtMost(33_333_333L).coerceAtLeast(caps.shutterRange?.lower ?: 1L)
-                                        val iso = (manual.iso.toDouble() * manual.shutterNs / shutter).roundToInt()
-                                        // Preserve brightness when entering manual video at the 30 fps shutter limit.
-                                        manual.copy(shutterNs = shutter, iso = caps.isoRange?.clamp(iso) ?: iso)
-                                    } else manual
-                                    model.changeCapture { safeManual }
-                                }
-                            }
-                            select(control)
-                        }
-                    }, enabled = enabled, shape = RoundedCornerShape(12.dp),
-                        color = if (active == control) MaterialTheme.colorScheme.primary.copy(alpha = .2f) else Color.Black.copy(alpha = .62f),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("control-${control.name.lowercase()}")
-                            .semantics { contentDescription = "${control.title} $value" }) {
-                        Column(Modifier.padding(horizontal = 2.dp, vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(control.title, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = if (enabled) .7f else .3f))
-                            Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold, color = if (enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .4f))
+                }
+            }
+            Row(Modifier.fillMaxWidth().onSizeChanged { stripHeight = it.height }.padding(horizontal = 12.dp, vertical = 4.dp).testTag("camera-control-strip"),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                controls.forEach { control ->
+                    val selected = active == control
+                    val enabled = state.liveControlsEnabled && control.supported(state)
+                    val value = control.value(state)
+                    Surface(onClick = { select(if (selected) null else control) }, enabled = enabled,
+                        shape = RoundedCornerShape(10.dp), color = Color.Transparent,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("control-${control.name.lowercase()}").semantics {
+                            contentDescription = "${control.title} $value"
+                        }) {
+                        Column(Modifier.padding(horizontal = 2.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center) {
+                            Text(control.title, style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                                color = Color.White.copy(alpha = if (enabled) .62f else .4f))
+                            Text(value, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.Medium, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) .95f else .5f))
+                            Box(Modifier.padding(top = 3.dp).width(14.dp).height(2.dp)
+                                .background(if (selected && enabled) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape))
                         }
                     }
                 }
             }
         }
+        if (popupControl != null && popupControl.supported(state)) {
+            val index = controls.indexOf(popupControl)
+            val popupLeft = if (popupControl == LiveControl.ZOOM) (maxWidth - popupWidth) / 2 else
+                (12.dp + (maxWidth - 24.dp - 4.dp * (controls.size - 1)) / controls.size * (index + .5f) + 4.dp * index - popupWidth / 2)
+                    .coerceIn(8.dp, (maxWidth - popupWidth - 8.dp).coerceAtLeast(8.dp))
+            val anchor = anchorHeight
+            val enabled = state.liveControlsEnabled && active == popupControl
+            AnimatedVisibility(visible = active != null && state.liveControlsEnabled,
+                enter = fadeIn(tween(100)) + slideInVertically(tween(100, easing = LinearOutSlowInEasing)) { it / 12 },
+                exit = fadeOut(tween(90)) + slideOutVertically(tween(90, easing = LinearOutSlowInEasing)) { it / 16 },
+                modifier = Modifier.align(Alignment.BottomStart).offset(x = popupLeft).padding(bottom = anchor + 6.dp).width(popupWidth)) {
+                Surface(shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .78f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = .12f))) {
+                    Column(Modifier.padding(top = 10.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(popupControl.value(state), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        slider(popupControl, sliderHeight, enabled)
+                        TextButton(onClick = { reset(popupControl) }, enabled = enabled, contentPadding = PaddingValues(0.dp), modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(when (popupControl) {
+                                LiveControl.EV -> "0"
+                                LiveControl.ZOOM -> "1×"
+                                else -> "AUTO"
+                            }, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val LiveControl.entersManual get() = this == LiveControl.ISO || this == LiveControl.SHUTTER || this == LiveControl.APERTURE
+
+private fun LiveControl.supported(state: CameraUiState): Boolean {
+    val caps = state.capabilities
+    return when (this) {
+        LiveControl.ISO -> caps.manualSensor && caps.isoRange?.let { it.upper > it.lower } == true
+        LiveControl.SHUTTER -> caps.manualSensor && caps.shutterRange?.let { it.upper > it.lower } == true
+        LiveControl.EV -> caps.hasEv && !state.capture.manual
+        LiveControl.WB -> caps.whiteBalances.size > 1 || caps.cctRange?.let { it.upper > it.lower } == true
+        LiveControl.APERTURE -> caps.adjustableAperture
+        LiveControl.ZOOM -> state.maxZoom > state.minZoom
+    }
+}
+
+@Composable
+private fun LiveControl.value(state: CameraUiState): String {
+    val capture = state.capture
+    val caps = state.capabilities
+    // Dragging zoom must not repeatedly format unrelated exposure or shutter labels.
+    return when (this) {
+        LiveControl.ISO -> remember(capture.manual, capture.iso) { if (capture.manual) capture.iso.toString() else "AUTO" }
+        LiveControl.SHUTTER -> remember(capture.manual, capture.shutterNs) { if (capture.manual) shutterLabel(capture.shutterNs).removeSuffix(" s") else "AUTO" }
+        LiveControl.EV -> remember(capture.manual, capture.evIndex, caps.exposureStep) { if (capture.manual) "M" else "%+.1f".format(Locale.US, capture.evIndex * caps.exposureStep) }
+        LiveControl.WB -> remember(capture.kelvin, capture.wbMode, caps.whiteBalances) { capture.kelvin?.let { "$it K" } ?: caps.whiteBalances.find { it.mode == capture.wbMode }?.label ?: "自動" }
+        LiveControl.APERTURE -> remember(capture.aperture, caps.apertures) { "f/%.1f".format(Locale.US, capture.aperture ?: caps.apertures.first()) }
+        LiveControl.ZOOM -> remember(capture.zoom) { ZoomControls.label(capture.zoom) }
     }
 }
 
@@ -155,7 +233,7 @@ private data class SliderValue(val value: Float, val range: ClosedFloatingPointR
 
 /** Rotate the stable Material slider, including measurement and touch coordinates. */
 @Composable
-private fun VerticalControlSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>, steps: Int, enabled: Boolean, modifier: Modifier) {
+internal fun VerticalControlSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>, steps: Int, enabled: Boolean, modifier: Modifier) {
     // Up always increases, independent of the user's horizontal writing direction.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Slider(value.coerceIn(range.start, range.endInclusive), onChange, enabled = enabled, valueRange = range, steps = steps,

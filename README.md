@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.4.0**。加入黑金主題的內建相簿、照片縮放及影片播放，並優化 LUT 解析、GPU 每幀設定、照片分塊讀回與介面更新範圍。桌面驗證與逐項效能檢查見 [效能紀錄](docs/performance-audit-v040.md)，相簿操作與待測項目見 [內建相簿](docs/gallery-v040.md)。手機目前不在手邊，實機流暢度與播放／對焦／錄影仍待驗證。
+目前開發版本 **0.4.1**。相機主畫面改為透明控制列、中央單一變焦鍵、精簡頂部工具列；以白色為主，暖金表示選取狀態。詳見 [相機介面調整](docs/native-camera-ui-v041.md)。沿用 0.4.0 的內建相簿與效能優化，見 [效能紀錄](docs/performance-audit-v040.md)與 [內建相簿](docs/gallery-v040.md)。手機目前不在手邊，實機排版、流暢度與播放／對焦／錄影仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -16,6 +16,9 @@
 
 
 **0.4.0** 點左下角縮圖開啟 Grain 相簿，依全部／照片／影片瀏覽。照片可左右切換、雙指縮放、拖曳、雙擊還原；影片提供播放／暫停及進度拖曳。相簿採背景載入與有限快取，瀏覽時暫停相機；LUT 匯入改成串流處理、錄影計時只更新計時區塊。
+
+**0.4.1** ISO／快門／曝光／白平衡使用常駐透明控制列，變焦獨立置中。點控制格向上浮出直式滑桿，開關時按鈕與觀景窗維持位置。頂部改用小型白色圖示與短底片名稱，暖金集中在選取狀態；新增小螢幕、橫向及大字體 Compose 設計預覽。
+
 ## 功能
 
 - 前後相機、點擊對焦、裝置支援的縮放與 Auto 模式閃光燈。
@@ -51,7 +54,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
-目前個人富士測試版另存於 `output/Grain-0.4.0-personal-fuji-debug.apk`。APK 與官方 LUT 素材保留在本機，不提交到儲存庫。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+目前個人富士測試版另存於 `output/Grain-0.4.1-personal-fuji-debug.apk`。APK 與官方 LUT 素材保留在本機，不提交到儲存庫。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
 ## 安裝與操作
 

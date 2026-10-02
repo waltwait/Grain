@@ -370,23 +370,34 @@ private fun RecordingClock(model: CameraViewModel, status: RecordingStatus) {
 
 @Composable
 private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, modifier: Modifier, panel: (String) -> Unit) {
-    Row(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .65f), Color.Transparent))).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Black.copy(alpha = .45f), shape = CircleShape, modifier = Modifier.heightIn(min = 48.dp), onClick = { panel("settings") }, enabled = !state.recording) {
-            Box(Modifier.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) { Text(state.videoQuality, color = Color.White, style = MaterialTheme.typography.labelMedium) }
+    NativeCameraToolbar(state, modifier, panel = panel) { RecordingClock(model, state.recordingStatus) }
+}
+
+@Composable
+internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, clock: @Composable () -> Unit) {
+    val gradient = remember { Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent)) }
+    Row(modifier.fillMaxWidth().background(gradient).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp),
+            onClick = { panel("settings") }, enabled = !state.recording) {
+            Box(contentAlignment = Alignment.Center) { Text(state.videoQuality, color = Color.White, style = MaterialTheme.typography.labelMedium) }
         } else GlassIcon("flash", if (state.capture.flash) "閃光燈已開啟" else "閃光燈設定", !state.recording && !state.busy, state.capture.flash) { panel("settings") }
-        Spacer(Modifier.weight(1f))
-        if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
-            Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(7.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(8.dp))
-                RecordingClock(model, state.recordingStatus)
-            }
-        } else Surface(onClick = { panel("filters") }, shape = CircleShape, color = Color.Black.copy(alpha = .5f), enabled = !state.busy, modifier = Modifier.widthIn(max = 235.dp).heightIn(min = 48.dp).testTag("filter-picker")) {
-            Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                CameraGlyph("lut", Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
-                Text(state.filter.lut?.title?.removePrefix("富士 ") ?: "原色", color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(6.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(7.dp))
+                    clock()
+                }
+            } else Surface(onClick = { panel("filters") }, color = Color.Transparent, enabled = !state.busy,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("filter-picker").semantics {
+                    contentDescription = "選擇底片 ${state.filter.lut?.title ?: "原色"}"
+                }) {
+                Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    CameraGlyph("lut", Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
+                    Text(state.filter.lut?.title?.removePrefix("富士 ") ?: "原色", color = Color.White, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
-        Spacer(Modifier.weight(1f))
         GlassIcon("tune", "更多設定", !state.busy && !state.recording) { panel("settings") }
     }
 }
@@ -436,7 +447,7 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
 
 @Composable
 private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, click: () -> Unit) {
-    Surface(onClick = click, enabled = enabled, shape = CircleShape, color = Color.Black.copy(alpha = .5f), modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
+    Surface(onClick = click, enabled = enabled, shape = CircleShape, color = if (selected) Color.Black.copy(alpha = .22f) else Color.Transparent, modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
         Box(contentAlignment = Alignment.Center) { CameraGlyph(icon, Modifier.size(25.dp), if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .35f)) }
     }
 }

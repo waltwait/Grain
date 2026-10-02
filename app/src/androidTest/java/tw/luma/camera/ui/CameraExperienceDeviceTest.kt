@@ -41,8 +41,21 @@ class CameraExperienceDeviceTest {
         val frame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
         val root = ui.onRoot().fetchSemanticsNode().boundsInRoot
         assertTrue("Viewfinder must occupy at least 65% of the portrait height", frame.height >= root.height * .65f)
+        ui.onAllNodesWithTag("control-zoom").assertCountEquals(1)
+        val zoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
+        val strip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
+        assertEquals("Zoom must be centered above the control strip", frame.center.x, zoom.center.x, 2f)
+        assertTrue("Zoom must remain separate from the control strip", zoom.bottom <= strip.top + 2f)
         if (state.maxZoom > state.minZoom) {
             ui.onNodeWithTag("control-zoom").performClick()
+            val expandedFrame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
+            val expandedZoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
+            val expandedStrip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
+            assertEquals("Opening a slider must not resize the viewfinder", frame, expandedFrame)
+            assertEquals("Opening a slider must not move zoom", zoom, expandedZoom)
+            assertEquals("Opening a slider must not move the control strip", strip, expandedStrip)
+            val slider = ui.onNodeWithTag("live-slider-zoom").fetchSemanticsNode().boundsInRoot
+            assertTrue("The floating slider must not cover zoom", slider.bottom <= zoom.top + 2f)
             ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeUp(startY = height * .8f, endY = height * .2f) }
             ui.waitUntil(5_000) { abs(model().state.value.capture.zoom - state.capture.zoom) > .01f }
             ui.onNodeWithTag("control-zoom").performClick()
