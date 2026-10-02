@@ -2,13 +2,15 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.2.3**。功能包含大觀景窗、精簡相機控制、雙指與倍率變焦，以及即時 LUT 錄影；0.2.2 的建置、靜態檢查與 24 項 JVM 測試通過，真機對焦／UI／錄影驗證依使用者要求延後，詳見 [新版狀態](docs/ui-video-v020.md)。
+目前開發版本 **0.2.4**。功能包含大觀景窗、精簡相機控制、雙指與倍率變焦，以及即時 LUT 錄影；0.2.2 的建置、靜態檢查與 24 項 JVM 測試通過，真機對焦／UI／錄影驗證依使用者要求延後，詳見 [新版狀態](docs/ui-video-v020.md)。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
 **0.2.2** 將一般與單色 icon 的圖案縮小 12.5%，增加留白；點擊觀景窗會顯示對焦框與實際完成結果，滑動及雙指縮放不會觸發點擊對焦。自動曝光時一併測光，手動曝光保留 ISO／快門設定。手機端對焦、UI 與錄影驗證仍待進行。
 
 **0.2.3** App 名稱改為 Grain；新照片與影片使用 Grain 相簿及 GRAIN 檔名前綴。保留原有 App 識別碼、設定與匯入 LUT，既有照片不搬移。
+
+**0.2.4** 點擊對焦改用框線縮放與淡出表示，不顯示狀態文字。實際完成後，成功時框線收小、未完成時稍微放大再淡出；連續點擊會取消舊動畫並在新位置回饋。保留螢幕閱讀器的狀態描述。
 
 ## 功能
 
@@ -45,7 +47,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
-目前個人富士測試版另存於 `output/Grain-0.2.3-personal-fuji-debug.apk`。APK 與官方 LUT 素材保留在本機，不提交到儲存庫。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+目前個人富士測試版另存於 `output/Grain-0.2.4-personal-fuji-debug.apk`。APK 與官方 LUT 素材保留在本機，不提交到儲存庫。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
 ## 安裝與操作
 

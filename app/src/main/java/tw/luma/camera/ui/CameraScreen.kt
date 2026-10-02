@@ -7,6 +7,9 @@ import android.provider.Settings
 import android.view.MotionEvent
 import android.view.GestureDetector
 import android.view.ScaleGestureDetector
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraEffect
 import androidx.compose.ui.platform.testTag
@@ -41,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -155,8 +159,10 @@ fun CameraScreen(model: CameraViewModel) {
     }
     LaunchedEffect(focusFeedback) {
         val feedback = focusFeedback ?: return@LaunchedEffect
-        delay(if (feedback.outcome == null) 7000L else 1800L)
-        focusFeedback = if (feedback.outcome == null) feedback.copy(outcome = FocusOutcome.NOT_FOCUSED) else null
+        if (feedback.outcome == null) {
+            delay(7000L)
+            focusFeedback = feedback.copy(outcome = FocusOutcome.NOT_FOCUSED)
+        }
     }
     LaunchedEffect(engine, state.capture, state.ready) { if (state.ready) engine?.apply(state.capture) }
     LaunchedEffect(engine, state.filter) { engine?.setFilter(state.filter) }
@@ -172,7 +178,13 @@ fun CameraScreen(model: CameraViewModel) {
                     PreviewArea(state, view, permitted, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
-                    if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { FocusIndicator(it) }
+                    if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { feedback ->
+                        key(feedback.request) {
+                            FocusIndicator(feedback) {
+                                if (focusFeedback?.request == feedback.request) focusFeedback = null
+                            }
+                        }
+                    }
                     if (permitted && state.cameraError == null) {
                         CameraToolbar(state, Modifier.align(Alignment.TopCenter)) { panel = it }
                         ZoomBar(state, model, { panel = "zoom" }, Modifier.align(Alignment.BottomCenter))
@@ -194,7 +206,7 @@ fun CameraScreen(model: CameraViewModel) {
 private data class FocusFeedback(val request: Int, val point: Offset, val outcome: FocusOutcome? = null)
 
 @Composable
-private fun FocusIndicator(feedback: FocusFeedback) {
+private fun FocusIndicator(feedback: FocusFeedback, onFinished: () -> Unit) {
     val label = when (feedback.outcome) {
         null -> "對焦中"
         FocusOutcome.FOCUSED -> "已對焦"
@@ -203,17 +215,32 @@ private fun FocusIndicator(feedback: FocusFeedback) {
         FocusOutcome.UNAVAILABLE -> "此鏡頭不支援"
     }
     val color = if (feedback.outcome == FocusOutcome.NOT_FOCUSED || feedback.outcome == FocusOutcome.UNAVAILABLE) Color.White else MaterialTheme.colorScheme.primary
+    val scale = remember { Animatable(1.16f) }
+    val opacity = remember { Animatable(1f) }
+    val finish by rememberUpdatedState(onFinished)
+    LaunchedEffect(feedback.outcome) {
+        if (feedback.outcome == null) {
+            scale.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+        } else {
+            val succeeded = feedback.outcome == FocusOutcome.FOCUSED || feedback.outcome == FocusOutcome.METERED
+            scale.animateTo(if (succeeded) .9f else 1.08f, tween(140, easing = FastOutSlowInEasing))
+            delay(250L)
+            opacity.animateTo(0f, tween(160))
+            finish()
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
-        val width = with(density) { 112.dp.toPx() }
-        val height = with(density) { 96.dp.toPx() }
-        val halfFrame = with(density) { 32.dp.toPx() }
-        val maxX = (with(density) { maxWidth.toPx() } - width).coerceAtLeast(0f)
-        val maxY = (with(density) { maxHeight.toPx() } - height).coerceAtLeast(0f)
-        Column(Modifier.offset { IntOffset((feedback.point.x - width / 2).coerceIn(0f, maxX).roundToInt(), (feedback.point.y - halfFrame).coerceIn(0f, maxY).roundToInt()) }
-            .width(112.dp).testTag("focus-indicator").semantics { contentDescription = label }, horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(64.dp).border(1.5.dp, color, RoundedCornerShape(8.dp)))
-            Text(label, Modifier.padding(top = 5.dp).background(Color.Black.copy(alpha = .6f), CircleShape).padding(horizontal = 8.dp, vertical = 2.dp), color = color, style = MaterialTheme.typography.labelSmall)
+        val extent = with(density) { 80.dp.toPx() }
+        val maxX = (with(density) { maxWidth.toPx() } - extent).coerceAtLeast(0f)
+        val maxY = (with(density) { maxHeight.toPx() } - extent).coerceAtLeast(0f)
+        Box(Modifier.offset { IntOffset((feedback.point.x - extent / 2).coerceIn(0f, maxX).roundToInt(), (feedback.point.y - extent / 2).coerceIn(0f, maxY).roundToInt()) }
+            .size(80.dp).testTag("focus-indicator").semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(64.dp).graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+                alpha = opacity.value
+            }.border(1.5.dp, color, RoundedCornerShape(8.dp)))
         }
     }
 }
