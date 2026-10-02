@@ -116,10 +116,24 @@ class CameraEngine(
 
     fun apply(requested: CaptureSettings) {
         val current = camera ?: return
-        if (settings.copy(zoom = requested.zoom) == requested) {
+        if (settings.copy(zoom = requested.zoom, evIndex = requested.evIndex) == requested) {
+            val previous = settings
             settings = requested
             val zoom = current.cameraInfo.zoomState.value
-            current.cameraControl.setZoomRatio(requested.zoom.coerceIn(zoom?.minZoomRatio ?: 1f, zoom?.maxZoomRatio ?: 1f))
+            if (previous.zoom != requested.zoom) current.cameraControl.setZoomRatio(requested.zoom.coerceIn(zoom?.minZoomRatio ?: 1f, zoom?.maxZoomRatio ?: 1f))
+            if (previous.evIndex != requested.evIndex && !requested.manual && caps.hasEv) {
+                val token = ++applySequence
+                applying = true
+                val future = current.cameraControl.setExposureCompensationIndex(caps.exposureRange.clamp(requested.evIndex))
+                future.addListener({
+                    if (!closed && camera === current && token == applySequence) {
+                        runCatching { future.get() }.onFailure {
+                            if (it.cause !is androidx.camera.core.CameraControl.OperationCanceledException) onError("曝光未套用：${it.cause?.message ?: it.message}")
+                        }
+                        applying = false
+                    }
+                }, main)
+            }
             return
         }
         settings = requested

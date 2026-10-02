@@ -65,13 +65,12 @@ import tw.luma.camera.CameraViewModel
 import tw.luma.camera.camera.CameraEngine
 import tw.luma.camera.camera.FocusOutcome
 import kotlinx.coroutines.delay
-import tw.luma.camera.camera.CaptureSettings
 import tw.luma.camera.camera.shutterLabel
 import tw.luma.camera.gl.LutSurfaceProcessor
 import tw.luma.camera.lut.LutEncoding
 import java.util.Locale
-import kotlin.math.exp
-import kotlin.math.ln
+import tw.luma.camera.camera.LiveControlMath
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -87,6 +86,10 @@ fun CameraScreen(model: CameraViewModel) {
     var engine by remember { mutableStateOf<CameraEngine?>(null) }
     var focusFeedback by remember { mutableStateOf<FocusFeedback?>(null) }
     var focusRequest by remember { mutableIntStateOf(0) }
+    var activeControl by remember { mutableStateOf<LiveControl?>(null) }
+    var exposureAnchor by remember { mutableStateOf<Offset?>(null) }
+    var exposureFeedback by remember { mutableStateOf<ExposureFeedback?>(null) }
+    var exposureDragging by remember { mutableStateOf(false) }
     val currentEngine by rememberUpdatedState(engine)
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permitted = it }
     val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -102,6 +105,7 @@ fun CameraScreen(model: CameraViewModel) {
     val openPhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     val openLut = { lutImport.launch(arrayOf("*/*")) }
     val shutter = {
+        activeControl = null
         val active = engine
         if (active != null) {
             when {
@@ -123,6 +127,10 @@ fun CameraScreen(model: CameraViewModel) {
     }
     DisposableEffect(view, lifecycle, permitted, state.front, state.mode, retry) {
         focusFeedback = null
+        exposureAnchor = null
+        exposureFeedback = null
+        exposureDragging = false
+        activeControl = null
         var owned: CameraEngine? = null
         if (permitted) {
             val targets = CameraEffect.PREVIEW or if (state.mode == CaptureMode.VIDEO) CameraEffect.VIDEO_CAPTURE else 0
@@ -130,27 +138,69 @@ fun CameraScreen(model: CameraViewModel) {
             val next = CameraEngine(context, lifecycle, view, processor, model::ready, model::actual, model::cameraError, model::videoQuality)
             owned = next; engine = next; processor.settings = state.filter
             var multiTouch = false
+            var startExposure = 0
+            var manualHintShown = false
             val scale = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                override fun onScale(detector: ScaleGestureDetector): Boolean { model.zoom(model.state.value.capture.zoom * detector.scaleFactor); return true }
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    if (model.state.value.liveControlsEnabled) model.zoom(model.state.value.capture.zoom * detector.scaleFactor)
+                    return true
+                }
             })
             val taps = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDown(event: MotionEvent) = true
                 override fun onSingleTapUp(event: MotionEvent): Boolean {
-                    if (multiTouch || model.state.value.busy || !model.state.value.ready) return false
+                    if (multiTouch || !model.state.value.liveControlsEnabled) return false
                     val request = ++focusRequest
+                    activeControl = null
+                    exposureAnchor = null
+                    exposureFeedback = null
                     focusFeedback = FocusFeedback(request, Offset(event.x, event.y))
                     next.focus(event.x, event.y) { outcome ->
-                        focusFeedback?.takeIf { it.request == request }?.let { focusFeedback = it.copy(outcome = outcome) }
+                        focusFeedback?.takeIf { it.request == request }?.let {
+                            focusFeedback = it.copy(outcome = outcome)
+                            if (outcome == FocusOutcome.FOCUSED || outcome == FocusOutcome.METERED) exposureAnchor = it.point
+                        }
                     }
                     view.performClick()
                     return true
                 }
+                override fun onScroll(first: MotionEvent?, event: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+                    val start = first ?: return false
+                    val snapshot = model.state.value
+                    val anchor = exposureAnchor ?: return false
+                    val dy = event.y - start.y
+                    if (multiTouch || !snapshot.liveControlsEnabled || abs(dy) <= abs(event.x - start.x)) return false
+                    if (snapshot.capture.manual) {
+                        if (!manualHintShown) { model.message("手動曝光請調整 ISO 或快門"); manualHintShown = true }
+                        return true
+                    }
+                    val caps = snapshot.capabilities
+                    if (!caps.hasEv) return false
+                    val index = LiveControlMath.exposureIndex(startExposure, dy, context.resources.displayMetrics.density,
+                        caps.exposureStep, caps.exposureRange.lower, caps.exposureRange.upper)
+                    activeControl = null
+                    exposureDragging = true
+                    model.changeCapture { it.copy(evIndex = index) }
+                    exposureFeedback = ExposureFeedback(anchor, index)
+                    return true
+                }
             })
             view.setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) multiTouch = false
-                if (event.pointerCount > 1) multiTouch = true
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    multiTouch = false
+                    startExposure = model.state.value.capture.evIndex
+                    manualHintShown = false
+                }
+                if (event.pointerCount > 1) {
+                    multiTouch = true
+                    exposureDragging = false
+                    exposureAnchor = null
+                    exposureFeedback = null
+                    focusFeedback = null
+                }
                 scale.onTouchEvent(event)
                 taps.onTouchEvent(event)
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) exposureDragging = false
                 true
             }
             view.post { next.bind(model.state.value.front, model.state.value.mode == CaptureMode.VIDEO) }
@@ -164,10 +214,13 @@ fun CameraScreen(model: CameraViewModel) {
             focusFeedback = feedback.copy(outcome = FocusOutcome.NOT_FOCUSED)
         }
     }
+    LaunchedEffect(exposureFeedback, exposureDragging) { if (exposureFeedback != null && !exposureDragging) { delay(1200L); exposureFeedback = null } }
+    LaunchedEffect(state.capture.manual) { if (state.capture.manual) exposureFeedback = null }
+    BackHandler(enabled = activeControl != null) { activeControl = null }
     LaunchedEffect(engine, state.capture, state.ready) { if (state.ready) engine?.apply(state.capture) }
     LaunchedEffect(engine, state.filter) { engine?.setFilter(state.filter) }
     SideEffect { view.keepScreenOn = state.recording }
-    BackHandler(enabled = state.recording) { model.stopVideo(engine) }
+    BackHandler(enabled = state.recording && activeControl == null) { model.stopVideo(engine) }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); model.clearMessage() } }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = Color.Black, contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
@@ -186,24 +239,41 @@ fun CameraScreen(model: CameraViewModel) {
                         }
                     }
                     if (permitted && state.cameraError == null) {
-                        CameraToolbar(state, Modifier.align(Alignment.TopCenter)) { panel = it }
-                        ZoomBar(state, model, { panel = "zoom" }, Modifier.align(Alignment.BottomCenter))
+                        CameraToolbar(state, Modifier.align(Alignment.TopCenter)) { activeControl = null; panel = it }
+                        exposureFeedback?.let { ExposureIndicator(it, state.capabilities.exposureStep) }
+                        LiveCameraControls(state, model, engine, activeControl, { activeControl = it }, Modifier.align(Alignment.BottomCenter))
                     }
                 }
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openPhoto, { panel = "tools" }, Modifier.width(164.dp).fillMaxHeight(), true)
+                CameraDock(state, model, shutter, openPhoto, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
             } else Column(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openPhoto, { panel = "tools" }, Modifier.fillMaxWidth(), false)
+                CameraDock(state, model, shutter, openPhoto, { panel = "settings" }, Modifier.fillMaxWidth(), false)
             }
         }
     }
-    panel?.let { ControlsSheet(it, state, model, engine, { panel = it }, openLut, openPhoto) { panel = null } }
+    panel?.let { ControlsSheet(it, state, model, { panel = it }, openLut, openPhoto) { panel = null } }
 }
 
 private data class FocusFeedback(val request: Int, val point: Offset, val outcome: FocusOutcome? = null)
+private data class ExposureFeedback(val point: Offset, val index: Int)
+
+@Composable
+private fun ExposureIndicator(feedback: ExposureFeedback, step: Float) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val width = with(density) { 110.dp.toPx() }
+        val height = with(density) { 48.dp.toPx() }
+        val x = (feedback.point.x + with(density) { 40.dp.toPx() }).coerceIn(0f, (with(density) { maxWidth.toPx() } - width).coerceAtLeast(0f))
+        val y = (feedback.point.y - height / 2).coerceIn(0f, (with(density) { maxHeight.toPx() } - height).coerceAtLeast(0f))
+        Text("☀ %+.1f EV".format(Locale.US, feedback.index * step),
+            Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }.testTag("exposure-feedback")
+                .background(Color.Black.copy(alpha = .65f), CircleShape).padding(horizontal = 10.dp, vertical = 8.dp),
+            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+    }
+}
 
 @Composable
 private fun FocusIndicator(feedback: FocusFeedback, onFinished: () -> Unit) {
@@ -292,26 +362,7 @@ private fun CameraToolbar(state: CameraUiState, modifier: Modifier, panel: (Stri
             }
         }
         Spacer(Modifier.weight(1f))
-        GlassIcon("tune", "相機控制", !state.busy && !state.recording) { panel("tools") }
-    }
-}
-
-@Composable
-private fun ZoomBar(state: CameraUiState, model: CameraViewModel, expand: () -> Unit, modifier: Modifier) {
-    if (!state.ready) return
-    Row(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .65f)))).padding(top = 22.dp, bottom = 14.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Surface(shape = CircleShape, color = Color.Black.copy(alpha = .55f)) {
-            Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                ZoomControls.presets(state.minZoom, state.maxZoom).forEach { ratio ->
-                    TextButton(onClick = { model.zoom(ratio) }, enabled = !state.busy, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).testTag("zoom-$ratio")) {
-                        Text(ZoomControls.label(ratio), color = if (kotlin.math.abs(state.capture.zoom - ratio) < .06f) MaterialTheme.colorScheme.primary else Color.White, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                TextButton(onClick = expand, enabled = !state.busy, contentPadding = PaddingValues(horizontal = 10.dp), modifier = Modifier.heightIn(min = 48.dp).testTag("zoom-continuous")) {
-                    Text("${ZoomControls.label(state.capture.zoom)} ⌄", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
+        GlassIcon("tune", "更多設定", !state.busy && !state.recording) { panel("settings") }
     }
 }
 
@@ -353,7 +404,7 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 gallery(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, model::toggleFront)
             }
-            TextButton(onClick = tools, enabled = enabled) { Text(if (state.capture.manual) "PRO" else "AUTO", color = Color.White.copy(alpha = .7f)) }
+            TextButton(onClick = tools, enabled = enabled) { Text("設定", color = Color.White.copy(alpha = .7f)) }
         } else {
             Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 gallery(); capture(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, model::toggleFront)
@@ -386,41 +437,13 @@ private fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.Wh
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, navigate: (String) -> Unit, importLut: () -> Unit, importPhoto: () -> Unit, dismiss: () -> Unit) {
+private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, navigate: (String) -> Unit, importLut: () -> Unit, importPhoto: () -> Unit, dismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = dismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
             val caps = state.capabilities
-            Text(when (panel) { "tools" -> "相機控制"; "filters" -> "選擇濾鏡"; "zoom" -> "變焦"; "ev" -> "曝光"; "shutter" -> "快門"; "iso" -> "ISO"; "wb" -> "白平衡"; "aperture" -> "光圈"; "filter" -> "調色設定"; else -> "設定" }, style = MaterialTheme.typography.headlineSmall)
+            Text(when (panel) { "filters" -> "選擇濾鏡"; "filter" -> "調色設定"; else -> "設定" }, style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(16.dp))
             when (panel) {
-                "tools" -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        FilterChip(selected = !state.capture.manual, enabled = state.ready && !state.recording && !state.busy,
-                            onClick = { model.changeCapture { it.copy(manual = false, wbLocked = false) } }, label = { Text("AUTO") })
-                        FilterChip(selected = state.capture.manual, enabled = state.ready && caps.manualSensor && !state.recording && !state.busy,
-                            onClick = { engine?.enterManual()?.let { value -> model.changeCapture { value } } }, label = { Text("PRO") })
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        ControlTile("曝光", "%+.1f EV".format(Locale.US, state.capture.evIndex * caps.exposureStep), caps.hasEv && !state.capture.manual && state.ready, Modifier.weight(1f)) { navigate("ev") }
-                        ControlTile("白平衡", state.capture.kelvin?.let { "$it K" } ?: caps.whiteBalances.find { it.mode == state.capture.wbMode }?.label ?: "自動", state.ready, Modifier.weight(1f)) { navigate("wb") }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        ControlTile("ISO", if (state.capture.manual) state.capture.iso.toString() else "自動", state.capture.manual, Modifier.weight(1f)) { navigate("iso") }
-                        ControlTile("快門", if (state.capture.manual) shutterLabel(state.capture.shutterNs) else "自動", state.capture.manual, Modifier.weight(1f)) { navigate("shutter") }
-                    }
-                    if (caps.apertures.isNotEmpty()) {
-                        Spacer(Modifier.height(12.dp))
-                        ControlTile("光圈", state.actual.aperture?.let { "f/%.1f".format(Locale.US, it) } ?: "固定", caps.adjustableAperture && state.capture.manual, Modifier.fillMaxWidth()) { navigate("aperture") }
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = { navigate("filters") }, enabled = !state.busy) { Text("濾鏡") }
-                        OutlinedButton(onClick = { navigate("settings") }) { Text("更多設定") }
-                    }
-                    if (!caps.manualSensor) Text("這個鏡頭未提供手動快門與 ISO。", style = MaterialTheme.typography.bodySmall)
-                }
                 "filters" -> {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         item { FilterChip(selected = state.selectedLut == null, onClick = { model.selectLut(null) }, label = { Text("原色") }, modifier = Modifier.testTag("filter-original")) }
@@ -437,50 +460,6 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                         OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
                         OutlinedButton(onClick = { navigate("filter") }) { Text("調色設定") }
                     }
-                }
-                "zoom" -> {
-                    Text(ZoomControls.label(state.capture.zoom), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
-                    if (state.maxZoom > state.minZoom) LogSlider(state.capture.zoom.toDouble(), state.minZoom.toDouble(), state.maxZoom.toDouble()) { model.zoom(it.toFloat()) }
-                    Text("${ZoomControls.label(state.minZoom)}–${ZoomControls.label(state.maxZoom)} · 也可以在觀景窗雙指縮放", style = MaterialTheme.typography.bodyMedium)
-                    Text("倍率依目前鏡頭能力提供，可能包含數位裁切。", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
-                }
-                "ev" -> {
-                    Text("調整自動曝光目標。全手動模式由快門與 ISO 決定曝光。")
-                    Text("%+.2f EV".format(Locale.US, state.capture.evIndex * caps.exposureStep), Modifier.padding(top = 16.dp))
-                    if (caps.hasEv) Slider(state.capture.evIndex.toFloat(), { value -> model.changeCapture { it.copy(evIndex = value.roundToInt()) } }, valueRange = caps.exposureRange.lower.toFloat()..caps.exposureRange.upper.toFloat())
-                }
-                "shutter" -> caps.shutterRange?.let { range ->
-                    Text(shutterLabel(state.capture.shutterNs), style = MaterialTheme.typography.titleLarge)
-                    LogSlider(state.capture.shutterNs.toDouble(), range.lower.toDouble(), range.upper.toDouble()) { value -> model.changeCapture { it.copy(shutterNs = value.toLong()) } }
-                    Text("慢快門增加動態模糊，也會降低即時預覽更新速度。", style = MaterialTheme.typography.bodySmall)
-                }
-                "iso" -> caps.isoRange?.let { range ->
-                    Text("ISO ${state.capture.iso}", style = MaterialTheme.typography.titleLarge)
-                    LogSlider(state.capture.iso.toDouble(), range.lower.toDouble(), range.upper.toDouble()) { value -> model.changeCapture { it.copy(iso = value.roundToInt()) } }
-                }
-                "wb" -> {
-                    caps.whiteBalances.forEach { wb ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = state.capture.kelvin == null && state.capture.wbMode == wb.mode,
-                                onClick = { model.changeCapture { it.copy(wbMode = wb.mode, kelvin = null, wbLocked = false) } })
-                            TextButton(onClick = { model.changeCapture { it.copy(wbMode = wb.mode, kelvin = null, wbLocked = false) } }) { Text(wb.label) }
-                        }
-                    }
-                    if (caps.awbLock && state.capture.kelvin == null && state.capture.wbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO) ToggleRow("鎖定自動白平衡", state.capture.wbLocked, !state.capture.manual) { checked -> model.changeCapture { it.copy(wbLocked = checked) } }
-                    caps.cctRange?.let { range ->
-                        ToggleRow("手動色溫與色偏", state.capture.kelvin != null) { checked -> model.changeCapture { it.copy(kelvin = if (checked) range.clamp(5500) else null) } }
-                        state.capture.kelvin?.let { kelvin ->
-                            Text("${kelvin} K")
-                            Slider(kelvin.toFloat(), { value -> model.changeCapture { it.copy(kelvin = value.roundToInt()) } }, valueRange = range.lower.toFloat()..range.upper.toFloat())
-                            Text("色偏 ${state.capture.tint}")
-                            Slider(state.capture.tint.toFloat(), { value -> model.changeCapture { it.copy(tint = value.roundToInt()) } }, valueRange = -50f..50f)
-                        }
-                    } ?: Text("此鏡頭未提供直接 K 色溫控制；可使用上方白平衡預設。", style = MaterialTheme.typography.bodySmall)
-                    if (state.capture.manual) Text("M 模式下自動白平衡會在支援時鎖定，以減少色彩漂移。", style = MaterialTheme.typography.bodySmall)
-                }
-                "aperture" -> {
-                    caps.apertures.forEach { f -> FilterChip(selected = state.capture.aperture == f, onClick = { model.changeCapture { it.copy(aperture = f) } }, label = { Text("f/%.1f".format(Locale.US, f)) }) }
-                    Text("這是鏡頭實體光圈。固定光圈鏡頭無法調整。", style = MaterialTheme.typography.bodySmall)
                 }
                 "filter" -> {
                     Text("影像亮度：%+.1f EV".format(Locale.US, state.filter.brightnessEv))
@@ -502,6 +481,13 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                         ToggleRow("錄製聲音", state.recordWithAudio, !state.recording, model::recordWithAudio)
                         Text("首次錄影會詢問麥克風權限；未授權仍可錄製無聲影片。", style = MaterialTheme.typography.bodySmall)
                     }
+                    if (caps.awbLock && state.capture.kelvin == null && state.capture.wbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO) {
+                        ToggleRow("鎖定自動白平衡", state.capture.wbLocked, !state.capture.manual) { checked -> model.changeCapture { it.copy(wbLocked = checked) } }
+                    }
+                    if (state.capture.kelvin != null) {
+                        Text("白平衡色偏 ${state.capture.tint}")
+                        Slider(state.capture.tint.toFloat(), { value -> model.changeCapture { it.copy(tint = value.roundToInt()) } }, valueRange = -50f..50f)
+                    }
                     ToggleRow("同時儲存原圖", state.saveOriginal, !state.busy, model::saveOriginal)
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }
                     if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
@@ -519,26 +505,9 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
 }
 
 @Composable
-private fun ControlTile(label: String, value: String, enabled: Boolean, modifier: Modifier, click: () -> Unit) {
-    Surface(onClick = click, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.padding(16.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else .5f))
-            Text(value, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.titleMedium, color = if (enabled) Color.White else Color.White.copy(alpha = .45f))
-        }
-    }
-}
-
-@Composable
 private fun ToggleRow(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f))
         Switch(checked, onChange, enabled = enabled)
     }
-}
-
-@Composable
-private fun LogSlider(value: Double, min: Double, max: Double, onChange: (Double) -> Unit) {
-    if (max <= min) return
-    val low = ln(min); val high = ln(max)
-    Slider(((ln(value.coerceIn(min, max)) - low) / (high - low)).toFloat(), { t -> onChange(exp(low + t * (high - low))) })
 }

@@ -61,6 +61,7 @@ data class CameraUiState(
     val savedMime: String = "image/jpeg",
 ) {
     val recording get() = recordingStatus != RecordingStatus.IDLE
+    val liveControlsEnabled get() = ready && !busy && recordingStatus != RecordingStatus.STARTING && recordingStatus != RecordingStatus.STOPPING
 }
 
 class CameraViewModel(application: Application) : AndroidViewModel(application) {
@@ -100,7 +101,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun changeCapture(transform: (CaptureSettings) -> CaptureSettings) { _state.update { it.copy(capture = transform(it.capture)) } }
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = false)) } }
-    fun zoom(value: Float) { _state.update { it.copy(capture = it.capture.copy(zoom = value.coerceIn(it.minZoom, it.maxZoom))) } }
+    fun zoom(value: Float) { _state.update { if (it.liveControlsEnabled) it.copy(capture = it.capture.copy(zoom = value.coerceIn(it.minZoom, it.maxZoom))) else it } }
     fun recordWithAudio(enabled: Boolean) { if (!_state.value.recording) { _state.update { it.copy(recordWithAudio = enabled) }; prefs.edit().putBoolean("recordWithAudio", enabled).apply() } }
     fun videoQuality(value: String) { _state.update { it.copy(videoQuality = value) } }
     fun toggleGrid() { _state.update { it.copy(grid = !it.grid) }; prefs.edit().putBoolean("grid", _state.value.grid).apply() }
