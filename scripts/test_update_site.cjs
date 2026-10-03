@@ -56,3 +56,11 @@ test("failed requests keep the download disabled and expose retry", async () => 
   assert.equal(elements.retry.hidden, false);
   assert.match(elements.status.textContent, /暫時無法/);
 });
+
+test("private downloads open the latest release rather than the APK asset", async () => {
+  const elements = await load({ ...valid, access: "github-login" });
+  assert.equal(elements.download.hidden, false);
+  assert.equal(elements.download.href, "https://github.com/waltwait/Grain/releases/latest");
+  assert.match(elements.status.textContent, /登入 GitHub 下載/);
+  assert.equal((await load({ ...valid, access: "unknown" })).download.hidden, true);
+});

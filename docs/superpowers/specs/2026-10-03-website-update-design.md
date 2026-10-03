@@ -1,6 +1,6 @@
 # Grain 網站分發與 App 更新設計草案
 
-狀態：使用者已選定網站分發及「設定 → 檢查更新 → 下載新版 → 安裝」的 App 內流程，後續明確要求原儲存庫 public；部署分支確定採公開 GitHub raw／Release／Pages。正式網址 APK 已驗證，執行紀錄見 [公開更新來源](../../public-updates-v062.md)。
+狀態：使用者最新選擇改回 private 與原個人 APK 發布方式，覆蓋先前 public／Pages 部署選擇。Pages 已關閉，0.6.2 保留草稿；0.6.3 預設「檢查更新」開啟私人 GitHub Release，登入後下載並安裝。此文件其餘原生更新流程保留作為配置獨立 HTTPS 服務時的設計，最新執行狀態見 [私人更新紀錄](../../private-updates-v063.md)。
 
 ## 使用者需求與目前狀態
 
@@ -34,7 +34,7 @@ App 更新頁以 Compose 實作並沿用黑金主題。下載、雜湊與 APK me
 | 公開下載網站 | 靜態下載頁與匿名 HTTPS 版本資訊／APK，可用獨立 Pages 下載區。 | 公開分發十款官方素材需另確認，不能直接把私人個人 APK 公開。 |
 | 網站導向私人 GitHub | 網站只提供固定最新版連結，由瀏覽器登入 GitHub 下載。 | 可立即沿用私人包，但屬瀏覽器下載，不能稱為完整 App 自動下載。 |
 
-等待使用者選擇下載對象。若選私人完整更新，需再確認已有網站／網域與可用登入服務，或另設部署環境；若選公開，需確認公開包的素材分發範圍。尚未選定任何外部平台，不把私人 GitHub 帳號權杖內建到 App，也不變更原儲存庫可見性。
+使用者已選定私人 GitHub 的原發布方式：App 開啟最新 Release，下載由已登入的瀏覽器處理。預設不內嵌帳號權杖，不向私人 raw URL 發起匿名檢查；保留可配置的原生更新服務入口。
 
 ## 實作與驗證範圍
 
@@ -49,4 +49,4 @@ App 更新頁以 Compose 實作並沿用黑金主題。下載、雜湊與 APK me
 - [FileProvider 與安裝檔臨時讀取權](https://developer.android.com/reference/androidx/core/content/FileProvider)
 - [GitHub Release API 與私人資源存取](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)
 
-本文件的共同流程已按現有 App 架構與官方文件檢查並實作；部署分支尚未定案，完整更新仍待正式網址與手機驗證。
+原生更新共同模組已實作及本機驗證；0.6.3 預設採私人 Release 瀏覽器流程，手機安裝與返回相機仍待實機驗證。

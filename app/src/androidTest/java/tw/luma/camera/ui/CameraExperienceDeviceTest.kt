@@ -52,9 +52,7 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("app-update-screen").assertIsDisplayed()
         if (tw.luma.camera.BuildConfig.UPDATE_FEED_URL.isBlank()) {
             ui.onNodeWithTag("update-primary").assertTextEquals("檢查更新").assertIsEnabled()
-            ui.onNodeWithTag("update-primary").performClick()
-            ui.onNodeWithTag("update-error").assertTextEquals("更新下載網站尚未設定")
-            ui.onNodeWithTag("update-primary").assertIsEnabled()
+            ui.onNodeWithTag("update-error").assertDoesNotExist()
         }
         ui.onNodeWithText("返回").performClick()
         ready()

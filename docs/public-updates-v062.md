@@ -2,7 +2,7 @@
 
 使用者於 2026-10-03 要求將 `waltwait/Grain` 改為 public，讓 App 能直接下載更新。本次沿用「設定 → 檢查更新 → 下載新版 → 安裝」，公開設定只解決版本資訊及 APK 的匿名存取；目前安裝仍開啟 Android 系統安裝畫面。
 
-狀態：儲存庫已改為 public，匿名 Release API 可取得既有最新版 0.6.1。0.6.2 APK 已驗證並上傳為草稿；公開發佈被自動核准審查拒絕，因尚未確認十款官方富士素材的公開再散布授權及使用者對此素材包的明確授權。目前版本資訊與下載頁只指向已發佈的 0.6.1；不將 0.6.2 草稿改用其他方式公開。
+最終狀態：使用者改選 private 與原個人 APK 發布方式。已刪除本次建立的 Pages 設定，並確認 GitHub 回傳 `private: true`、`has_pages: false`。0.6.2 保留草稿，沒有繞過公開發布的自動核准審查拒絕；0.6.3 改用私人 Release 瀏覽器下載，見 [私人更新紀錄](private-updates-v063.md)。以下記錄曾執行的公開方案，所列匿名來源已不再作為 App 預設更新來源。
 
 ## 固定來源
 
@@ -21,7 +21,7 @@ App 的預設更新網址依 build type 選擇通道；`personal` 保留十款�
 
 ## 下載頁更新
 
-`.github/workflows/pages.yml` 只把 `website/` 的三個網頁檔案及版本 JSON 部署到 Pages，不上傳整個儲存庫、APK 或本機簽章。主頁讀取個人通道，`release/latest.json` 保留一般通道。更新 `updates/` 後會觸發網站重新部署；App 直接讀取 GitHub raw JSON，不依賴 Pages 部署是否完成。
+當時的 `.github/workflows/pages.yml`（已移除）只把 `website/` 的三個網頁檔案及版本 JSON 部署到 Pages，不上傳整個儲存庫、APK 或本機簽章。主頁讀取個人通道，`release/latest.json` 保留一般通道。更新 `updates/` 後會觸發網站重新部署；App 直接讀取 GitHub raw JSON，不依賴 Pages 部署是否完成。
 
 後續發布流程：建置同簽章 APK → 核對十款富士與簽章 → 產生版本 JSON → 上傳版本 APK → 更新對應 `updates/<channel>/latest.json` → 提交並推送。JSON 需與 Release 實際附件一致；保留舊版本 URL，不能把高版號資訊指向不同 APK。
 
@@ -37,4 +37,6 @@ Android 12 以上提供符合條件的自我更新 API，但仍要求對應權�
 
 正式網址成品 `output/Grain-0.6.2.apk`，14,000,346 bytes，SHA-256 `f0d112f541b29ec368d627c79ced240215dc7a730838744d7bff9830d9c19a20`。與先前 `.invalid` 測試網址包的雜湊不同，測試包不發布。
 
-待核對固定 JSON、既有公開 APK 的匿名下載與 Pages 部署。0.6.2 草稿仍待使用者確認及核准，不表示已公開發布。Samsung S24 Android 16 的安裝授權、取消及覆蓋更新仍待真機；目前無手機，不宣稱已通過。
+Pages 部署 [37119633226](https://github.com/waltwait/Grain/actions/runs/37119633226) 成功，下載頁實際顯示 Grain 0.6.1 與單一 APK 按鈕。網站 `latest.json`、App 使用的 raw JSON 與本機已簽章包 metadata 一致，匿名 Release API 顯示 0.6.1 是最新版，0.6.2 維持草稿。
+
+既有 0.6.1 APK 的匿名下載因逾時未完成，沒有取得完整檔案校驗結果；恢復私人方案後停止此檢查。0.6.2 保留草稿，不再等待公開發布確認。Samsung S24 Android 16 的安裝授權、取消及覆蓋更新仍待真機；目前無手機，不宣稱已通過。

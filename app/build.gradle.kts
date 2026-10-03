@@ -15,9 +15,9 @@ fun releaseSigningValue(name: String): String = releaseSigning.getProperty(name)
     ?: throw GradleException("Missing $name in .signing/release.properties")
 
 val configuredUpdateUrl = providers.gradleProperty("grainUpdateUrl").orNull
-fun updateFeedField(channel: String): String {
-    val url = configuredUpdateUrl
-        ?: "https://raw.githubusercontent.com/waltwait/Grain/main/updates/$channel/latest.json"
+fun updateFeedField(): String {
+    // Private releases open in the user's browser; an optional hosted feed enables native updates.
+    val url = configuredUpdateUrl.orEmpty()
     if (url.isNotBlank()) {
         val uri = URI(url)
         require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) {
@@ -34,9 +34,9 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 25
-        versionName = "0.6.2"
-        buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("release"))
+        versionCode = 26
+        versionName = "0.6.3"
+        buildConfigField("String", "UPDATE_FEED_URL", updateFeedField())
         buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -59,7 +59,6 @@ android {
     buildTypes {
         getByName("debug") {
             buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"")
-            buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("personal-fuji"))
         }
         release {
             isMinifyEnabled = true
@@ -70,7 +69,6 @@ android {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
             buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"")
-            buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("personal-fuji"))
         }
     }
     // Personal updates retain the official local pack and the installed release signature.

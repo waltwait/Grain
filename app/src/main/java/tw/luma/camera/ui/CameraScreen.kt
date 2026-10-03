@@ -326,7 +326,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     }
     panel?.takeUnless { it == "filters" }?.let {
         ControlsSheet(it, state, model, openLut, {
-            panel = null; activeControl = null; model.pausePreview(); updateModel.check(); updatesOpen = true
+            panel = null; activeControl = null; model.pausePreview()
+            if (tw.luma.camera.BuildConfig.UPDATE_FEED_URL.isNotBlank()) updateModel.check()
+            updatesOpen = true
         }) { panel = if (it == "filter") "filters" else null }
     }
 }

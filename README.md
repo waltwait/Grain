@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.6.2**、versionCode **25**，新增設定內檢查更新、下載與系統安裝入口；正式 GitHub 更新來源已接好，成品已驗證，但含富士素材的公開發布仍待確認與核准，見 [App 內更新紀錄](docs/in-app-updates-v062.md)。儲存庫已改為 public，公開最新版仍為 **0.6.1**，個人富士版恢復十款富士 LUT，沿用 0.6.0 正式簽章，可直接更新 0.6.0 正式版；見 [富士濾鏡恢復紀錄](docs/personal-fuji-v061.md)。保留獨立照片編輯預覽、觀景窗左右滑動變焦與半透明參數面板。簽章備份與舊 debug 測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
+目前版本 **0.6.3**、versionCode **26**，依使用者最新選擇恢復私人儲存庫與原有個人 APK 發布方式。設定內「檢查更新」開啟 GitHub 最新 Release，登入後下載單一 APK 並覆蓋安裝；原 Grain Pages 已關閉，改由 [公開下載頁](https://waltwait.github.io/Grain-pages/) 連到私人 Release；App 不再嘗試匿名讀取私人版本資訊，見 [私人更新紀錄](docs/private-updates-v063.md)。個人版保留十款富士 LUT，沿用 0.6.0／0.6.1 正式簽章；見 [富士濾鏡恢復紀錄](docs/personal-fuji-v061.md)。保留獨立照片編輯預覽、觀景窗左右滑動變焦與半透明參數面板。簽章備份與舊 debug 測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -45,7 +45,9 @@
 
 **0.6.1** 修復 0.6.0 正式包缺少個人富士素材的問題：新增 `personal` 建置，沿用正式簽章並包含本機十款官方 LUT。新增建置前完整性檢查與 APK 校驗腳本；私人個人版只提供一個 APK 附件，保留 0.6.0 的功能與資料格式。
 
-**0.6.2（發布準備中）** 設定新增「檢查更新」，依序檢查、下載、安裝；下載及校驗使用背景 I/O，提供進度、取消及頁內錯誤。個人通道核對十款富士素材與既有正式簽章，預設網址已接到 GitHub 的獨立通道。使用者指定原儲存庫 public，固定更新網址與 Pages 配置見 [公開更新來源](docs/public-updates-v062.md)。
+**0.6.2（保留草稿）** 實作 HTTPS 更新、下載校驗與系統安裝入口；公開發布未完成。相關開發驗證保留於 [App 內更新紀錄](docs/in-app-updates-v062.md)。
+
+**0.6.3** 恢復 private 與個人富士 APK。預設「檢查更新」開啟私人 GitHub Release；未配置獨立 HTTPS 更新服務時不自動連線。保留可選的 `-PgrainUpdateUrl` 與原更新校驗模組，移除原 Grain Pages 自動部署，公開網頁改放獨立 Grain-pages 儲存庫，APK 仍私人。
 
 觀景窗支援單指右滑放大、左滑縮小，拍照及錄影時皆可使用；保留點擊對焦、對焦後上下滑調曝光與雙指變焦，同一次滑動會鎖定方向。浮動參數面板改為半透明，按住或拖動 ISO、快門、曝光、白平衡、光圈及變焦滑桿時底色會再淡化，放開後平順恢復，控制位置與取景範圍保持固定。
 

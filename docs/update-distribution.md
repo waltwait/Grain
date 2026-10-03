@@ -1,6 +1,6 @@
 # Grain 下載頁與 App 更新方案
 
-2026-10-03 研究。Grain 目前為私人 GitHub 儲存庫，沒有啟用 Pages；已發布最新版為個人富士 0.6.1／versionCode 24。使用者已選定網站 APK 分發及「設定 → 檢查更新 → 下載新版 → 安裝」。共同更新模組及網站範本已加入 0.6.2 開發版，尚未接正式網址或部署；實作見 [0.6.2 紀錄](in-app-updates-v062.md)。
+2026-10-03 研究。最新決定為 private 儲存庫與原個人 APK 發布方式；原 Grain Pages 已關閉，公開網頁改由獨立 Grain-pages 連到私人 Release。0.6.3 的「檢查更新」開啟 GitHub 最新 Release，使用者登入後下載及安裝。原生 HTTPS 更新模組保留供日後配置服務；私人 GitHub 不能直接作為匿名 App 更新來源。見 [私人更新紀錄](private-updates-v063.md)。
 
 ## 建議架構
 
@@ -49,4 +49,4 @@ Android 網站分發需處理「允許安裝未知 App」授權。[Android 官�
 | 所有人 | 建議獨立公開 APK 下載區，程式碼維持私人；Pages 與 App 可匿名讀取版本資訊。 |
 | 本人／受邀使用者 | 維持私人個人包；完整 App 內下載需真正的登入／受控下載服務，瀏覽器登入 GitHub 不能代替 App 內下載。 |
 
-使用者已於 2026-10-03 指定將原儲存庫改成 public；採公開 GitHub raw 版本描述、Release APK 與 Pages 下載頁，無需另提供網站。具體網址及後續執行狀態見 [公開更新來源](public-updates-v062.md)。
+使用者曾選擇公開 GitHub raw／Release／Pages，之後明確改回 private 並維持原發布方式。公開方案停止，0.6.2 保留草稿，最新私人流程見 [0.6.3 紀錄](private-updates-v063.md)。

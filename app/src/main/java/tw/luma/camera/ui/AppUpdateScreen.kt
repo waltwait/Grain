@@ -81,6 +81,12 @@ fun AppUpdateScreen(model: AppUpdateViewModel, back: () -> Unit) {
             if (!state.downloading) {
                 Button(onClick = {
                     when {
+                        BuildConfig.UPDATE_FEED_URL.isBlank() -> {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    "https://github.com/waltwait/Grain/releases/latest".toUri()))
+                            }.onFailure { model.error("無法開啟 GitHub 下載頁") }
+                        }
                         state.download != null && state.available -> {
                             if (context.packageManager.canRequestPackageInstalls()) model.prepareInstall()
                             else {

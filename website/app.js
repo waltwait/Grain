@@ -28,6 +28,7 @@ async function loadRelease() {
         !Number.isInteger(info.bundledFujiCount) || info.bundledFujiCount < 0 || info.bundledFujiCount > 10 ||
         !["release", "personal-fuji"].includes(info.channel) ||
         (info.channel === "personal-fuji" && info.bundledFujiCount !== 10) ||
+        (info.access !== undefined && info.access !== "github-login") ||
         !/^[a-f0-9]{64}$/i.test(info.apkSha256) || !/^[a-f0-9]{64}$/i.test(info.signingCertificateSha256) ||
         (info.notes !== undefined && (typeof info.notes !== "string" || info.notes.length > 4000)) ||
         url.protocol !== "https:" || url.username || url.password || url.hash) {
@@ -35,9 +36,11 @@ async function loadRelease() {
     }
     version.textContent = "Grain " + info.versionName;
     notes.textContent = info.notes || "";
-    download.href = url.href;
+    download.href = info.access === "github-login"
+      ? "https://github.com/waltwait/Grain/releases/latest" : url.href;
     download.hidden = false;
     status.textContent = "Android " + (info.minSdk === 29 ? "10" : "API " + info.minSdk) + "+ · " + (info.apkSize / 1024 / 1024).toFixed(1) + " MB";
+    if (info.access === "github-login") status.textContent += " · 登入 GitHub 下載";
   } catch (_) {
     version.textContent = "Grain";
     status.textContent = "暫時無法取得最新版，請稍後再試。";
