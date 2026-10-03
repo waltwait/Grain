@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.6.0**、versionCode **23**，包含獨立照片編輯預覽、觀景窗左右滑動變焦與半透明參數面板，建置與成品見 [0.6.0 紀錄](docs/release-v060.md)。Release APK／AAB 沿用正式簽章；簽章備份與測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
+目前開發版本 **0.6.1**、versionCode **24**，個人富士版恢復十款富士 LUT，沿用 0.6.0 正式簽章，可直接更新 0.6.0 正式版；建置與成品見 [富士濾鏡恢復紀錄](docs/personal-fuji-v061.md)。保留獨立照片編輯預覽、觀景窗左右滑動變焦與半透明參數面板。簽章備份與舊 debug 測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -41,7 +41,9 @@
 
 **0.6.0** 整合 0.5.0 發布準備期間的介面與照片編輯更新，versionCode 由 22 升為 23，沿用 App 識別碼、正式簽章與既有資料格式。相簿檢視頁移除放大／還原、上一張／下一張按鈕，以左右滑動、雙指縮放及雙擊還原操作；畫面沒有手勢說明文字。
 
-0.6.0 已於 2026-10-03 發布為 [GitHub 最新正式版本](https://github.com/waltwait/Grain/releases/tag/v0.6.0)，包含 APK／AAB 與 SHA-256 校驗檔。儲存庫維持私人狀態，下載需具存取權的 GitHub 帳號；尚未上傳 Google Play。
+0.6.0 已於 2026-10-03 發布為 [GitHub 正式版本](https://github.com/waltwait/Grain/releases/tag/v0.6.0)，包含 APK／AAB 與 SHA-256 校驗檔。儲存庫維持私人狀態，下載需具存取權的 GitHub 帳號；尚未上傳 Google Play。
+
+**0.6.1** 修復 0.6.0 正式包缺少個人富士素材的問題：新增 `personal` 建置，沿用正式簽章並包含本機十款官方 LUT。新增建置前完整性檢查與 APK 校驗腳本；私人個人版只提供一個 APK 附件，保留 0.6.0 的功能與資料格式。
 
 觀景窗支援單指右滑放大、左滑縮小，拍照及錄影時皆可使用；保留點擊對焦、對焦後上下滑調曝光與雙指變焦，同一次滑動會鎖定方向。浮動參數面板改為半透明，按住或拖動 ISO、快門、曝光、白平衡、光圈及變焦滑桿時底色會再淡化，放開後平順恢復，控制位置與取景範圍保持固定。
 
@@ -87,9 +89,18 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
-目前個人富士測試版另存於 `output/Grain-0.5.0-personal-fuji-debug.apk`。APK 與官方富士 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+目前個人富士版另存於 `output/Grain-0.6.1-personal-fuji.apk`，使用正式簽章，非 debuggable。APK 與官方富士 LUT 素材不提交 Git；個人 APK 另提供私人 GitHub Release 下載。舊 debug 個人包仍使用不同簽章。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
-正式版成品為 `output/Grain-0.6.0-release.apk` 與 `output/Grain-0.6.0-release.aab`，不內建官方富士素材。Release 使用 `.signing/release.properties` 指定的正式 keystore；這個目錄、密碼與私鑰均不提交 Git。第一次可使用 `python3 scripts/create_release_keystore.py` 建立新簽章，或參考 [簽章設定範本](docs/release-signing.properties.example) 指定既有 keystore。建立後需自行安全備份整個 `.signing` 目錄。正式簽章與既有 debug 簽章不同，不能直接覆蓋目前個人測試版；本次沒有移除手機上的 App 或搬移資料。
+本機已準備十款素材與正式簽章設定時，個人更新包使用：
+
+```sh
+./gradlew :app:assemblePersonal
+python3 scripts/verify_personal_fuji_apk.py app/build/outputs/apk/personal/app-personal.apk
+```
+
+`personal` 只重用 `src/debug/assets` 的本機素材，不重用 debug Kotlin 程式或 debug 簽章。缺少十款素材、來源 metadata 或正式簽章設定時，個人建置會直接失敗。一般 `release` 保留原有可分發素材組合，不自動帶入官方富士檔案。
+
+0.6.0 一般正式版成品為 `output/Grain-0.6.0-release.apk` 與 `output/Grain-0.6.0-release.aab`，不內建官方富士素材。Release 與 personal 使用 `.signing/release.properties` 指定的正式 keystore；這個目錄、密碼與私鑰均不提交 Git。第一次可使用 `python3 scripts/create_release_keystore.py` 建立新簽章，或參考 [簽章設定範本](docs/release-signing.properties.example) 指定既有 keystore。建立後需自行安全備份整個 `.signing` 目錄。正式簽章與既有 debug 簽章不同，不能直接覆蓋舊 debug 測試版；本次沒有移除手機上的 App 或搬移資料。
 
 ```sh
 ./gradlew :app:assembleRelease :app:bundleRelease

@@ -20,8 +20,8 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 23
-        versionName = "0.6.0"
+        versionCode = 24
+        versionName = "0.6.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -46,9 +46,31 @@ android {
             if (releaseSigningFile.isFile) signingConfig = signingConfigs.getByName("grainRelease")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        create("personal") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+        }
     }
+    // Personal updates retain the official local pack and the installed release signature.
+    sourceSets.getByName("personal").assets.srcDir("src/debug/assets")
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
+
+val verifyPersonalFujiAssets = tasks.register("verifyPersonalFujiAssets") {
+    val directory = file("src/debug/assets/luts/fujifilm")
+    inputs.files(fileTree(directory) { include("*.cube", "sources.json") })
+    doLast {
+        check(releaseSigningFile.isFile) { "Personal updates require the existing release signing configuration." }
+        val styles = listOf("CLASSIC-CHROME", "CLASSIC-Neg.", "REALA-ACE", "PROVIA", "Velvia",
+            "ASTIA", "PRO-Neg.Std", "ETERNA", "ETERNA-BB", "ACROS")
+        val missing = styles.map { "FLog2_to_${it}_33grid_V.1.00.cube" }
+            .filterNot { directory.resolve(it).isFile }
+        check(missing.isEmpty() && directory.resolve("sources.json").isFile) {
+            "Personal Fuji pack is incomplete. Prepare all ten official LUTs before building a personal update."
+        }
+    }
+}
+tasks.matching { it.name == "prePersonalBuild" }.configureEach { dependsOn(verifyPersonalFujiAssets) }
 
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 

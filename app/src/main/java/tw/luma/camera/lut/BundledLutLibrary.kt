@@ -2,7 +2,7 @@ package tw.luma.camera.lut
 
 import android.content.res.AssetManager
 
-/** Optional local debug assets. Official CUBE files are kept byte-for-byte unchanged. */
+/** Local personal/debug assets. Official CUBE files are kept byte-for-byte unchanged. */
 object BundledLutLibrary {
     private const val DIRECTORY = "luts/fujifilm"
     private val names = listOf(
