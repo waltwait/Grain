@@ -358,33 +358,43 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("camera-ready").assertExists()
     }
 
-    @Test fun ownPhotoOpensInGrainAndCanZoomAndReset() {
+    @Test fun ownPhotosSwipeAfterZoomAndReset() {
         ready()
-        val name = "GRAIN_TEST_${System.nanoTime()}.jpg"
+        val names = List(2) { "GRAIN_TEST_${System.nanoTime()}_$it.jpg" }
         val resolver = ui.activity.contentResolver
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
-            put(MediaStore.Images.Media.IS_PENDING, 1)
-        }
-        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+        val uris = mutableListOf<android.net.Uri>()
         val bitmap = Bitmap.createBitmap(160, 120, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(80, 120, 170)) }
         try {
-            requireNotNull(resolver.openOutputStream(uri)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
-            resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            names.forEach { name ->
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+                val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+                uris += uri
+                requireNotNull(resolver.openOutputStream(uri)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+                resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            }
             ui.onNodeWithTag("open-gallery").performClick()
-            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
-            ui.onNodeWithContentDescription("照片 $name").performClick()
+            ui.onNodeWithTag("gallery-filter-1").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 ${names.last()}").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithContentDescription("照片 ${names.last()}").performClick()
             ui.waitUntil(10_000) { ui.onAllNodesWithTag("gallery-photo").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithTag("gallery-photo").performTouchInput { pinch(start0 = center - Offset(30f, 0f), start1 = center + Offset(30f, 0f), end0 = center - Offset(90f, 0f), end1 = center + Offset(90f, 0f)) }
             ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已放大"))
             ui.onNodeWithTag("gallery-photo").performTouchInput { doubleClick(center) }
             ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "原始比例"))
+            ui.onNodeWithTag("gallery-pager").performTouchInput { swipeLeft() }
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 ${names.first()}").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "原始比例"))
+            ui.onNodeWithTag("gallery-pager").performTouchInput { swipeRight() }
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 ${names.last()}").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithTag("viewer-back").performClick()
             ui.onNodeWithTag("gallery-close").performClick()
             ready()
-        } finally { bitmap.recycle(); resolver.delete(uri, null, null) }
+        } finally { bitmap.recycle(); uris.forEach { resolver.delete(it, null, null) } }
     }
 
     private fun screenshot(name: String) {

@@ -30,11 +30,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -52,7 +53,6 @@ import androidx.media3.ui.compose.ContentFrame
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import tw.luma.camera.camera.ZoomControls
 import tw.luma.camera.gallery.GalleryItem
 import tw.luma.camera.gallery.GalleryViewModel
@@ -139,11 +139,9 @@ private fun GalleryThumbnail(item: GalleryItem, model: GalleryViewModel, modifie
 @Composable
 private fun ColumnScope.GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: GalleryViewModel, back: () -> Unit) {
     val pager = rememberPagerState(initialPage = initialPage) { items.size }
-    val scope = rememberCoroutineScope()
     val positions = remember { mutableMapOf<String, Long>() }
     var zoomed by remember { mutableStateOf(false) }
     LaunchedEffect(pager.currentPage) { zoomed = false }
-    val item = items[pager.currentPage.coerceIn(items.indices)]
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = back, modifier = Modifier.heightIn(min = 48.dp).testTag("viewer-back")) { Text("‹ 相簿") }
         Spacer(Modifier.weight(1f))
@@ -158,13 +156,6 @@ private fun ColumnScope.GalleryViewer(items: List<GalleryItem>, initialPage: Int
             else if (current.video) GalleryThumbnail(current, model, Modifier.fillMaxSize())
             else GalleryPhoto(current, model, page == pager.settledPage) { zoomed = it }
         }
-    }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = { zoomed = false; scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } }, enabled = pager.currentPage > 0) { Text("‹ 上一張") }
-        if (item.video) Text("影片 · ${durationLabel(item.durationMs)}", modifier = Modifier.weight(1f), maxLines = 2,
-            textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
-        else Spacer(Modifier.weight(1f))
-        TextButton(onClick = { zoomed = false; scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } }, enabled = pager.currentPage < items.lastIndex) { Text("下一張 ›") }
     }
 }
 
@@ -203,16 +194,18 @@ private fun GalleryPhoto(item: GalleryItem, model: GalleryViewModel, active: Boo
             Image(remember(image) { image.asImageBitmap() }, "照片 ${item.name}", contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().transformable(transform, enabled = active, canPan = { scale > 1.01f })
                     .pointerInput(item.uri) { detectTapGestures(onDoubleTap = { scale = 1f; pan = Offset.Zero; zoomChanged(false) }) }
-                    .semantics { stateDescription = if (scale > 1.01f) "已放大" else "原始比例" }
+                    .semantics {
+                        stateDescription = if (scale > 1.01f) "已放大" else "原始比例"
+                        customActions = if (!active) emptyList() else listOf(
+                            CustomAccessibilityAction(if (scale > 1.01f) "還原比例" else "放大照片") {
+                                scale = if (scale > 1.01f) 1f else 2f
+                                pan = Offset.Zero
+                                zoomChanged(scale > 1.01f)
+                                true
+                            },
+                        )
+                    }
                     .graphicsLayer { scaleX = scale; scaleY = scale; translationX = pan.x; translationY = pan.y }.testTag("gallery-photo"))
-            val magnified by remember { derivedStateOf { scale > 1.01f } }
-            TextButton(onClick = {
-                scale = if (magnified) 1f else 2f
-                pan = Offset.Zero
-                zoomChanged(scale > 1.01f)
-            }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = .65f), RoundedCornerShape(12.dp))) {
-                Text(if (magnified) "還原" else "放大")
-            }
         } else {
             GalleryThumbnail(item, model, Modifier.fillMaxSize(), ContentScale.Fit)
             if (active && !failed) CircularProgressIndicator(Modifier.size(28.dp))

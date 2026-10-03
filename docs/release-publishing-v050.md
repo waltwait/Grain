@@ -6,6 +6,8 @@
 
 套件為 `tw.luma.camera`，versionName **0.5.0**、versionCode **22**。原有 Kotlin／Compose 功能沿用 0.5.0，Release 關閉 debuggable 並執行 R8 最佳化。正式成品含六款 Grain Originals 與五款 Pat David／Natron 的 Kodak 社群模擬，保留來源、轉換說明與 CC BY-SA 4.0 連結；APK／AAB 的 LUT 資產逐 byte 相同。官方富士 CUBE 只在 debug source set，本輪沒有將它們加入正式成品；LUT 匯入功能仍可使用，三個英文品牌類別保留。
 
+相簿檢視頁移除放大／還原按鈕與上一張／下一張底列，照片使用左右滑動切換、雙指縮放與拖曳、雙擊還原比例。縮放時拖曳移動照片，還原後可繼續滑動換張；沒有新增畫面上的手勢說明。保留返回相簿、張數與影片播放控制，螢幕閱讀器仍可使用縮放／還原動作。
+
 ## 正式簽章
 
 新增 `.signing/release.properties` 的本機設定支援，缺少設定時 Release 保持未簽章，不自動回退為 debug 簽章。設定存在但欄位不完整時，Gradle 會明確失敗，錯誤僅顯示缺少的欄位名稱。
@@ -18,7 +20,7 @@
 
 ## 驗證
 
-使用專案現有的 `testDebugUnitTest`、`lintDebug`、`assembleRelease` 與 `bundleRelease` 全部成功，耗時 **1 分 3 秒**。完整 **110 項 JVM 測試通過**，0 失敗／錯誤／跳過；Lint **0 錯誤、21 警告**。本專案未提供 `testReleaseUnitTest` 任務，首次嘗試於執行前失敗後改用現有任務，未把它記為通過。
+相簿修改後，`testDebugUnitTest`、`lintDebug`、`assembleDebugAndroidTest`、`assembleRelease` 與 `bundleRelease` 全部成功，耗時 **1 分 4 秒**。完整 **110 項 JVM 測試通過**，0 失敗／錯誤／跳過；Lint **0 錯誤、21 警告**。既有相簿裝置測試擴充為兩張測試照片，涵蓋雙指放大、雙擊還原與左右滑動切換；本次只完成編譯，沒有執行裝置測試。本專案未提供 `testReleaseUnitTest` 任務，先前嘗試於執行前失敗後改用現有任務，未把它記為通過。
 
 APK 的 package/version metadata、非 debuggable、APK Signature Scheme v2、RSA 4096 及新 certificate 已確認。`zipalign -c -P 16 4` 通過；六個 arm64-v8a／x86_64 native libraries 的所有 ELF LOAD segments 至少 16 KB 對齊。這是靜態封裝檢查，沒有實際在 16 KB 裝置執行。
 
@@ -30,7 +32,7 @@ AAB 的 JAR 簽章驗證成功，專案內 bundletool 的 `validate` 也通過�
 
 | 成品 | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `output/Grain-0.5.0-release.apk` | 11,667,522 | `4a41a6a444193516d4d2231312c01302788a725a0d84bf6dc21c181e44a4d549` |
-| `output/Grain-0.5.0-release.aab` | 13,086,653 | `111cf93ccbb28e69b88d3774a7d62b9c30ec6965705ca49d8d92aad009afe282` |
+| `output/Grain-0.5.0-release.apk` | 11,667,522 | `bc5781c3da54bcc055696bec46057e0ba4cdd5287dd902574dbe636d5693e5a1` |
+| `output/Grain-0.5.0-release.aab` | 13,081,045 | `2b83ff86bea2635159354897f6d2098853bd2f499eb7a9f192ded966c79a4f30` |
 
 各有 `.sha256` 檔；R8 mapping 另存為 `output/Grain-0.5.0-release-mapping.txt`，不提交 Git。成品與簽章資訊均可重用，但不應重新產生 key 來取代已發布的 key。
