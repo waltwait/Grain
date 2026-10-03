@@ -29,3 +29,9 @@ Release 只提供 `Grain-0.6.3-personal-fuji.apk` 一個附件。舊 Release 保
 ## 後續維護
 
 發布每個新私人 Release 後，以相同簽章 APK 執行 `scripts/prepare_private_download_page.py`，明確指定該版本私人 APK URL、build-tools 與更新內容。腳本只輸出五個網頁檔案，不複製 APK；若目錄有其他檔案會拒絕。將輸出同步到 `Grain-pages` 的 main 分支，Pages 會重新建置。網頁的按鈕固定連 `/releases/latest`，不需逐版更換下載連結；顯示版號與說明由同步後的 `latest.json` 更新。
+
+## 發布結果
+
+2026-10-03 已發布 [私人 Grain 0.6.3](https://github.com/waltwait/Grain/releases/tag/v0.6.3)，只有 `Grain-0.6.3-personal-fuji.apk` 一個附件；GitHub 回報大小 14,000,342 bytes 與 SHA-256 和本機成品一致。原儲存庫再次確認 `private: true`、`has_pages: false`；不帶登入憑證讀取最新 Release API 回傳 404。0.6.2 仍保留草稿。
+
+[公開下載頁](https://waltwait.github.io/Grain-pages/) 由獨立公開網頁庫部署，Pages 回報 `public: true`、`status: built`，[部署 37121144873](https://github.com/waltwait/Grain-pages/actions/runs/37121144873) 成功。遠端只含五個網頁／metadata 檔及 README，未發布 APK 或 LUT。瀏覽器實際顯示 0.6.3、13.4 MB、「登入 GitHub 下載」與唯一下載按鈕，目標為私人 `/releases/latest`；匿名取得的公開 JSON 和本機 metadata 完全一致。

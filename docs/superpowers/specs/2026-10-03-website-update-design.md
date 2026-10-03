@@ -1,6 +1,6 @@
 # Grain 網站分發與 App 更新設計草案
 
-狀態：使用者最新選擇改回 private 與原個人 APK 發布方式，覆蓋先前 public／Pages 部署選擇。Pages 已關閉，0.6.2 保留草稿；0.6.3 預設「檢查更新」開啟私人 GitHub Release，登入後下載並安裝。此文件其餘原生更新流程保留作為配置獨立 HTTPS 服務時的設計，最新執行狀態見 [私人更新紀錄](../../private-updates-v063.md)。
+狀態：使用者最新選擇改回 private 與原個人 APK 發布方式，覆蓋先前 public／Pages 部署選擇。原 Grain Pages 已關閉，另以公開 Grain-pages 發布只連到私人 Release 的網頁，0.6.2 保留草稿；0.6.3 預設「檢查更新」開啟私人 GitHub Release，登入後下載並安裝。此文件其餘原生更新流程保留作為配置獨立 HTTPS 服務時的設計，最新執行狀態見 [私人更新紀錄](../../private-updates-v063.md)。
 
 ## 使用者需求與目前狀態
 

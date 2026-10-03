@@ -2,7 +2,7 @@
 
 使用者於 2026-10-03 要求將 `waltwait/Grain` 改為 public，讓 App 能直接下載更新。本次沿用「設定 → 檢查更新 → 下載新版 → 安裝」，公開設定只解決版本資訊及 APK 的匿名存取；目前安裝仍開啟 Android 系統安裝畫面。
 
-最終狀態：使用者改選 private 與原個人 APK 發布方式。已刪除本次建立的 Pages 設定，並確認 GitHub 回傳 `private: true`、`has_pages: false`。0.6.2 保留草稿，沒有繞過公開發布的自動核准審查拒絕；0.6.3 改用私人 Release 瀏覽器下載，見 [私人更新紀錄](private-updates-v063.md)。以下記錄曾執行的公開方案，所列匿名來源已不再作為 App 預設更新來源。
+最終狀態：使用者改選 private 與原個人 APK 發布方式。已刪除本次建立的 Pages 設定，並確認 GitHub 回傳 `private: true`、`has_pages: false`。0.6.2 保留草稿，沒有繞過公開發布的自動核准審查拒絕；0.6.3 改用私人 Release 瀏覽器下載，使用者後續要求網頁公開，已另建只含網頁與 metadata 的公開 Grain-pages；見 [私人更新紀錄](private-updates-v063.md)。以下記錄曾執行的公開方案，所列匿名來源已不再作為 App 預設更新來源。
 
 ## 固定來源
 
