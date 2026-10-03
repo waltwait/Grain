@@ -28,6 +28,8 @@ import tw.luma.camera.lut.CubeLut
 import tw.luma.camera.lut.BundledLutLibrary
 import tw.luma.camera.lut.OriginalLutLibrary
 import tw.luma.camera.lut.KodakLutLibrary
+import tw.luma.camera.lut.FilterSwitching
+import tw.luma.camera.lut.FilterSeries
 import tw.luma.camera.storage.PhotoStorage
 import androidx.camera.video.VideoRecordEvent
 import java.io.File
@@ -86,6 +88,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         .map { ZoomControls.recordingTime(it * 1_000_000_000L) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ZoomControls.recordingTime(0))
     private val prefs = application.getSharedPreferences("luma", 0)
+    private val filterSwitching = FilterSwitching { id ->
+        if (prefs.contains("lutStrength-$id")) prefs.getFloat("lutStrength-$id", 1f) else null
+    }
     private val lutDirectory = File(application.filesDir, "luts").apply { mkdirs() }
     private val captureExecutor = Executors.newSingleThreadExecutor()
     private var libraryReady = false
@@ -118,9 +123,30 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun selectLut(id: String?) {
-        val entry = _state.value.luts.find { it.id == id }
-        _state.update { it.copy(selectedLut = entry?.id, filter = it.filter.copy(lut = entry?.lut, encoding = entry?.lut?.suggestedEncoding ?: tw.luma.camera.lut.LutEncoding.SRGB)) }
-        if (libraryReady) prefs.edit().putString("selectedLut", entry?.id).apply()
+        val current = _state.value
+        val entry = current.luts.find { it.id == id }
+        if (current.selectedLut == entry?.id && current.filter.lut === entry?.lut) return
+        saveFilterStrength()
+        val filter = filterSwitching.select(current.filter, current.selectedLut, entry)
+        _state.update { it.copy(selectedLut = entry?.id, filter = filter) }
+        if (libraryReady) {
+            val editor = prefs.edit().putString("selectedLut", entry?.id)
+            entry?.let { editor.putString("seriesVariant-${FilterSeries.key(it)}", it.id) }
+            editor.apply()
+        }
+    }
+
+    fun selectSeries(series: FilterSeries) {
+        val current = _state.value.luts.find { it.id == _state.value.selectedLut && FilterSeries.key(it) == series.id }
+        val remembered = current?.id ?: prefs.getString("seriesVariant-${series.id}", null)
+        selectLut(series.preferred(remembered).id)
+    }
+
+    fun saveFilterStrength() {
+        val current = _state.value
+        current.selectedLut?.let { id ->
+            prefs.edit().putFloat("lutStrength-$id", current.filter.strength.coerceIn(0f, 1f)).apply()
+        }
     }
 
     fun changeFilter(transform: (FilterSettings) -> FilterSettings) { _state.update {
@@ -178,9 +204,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                         LutEntry(id, lut, true)
                     } finally { temp.delete() }
                 }
-                _state.update { it.copy(luts = it.luts.filterNot { previous -> previous.id == entry.id } + entry,
-                    selectedLut = entry.id, filter = it.filter.copy(lut = entry.lut, encoding = entry.lut.suggestedEncoding)) }
-                prefs.edit().putString("selectedLut", entry.id).apply()
+                _state.update { it.copy(luts = it.luts.filterNot { previous -> previous.id == entry.id } + entry) }
+                selectLut(entry.id)
                 message("已匯入 ${entry.lut.title}")
             } catch (e: Exception) { message(e.message ?: "LUT 匯入失敗") }
             finally { _state.update { it.copy(busy = false) } }

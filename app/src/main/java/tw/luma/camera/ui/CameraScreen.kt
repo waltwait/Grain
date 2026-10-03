@@ -30,8 +30,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,6 +114,7 @@ fun CameraScreen(model: CameraViewModel) {
     val openGallery = { model.pausePreview(); galleryOpen = true }
     val shutter = {
         activeControl = null
+        if (panel == "filters") panel = null
         val active = engine
         if (active != null) {
             when {
@@ -162,6 +161,7 @@ fun CameraScreen(model: CameraViewModel) {
                     if (multiTouch || !model.state.value.liveControlsEnabled) return false
                     val request = ++focusRequest
                     activeControl = null
+                    if (panel == "filters") panel = null
                     exposureAnchor = null
                     exposureFeedback = null
                     focusFeedback = FocusFeedback(request, Offset(event.x, event.y))
@@ -225,17 +225,18 @@ fun CameraScreen(model: CameraViewModel) {
     LaunchedEffect(exposureFeedback, exposureDragging) { if (exposureFeedback != null && !exposureDragging) { delay(1200L); exposureFeedback = null } }
     LaunchedEffect(state.capture.manual) { if (state.capture.manual) exposureFeedback = null }
     BackHandler(enabled = activeControl != null) { activeControl = null }
+    BackHandler(enabled = panel == "filters") { panel = null }
     LaunchedEffect(engine, state.capture, state.ready) { if (state.ready) engine?.apply(state.capture) }
     LaunchedEffect(engine, state.filter) { engine?.setFilter(state.filter) }
     SideEffect { view.keepScreenOn = state.recording }
-    BackHandler(enabled = state.recording && activeControl == null) { model.stopVideo(engine) }
+    BackHandler(enabled = state.recording && activeControl == null && panel == null) { model.stopVideo(engine) }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); model.clearMessage() } }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = Color.Black, contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding).safeDrawingPadding()) {
             val landscape = maxWidth > maxHeight && maxWidth > 600.dp
             val preview: @Composable (Modifier) -> Unit = { modifier ->
-                Box(modifier) {
+                BoxWithConstraints(modifier) {
                     PreviewArea(state, model, view, permitted, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
@@ -247,9 +248,20 @@ fun CameraScreen(model: CameraViewModel) {
                         }
                     }
                     if (permitted && state.cameraError == null) {
-                        CameraToolbar(state, model, Modifier.align(Alignment.TopCenter)) { activeControl = null; panel = it }
+                        CameraToolbar(state, model, Modifier.align(Alignment.TopCenter)) {
+                            activeControl = null
+                            panel = if (it == "filters" && panel == "filters") null else it
+                        }
                         exposureFeedback?.let { ExposureIndicator(it, state.capabilities.exposureStep) }
-                        LiveCameraControls(state, model, engine, activeControl, { activeControl = it }, Modifier.align(Alignment.BottomCenter))
+                        if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, { activeControl = it }, Modifier.align(Alignment.BottomCenter))
+                    }
+                    if (panel == "filters") {
+                        FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,
+                            maxHeight = (maxHeight - 56.dp).coerceAtLeast(48.dp), compact = maxHeight < 360.dp,
+                            onSeries = model::selectSeries, onVariant = model::selectLut,
+                            onStrength = { value -> model.changeFilter { it.copy(strength = value) } },
+                            onStrengthFinished = model::saveFilterStrength, onImport = openLut,
+                            onMore = { panel = "filter" }, onClose = { panel = null }, modifier = Modifier.align(Alignment.BottomCenter))
                     }
                 }
             }
@@ -262,7 +274,9 @@ fun CameraScreen(model: CameraViewModel) {
             }
         }
     }
-    panel?.let { ControlsSheet(it, state, model, { panel = it }, openLut, openPhoto) { panel = null } }
+    panel?.takeUnless { it == "filters" }?.let {
+        ControlsSheet(it, state, model, openLut, openPhoto) { panel = if (it == "filter") "filters" else null }
+    }
 }
 
 private data class FocusFeedback(val request: Int, val point: Offset, val outcome: FocusOutcome? = null)
@@ -452,11 +466,13 @@ private fun GlassIcon(icon: String, description: String, enabled: Boolean = true
 }
 
 @Composable
-private fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.White) {
+internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.White) {
     Canvas(modifier) {
         val w = size.width; val h = size.height; val stroke = Stroke(width = 1.6.dp.toPx())
         fun line(x: Float, y: Float, x2: Float, y2: Float) = drawLine(tint, Offset(w*x,h*y), Offset(w*x2,h*y2), stroke.width)
         when (name) {
+            "add" -> { line(.5f,.15f,.5f,.85f); line(.15f,.5f,.85f,.5f) }
+            "close" -> { line(.23f,.23f,.77f,.77f); line(.77f,.23f,.23f,.77f) }
             "flash" -> drawPath(Path().apply { moveTo(w*.6f,h*.07f); lineTo(w*.22f,h*.55f); lineTo(w*.48f,h*.55f); lineTo(w*.4f,h*.93f); lineTo(w*.8f,h*.42f); lineTo(w*.55f,h*.42f); close() }, tint, style = stroke)
             "tune" -> { for ((y,x) in listOf(.24f to .32f,.5f to .68f,.76f to .4f)) { line(.1f,y,.9f,y); drawCircle(Color.Black, w*.09f, Offset(w*x,h*y)); drawCircle(tint, w*.09f, Offset(w*x,h*y), style = stroke) } }
             "lut" -> { drawCircle(tint,w*.24f,Offset(w*.36f,h*.36f),style=stroke); drawCircle(tint,w*.24f,Offset(w*.64f,h*.36f),style=stroke); drawCircle(tint,w*.24f,Offset(w*.5f,h*.65f),style=stroke) }
@@ -468,45 +484,29 @@ private fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.Wh
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, navigate: (String) -> Unit, importLut: () -> Unit, importPhoto: () -> Unit, dismiss: () -> Unit) {
+private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, importLut: () -> Unit, importPhoto: () -> Unit, dismiss: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = dismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
             val caps = state.capabilities
-            Text(when (panel) { "filters" -> "選擇濾鏡"; "filter" -> "調色設定"; else -> "設定" }, style = MaterialTheme.typography.headlineSmall)
+            Text(if (panel == "filter") "調色與濾鏡資訊" else "設定", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(16.dp))
             when (panel) {
-                "filters" -> {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        item { FilterChip(selected = state.selectedLut == null, onClick = { model.selectLut(null) }, label = { Text("原色") }, modifier = Modifier.testTag("filter-original")) }
-                        items(state.luts, key = { it.id }) { entry -> FilterChip(selected = state.selectedLut == entry.id,
-                            onClick = { model.selectLut(entry.id) }, label = { Text(entry.lut.title.removePrefix("富士 ")) }, modifier = Modifier.testTag("filter-${entry.id}")) }
-                    }
-                    state.filter.lut?.let { lut ->
-                        Spacer(Modifier.height(12.dp)); Text(lut.title, style = MaterialTheme.typography.titleMedium)
-                        state.luts.find { it.id == state.selectedLut }?.let { entry ->
-                            entry.description?.let { description ->
-                                Text(description, style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
-                            }
-                            if (entry.sourceUrl != null || entry.licenseUrl != null) Row {
-                                entry.sourceUrl?.let { url -> TextButton(onClick = {
-                                    runCatching { uriHandler.openUri(url) }.onFailure { model.message("無法開啟來源網頁") }
-                                }) { Text("作者與來源") } }
-                                entry.licenseUrl?.let { url -> TextButton(onClick = {
-                                    runCatching { uriHandler.openUri(url) }.onFailure { model.message("無法開啟授權網頁") }
-                                }) { Text("授權說明") } }
-                            }
-                        }
-                        Text("強度 ${(state.filter.strength * 100).roundToInt()}%", Modifier.padding(top = 12.dp))
-                        Slider(state.filter.strength, { value -> model.changeFilter { it.copy(strength = value) } }, modifier = Modifier.testTag("filter-strength"))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
-                        OutlinedButton(onClick = { navigate("filter") }) { Text("調色設定") }
-                    }
-                }
                 "filter" -> {
+                    state.luts.find { it.id == state.selectedLut }?.let { entry ->
+                        Text(entry.lut.title, style = MaterialTheme.typography.titleMedium)
+                        entry.description?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+                        if (entry.sourceUrl != null || entry.licenseUrl != null) Row {
+                            entry.sourceUrl?.let { url -> TextButton(onClick = {
+                                runCatching { uriHandler.openUri(url) }.onFailure { model.message("無法開啟來源網頁") }
+                            }) { Text("作者與來源") } }
+                            entry.licenseUrl?.let { url -> TextButton(onClick = {
+                                runCatching { uriHandler.openUri(url) }.onFailure { model.message("無法開啟授權網頁") }
+                            }) { Text("授權說明") } }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
                     SoftwareWhiteBalanceSliders(state.filter, !state.busy, model::changeFilter)
                     TextButton(onClick = { model.changeFilter { tw.luma.camera.camera.WhiteBalanceControls.reset(it) } }) { Text("重設冷暖與色偏") }
                     Text("影像亮度：%+.1f EV".format(Locale.US, state.filter.brightnessEv))
@@ -532,6 +532,7 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }
                     if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
                     OutlinedButton(onClick = importPhoto, enabled = !state.busy && !state.recording) { Text("匯入照片套用濾鏡") }
+                    OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
                     Spacer(Modifier.height(16.dp))
                     var deviceInfo by remember { mutableStateOf(false) }
                     TextButton(onClick = { deviceInfo = !deviceInfo }, modifier = Modifier.testTag("device-info-toggle")) {

@@ -35,6 +35,70 @@ class CameraExperienceDeviceTest {
     private fun model() = ViewModelProvider(ui.activity)[CameraViewModel::class.java]
     private fun ready() { ui.waitUntil(30_000) { model().state.value.ready } }
 
+    @Test fun filmGroupsOnlyBrowseAndSeriesRemembersVariantAndStrength() {
+        ready()
+        val model = model()
+        ui.waitUntil(10_000) { model.state.value.luts.any { it.id == "kodak-portra-800" } }
+        val before = model.state.value
+        try {
+            ui.runOnIdle {
+                model.selectLut("kodak-portra-160"); model.changeFilter { it.copy(strength = .7f) }; model.saveFilterStrength()
+                model.selectLut("kodak-portra-800"); model.changeFilter { it.copy(strength = .25f) }; model.saveFilterStrength()
+                model.selectLut("grain-daylight"); model.changeFilter { it.copy(strength = .4f) }; model.saveFilterStrength()
+            }
+            val frame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
+            ui.onNodeWithTag("filter-picker").performClick()
+            ui.onNodeWithTag("filter-group-KODAK").performClick()
+            ui.runOnIdle { assertEquals("grain-daylight", model.state.value.selectedLut) }
+            ui.onNodeWithTag("filter-series-kodak-portra").performClick()
+            ui.waitUntil(5_000) { model.state.value.selectedLut == "kodak-portra-800" }
+            ui.runOnIdle { assertEquals(.25f, model.state.value.filter.strength) }
+            ui.onNodeWithTag("filter-kodak-portra-160").performClick().assertIsSelected()
+            ui.runOnIdle { assertEquals(.7f, model.state.value.filter.strength) }
+            ui.onNodeWithTag("filter-group-GRAIN").performClick()
+            ui.runOnIdle { assertEquals("kodak-portra-160", model.state.value.selectedLut) }
+            ui.onNodeWithTag("filter-series-grain-daylight").performClick()
+            ui.waitUntil(5_000) { model.state.value.selectedLut == "grain-daylight" }
+            ui.runOnIdle { assertEquals(.4f, model.state.value.filter.strength) }
+            ui.onNodeWithTag("filter-group-KODAK").performClick()
+            ui.onNodeWithTag("filter-series-kodak-portra").performClick()
+            ui.runOnIdle {
+                assertEquals("kodak-portra-160", model.state.value.selectedLut)
+                assertEquals(.7f, model.state.value.filter.strength)
+                assertEquals(before.capture, model.state.value.capture)
+            }
+            assertEquals(frame, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
+            ui.onNodeWithTag("shutter").assertIsEnabled()
+            ui.onNodeWithTag("filter-original").performClick().assertIsSelected()
+            ui.runOnIdle { assertNull(model.state.value.filter.lut) }
+            screenshot("grain-series-filter-tray.png")
+            ui.onNodeWithTag("filter-close").performClick()
+            ui.onNodeWithTag("filter-tray").assertDoesNotExist()
+        } finally {
+            ui.runOnIdle { model.selectLut(before.selectedLut); model.changeFilter { before.filter } }
+        }
+    }
+
+    @Test fun settledFilmSwipeSelectsASeriesAndRestoresItsLastVariant() {
+        ready()
+        val model = model()
+        ui.waitUntil(10_000) { model.state.value.luts.any { it.id == "kodak-portra-800" } }
+        val before = model.state.value
+        try {
+            ui.runOnIdle { model.selectLut("kodak-portra-800") }
+            ui.onNodeWithTag("filter-picker").performClick()
+            ui.onNodeWithTag("filter-group-KODAK").performClick()
+            ui.onNodeWithTag("filter-series-pager").performTouchInput { swipeLeft(startX = width * .75f, endX = width * .25f) }
+            ui.waitUntil(5_000) { model.state.value.selectedLut == "kodak-ektachrome-100-vs" }
+            ui.onNodeWithTag("filter-series-pager").performTouchInput { swipeRight(startX = width * .25f, endX = width * .75f) }
+            ui.waitUntil(5_000) { model.state.value.selectedLut == "kodak-portra-800" }
+            ui.onNodeWithTag("filter-kodak-portra-800").assertIsSelected()
+            ui.onNodeWithTag("filter-close").performClick()
+        } finally {
+            ui.runOnIdle { model.selectLut(before.selectedLut); model.changeFilter { before.filter } }
+        }
+    }
+
     @Test fun camera2TemperatureWithoutCctAppliesAndReturnsToAuto() {
         ready()
         val model = model()
