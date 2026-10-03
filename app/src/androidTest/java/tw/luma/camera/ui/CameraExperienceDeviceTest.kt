@@ -35,6 +35,49 @@ class CameraExperienceDeviceTest {
     private fun model() = ViewModelProvider(ui.activity)[CameraViewModel::class.java]
     private fun ready() { ui.waitUntil(30_000) { model().state.value.ready } }
 
+    @Test fun photoSaveIsQuietAndKeepsTheViewfinderAndControlsInPlace() {
+        ready()
+        val model = model()
+        val before = model.state.value
+        var saved: android.net.Uri? = null
+        try {
+            ui.runOnIdle { model.mode(CaptureMode.PHOTO); model.saveOriginal(false); model.clearMessage() }
+            ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.PHOTO }
+            val frame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
+            val gallery = ui.onNodeWithTag("open-gallery").fetchSemanticsNode().boundsInRoot
+            val shutter = ui.onNodeWithTag("shutter").fetchSemanticsNode().boundsInRoot
+            val revision = model.state.value.captureFeedback.savedRevision
+            ui.onNodeWithTag("shutter").performClick()
+            ui.waitUntil(30_000) {
+                val current = model.state.value
+                !current.busy && current.captureFeedback.savedRevision == revision + 1 &&
+                    current.savedMime == "image/jpeg" && current.savedUri != null
+            }
+            saved = model.state.value.savedUri
+            ui.runOnIdle {
+                val current = model.state.value
+                assertEquals(tw.luma.camera.camera.PhotoPhase.IDLE, current.captureFeedback.phase)
+                assertEquals(current.captureFeedback.requestId, current.captureFeedback.capturedPhotoId)
+                assertNull(current.message)
+            }
+            assertEquals(frame, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
+            assertEquals(gallery, ui.onNodeWithTag("open-gallery").fetchSemanticsNode().boundsInRoot)
+            assertEquals(shutter, ui.onNodeWithTag("shutter").fetchSemanticsNode().boundsInRoot)
+            ui.onNodeWithTag("camera-status").assertTextEquals("")
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            ui.activity.contentResolver.openInputStream(requireNotNull(saved)).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+            assertTrue(bounds.outWidth > 0 && bounds.outHeight > 0)
+            screenshot("grain-quiet-photo-save.png")
+            ui.runOnIdle { model.message("照片未儲存") }
+            ui.onNodeWithTag("camera-status").assertTextEquals("照片未儲存")
+            ui.onAllNodesWithText("照片未儲存").assertCountEquals(1)
+            assertEquals(frame, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
+        } finally {
+            saved?.let { ui.activity.contentResolver.delete(it, null, null) }
+            ui.runOnIdle { model.clearMessage(); model.saveOriginal(before.saveOriginal); model.mode(before.mode) }
+        }
+    }
+
     @Test fun threeBrandGroupsOnlyBrowseAndEachFilmKeepsItsStrength() {
         ready()
         val model = model()
@@ -264,6 +307,7 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("shutter").performClick()
             ui.waitUntil(20_000) { !model.state.value.recording && model.state.value.savedUri != before.savedUri && model.state.value.savedMime == "video/mp4" }
             saved = model.state.value.savedUri
+            ui.onNodeWithTag("camera-status").assertTextEquals("")
             val uri = requireNotNull(saved)
             MediaMetadataRetriever().use { retriever ->
                 retriever.setDataSource(ui.activity, uri)

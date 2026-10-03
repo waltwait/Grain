@@ -19,6 +19,7 @@ import tw.luma.camera.camera.ZoomControls
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tw.luma.camera.camera.ActualCapture
+import tw.luma.camera.camera.CaptureFeedback
 import tw.luma.camera.camera.CameraCapabilities
 import tw.luma.camera.camera.CameraEngine
 import tw.luma.camera.camera.CaptureSettings
@@ -38,6 +39,7 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.CancellationException
 
 data class LutEntry(val id: String, val lut: CubeLut, val imported: Boolean = false,
     val description: String? = null, val sourceUrl: String? = null, val licenseUrl: String? = null)
@@ -55,6 +57,7 @@ data class CameraUiState(
     val grid: Boolean = true,
     val ready: Boolean = false,
     val busy: Boolean = false,
+    val captureFeedback: CaptureFeedback = CaptureFeedback(),
     val hasFlash: Boolean = false,
     val minZoom: Float = 1f,
     val maxZoom: Float = 1f,
@@ -160,7 +163,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleGrid() { _state.update { it.copy(grid = !it.grid) }; prefs.edit().putBoolean("grid", _state.value.grid).apply() }
     fun saveOriginal(enabled: Boolean) { _state.update { it.copy(saveOriginal = enabled) }; prefs.edit().putBoolean("saveOriginal", enabled).apply() }
     fun message(text: String) { _state.update { it.copy(message = text) } }
-    fun clearMessage() { _state.update { it.copy(message = null) } }
+    fun clearMessage(expected: String? = null) { _state.update {
+        if (expected == null || it.message == expected) it.copy(message = null) else it
+    } }
     fun cameraError(text: String) { _state.update { it.copy(ready = false, cameraError = text) } }
     fun pausePreview() { _state.update { it.copy(ready = false, actual = ActualCapture()) } }
     fun retry() { _state.update { it.copy(cameraError = null, ready = false) } }
@@ -195,7 +200,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 _state.update { it.copy(luts = it.luts.filterNot { previous -> previous.id == entry.id } + entry) }
                 selectLut(entry.id)
-                message("已匯入 ${entry.lut.title}")
             } catch (e: Exception) { message(e.message ?: "LUT 匯入失敗") }
             finally { _state.update { it.copy(busy = false) } }
         }
@@ -206,7 +210,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         if (_state.value.busy) return
         viewModelScope.launch {
             val deleted = withContext(Dispatchers.IO) { File(lutDirectory, "${entry.id}.cube").delete() }
-            if (deleted) { prefs.edit().remove("lutTitle-${entry.id}").apply(); _state.update { it.copy(luts = it.luts.filterNot { lut -> lut.id == entry.id }) }; selectLut(null); message("已移除 LUT") }
+            if (deleted) { prefs.edit().remove("lutTitle-${entry.id}").apply(); _state.update { it.copy(luts = it.luts.filterNot { lut -> lut.id == entry.id }) }; selectLut(null) }
             else message("無法移除 LUT")
         }
     }
@@ -214,21 +218,29 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun takePhoto(engine: CameraEngine) {
         if (_state.value.busy || !_state.value.ready || _state.value.mode != CaptureMode.PHOTO) return
         val snapshot = _state.value
-        _state.update { it.copy(busy = true) }
+        _state.update { it.copy(busy = true, message = null, captureFeedback = it.captureFeedback.startPhoto()) }
+        val requestId = _state.value.captureFeedback.requestId
         viewModelScope.launch {
-            val file = File.createTempFile("luma-capture-", ".jpg", getApplication<Application>().cacheDir)
+            var pendingFile: File? = null
             try {
+                val file = File.createTempFile("luma-capture-", ".jpg", getApplication<Application>().cacheDir)
+                pendingFile = file
                 suspendCancellableCoroutine { continuation ->
                     engine.capture(file, captureExecutor) { result ->
                         if (continuation.isActive) result.fold({ continuation.resume(Unit) }, { continuation.resumeWithException(it) })
                     }
                 }
+                _state.update { it.copy(captureFeedback = it.captureFeedback.capturedPhoto(requestId)) }
                 val uri = withContext(Dispatchers.IO) { PhotoStorage.processAndSave(getApplication(), file, snapshot.filter, snapshot.saveOriginal) }
-                val thumb = withContext(Dispatchers.IO) { getApplication<Application>().contentResolver.loadThumbnail(uri, android.util.Size(160, 160), null) }
-                _state.update { it.copy(savedUri = uri, thumbnail = thumb, savedMime = "image/jpeg") }
-                message(if (snapshot.saveOriginal) "已儲存濾鏡照片與原圖到 Pictures/Grain" else "已儲存照片到 Pictures/Grain")
-            } catch (e: Exception) { message(e.message ?: "拍照失敗") }
-            finally { file.delete(); _state.update { it.copy(busy = false) } }
+                val thumb = loadMediaThumbnail(uri)
+                _state.update { it.copy(savedUri = uri, thumbnail = thumb, savedMime = "image/jpeg",
+                    captureFeedback = it.captureFeedback.savedPhoto(requestId)) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { message(e.message ?: "拍照失敗") }
+            finally { pendingFile?.delete(); _state.update {
+                if (it.captureFeedback.requestId == requestId) it.copy(busy = false,
+                    captureFeedback = it.captureFeedback.failedPhoto(requestId)) else it
+            } }
         }
     }
 
@@ -237,8 +249,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         val snapshot = _state.value
         _state.update { it.copy(busy = true) }
         viewModelScope.launch {
-            val source = File.createTempFile("luma-import-", ".jpg", getApplication<Application>().cacheDir)
+            var pendingFile: File? = null
             try {
+                val source = File.createTempFile("luma-import-", ".jpg", getApplication<Application>().cacheDir)
+                pendingFile = source
                 val output = withContext(Dispatchers.IO) {
                     requireNotNull(getApplication<Application>().contentResolver.openInputStream(uri)).use { input ->
                         source.outputStream().use { target ->
@@ -251,11 +265,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                     require(bounds.outWidth.toLong() * bounds.outHeight in 1..50_000_000L) { "請使用 50MP 以下的照片" }
                     PhotoStorage.processAndSave(getApplication(), source, snapshot.filter, false)
                 }
-                val thumb = withContext(Dispatchers.IO) { getApplication<Application>().contentResolver.loadThumbnail(output, android.util.Size(160, 160), null) }
-                _state.update { it.copy(savedUri = output, thumbnail = thumb, savedMime = "image/jpeg") }
-                message("已套用濾鏡並另存照片")
-            } catch (e: Exception) { message(e.message ?: "照片匯入失敗") }
-            finally { source.delete(); _state.update { it.copy(busy = false) } }
+                val thumb = loadMediaThumbnail(output)
+                _state.update { it.copy(savedUri = output, thumbnail = thumb, savedMime = "image/jpeg",
+                    captureFeedback = it.captureFeedback.mediaSaved()) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { message(e.message ?: "照片匯入失敗") }
+            finally { pendingFile?.delete(); _state.update { it.copy(busy = false) } }
         }
     }
 
@@ -273,10 +288,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                             (!event.hasError() || event.error == VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE)
                         _state.update { it.copy(recordingStatus = RecordingStatus.IDLE, recordingNs = event.recordingStats.recordedDurationNanos) }
                         if (usable) {
-                            _state.update { it.copy(savedUri = uri, savedMime = "video/mp4", thumbnail = null) }
-                            message("已儲存濾鏡影片到 Movies/Grain")
+                            _state.update { it.copy(savedUri = uri, savedMime = "video/mp4", thumbnail = null,
+                                captureFeedback = it.captureFeedback.mediaSaved()) }
                             viewModelScope.launch {
-                                val thumb = withContext(Dispatchers.IO) { runCatching { getApplication<Application>().contentResolver.loadThumbnail(uri, android.util.Size(160, 160), null) }.getOrNull() }
+                                val thumb = loadMediaThumbnail(uri)
                                 _state.update { if (it.savedUri == uri) it.copy(thumbnail = thumb) else it }
                             }
                         } else {
@@ -287,6 +302,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         } catch (e: Exception) { _state.update { it.copy(recordingStatus = RecordingStatus.IDLE) }; message(e.message ?: "錄影啟動失敗") }
+    }
+
+    // Publishing a photo succeeded even if the optional small preview cannot be loaded.
+    private suspend fun loadMediaThumbnail(uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
+        try { getApplication<Application>().contentResolver.loadThumbnail(uri, android.util.Size(160, 160), null) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
     }
 
     fun stopVideo(engine: CameraEngine?) {

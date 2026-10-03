@@ -26,7 +26,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -43,8 +42,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -81,7 +78,6 @@ fun CameraScreen(model: CameraViewModel) {
     val galleryModel: GalleryViewModel = viewModel()
     var galleryOpen by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current
-    val snackbar = remember { SnackbarHostState() }
     var permitted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
@@ -230,9 +226,9 @@ fun CameraScreen(model: CameraViewModel) {
     LaunchedEffect(engine, state.filter) { engine?.setFilter(state.filter) }
     SideEffect { view.keepScreenOn = state.recording }
     BackHandler(enabled = state.recording && activeControl == null && panel == null) { model.stopVideo(engine) }
-    LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); model.clearMessage() } }
+    LaunchedEffect(state.message) { state.message?.let { delay(5000); model.clearMessage(it) } }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = Color.Black, contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
+    Scaffold(containerColor = Color.Black, contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding).safeDrawingPadding()) {
             val landscape = maxWidth > maxHeight && maxWidth > 600.dp
             val preview: @Composable (Modifier) -> Unit = { modifier ->
@@ -240,6 +236,7 @@ fun CameraScreen(model: CameraViewModel) {
                     PreviewArea(state, model, view, permitted, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
+                    ViewfinderCaptureFeedback(state.captureFeedback.capturedPhotoId, Modifier.fillMaxSize())
                     if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { feedback ->
                         key(feedback.request) {
                             FocusIndicator(feedback) {
@@ -426,21 +423,12 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
         }
     }
     val capture: @Composable () -> Unit = {
-        val video = state.mode == CaptureMode.VIDEO
-        val stopping = state.recordingStatus == RecordingStatus.STOPPING
-        Button(onClick = shutter, enabled = (state.ready && !state.busy || state.recording) && !stopping,
-            modifier = Modifier.size(82.dp).border(3.dp, Color.White.copy(alpha = .95f), CircleShape).padding(6.dp).testTag("shutter").semantics { contentDescription = if (state.recording) "停止錄影" else if (video) "開始錄影" else "拍照" },
-            colors = ButtonDefaults.buttonColors(containerColor = if (video) Color(0xFFFF444C) else Color.White, disabledContainerColor = Color.DarkGray), shape = CircleShape, contentPadding = PaddingValues(0.dp)) {
-            when {
-                state.busy || state.recordingStatus == RecordingStatus.STARTING || stopping -> CircularProgressIndicator(Modifier.size(24.dp), color = if (video) Color.White else Color.Black)
-                state.recording -> Box(Modifier.size(27.dp).clip(RoundedCornerShape(5.dp)).background(Color.White))
-            }
-        }
+        CameraCaptureButton(state, shutter)
     }
     val gallery: @Composable () -> Unit = {
-        Surface(onClick = openGallery, enabled = enabled, shape = RoundedCornerShape(12.dp), color = Color(0xFF202124), modifier = Modifier.size(48.dp).testTag("open-gallery").semantics { contentDescription = "開啟 Grain 相簿" }) {
-            state.thumbnail?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: Box(contentAlignment = Alignment.Center) { CameraGlyph("gallery", Modifier.size(25.dp)) }
-        }
+        SavedMediaButton(state.thumbnail, state.captureFeedback.savedRevision,
+            state.captureFeedback.phase == tw.luma.camera.camera.PhotoPhase.SAVING || state.recordingStatus == RecordingStatus.STOPPING,
+            enabled, openGallery)
     }
     Column(modifier.background(Color.Black).padding(horizontal = 22.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (landscape) Arrangement.SpaceEvenly else Arrangement.Top) {
         modes()
@@ -451,10 +439,11 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             }
             TextButton(onClick = tools, enabled = enabled) { Text("設定", color = Color.White.copy(alpha = .7f)) }
         } else {
-            Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 gallery(); capture(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, model::toggleFront)
             }
         }
+        CameraStatusLine(state.message)
     }
 }
 
