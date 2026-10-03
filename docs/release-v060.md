@@ -18,7 +18,7 @@ APK metadata 與 AAB base manifest 均確認為 `tw.luma.camera`／0.6.0／23，
 
 AAB 的 JAR 簽章與 bundletool 結構驗證通過。JDK jarsigner 的自簽 certificate、無 timestamp、POSIX attributes 與 AGP manifest 排列提示仍存在，細節沿用 [Release 準備紀錄](release-publishing-v050.md)，沒有自行重排或重新產生 key。R8 後的相機、錄影、S24 白平衡、GPU 預覽與編輯輸出仍需實機驗證。
 
-## 成品與草稿
+## 成品與發布
 
 | 成品 | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -27,4 +27,4 @@ AAB 的 JAR 簽章與 bundletool 結構驗證通過。JDK jarsigner 的自簽 ce
 
 各有 `.sha256` 檔；R8 mapping 另存為 `output/Grain-0.6.0-release-mapping.txt`。成品與 `.signing` 均不提交 Git。
 
-GitHub 原正式版草稿升為 `v0.6.0`，保留草稿狀態，附上本版 APK／AAB 與校驗檔；私人儲存庫可見性與已發布的 `v0.5.0` 個人測試版保持原樣。發布管道與既有 keystore 的確認沿用前次待辦，未公開發布或上傳 Google Play。
+2026-10-03 依使用者授權將 GitHub 草稿正式發布為 [Grain 0.6.0](https://github.com/waltwait/Grain/releases/tag/v0.6.0)，並設為最新版本；`draft=false`、`prerelease=false`。發布來源 commit 為 `87721a63a6c0d741a58170b81ca4c84adb72aace`，附上本版 APK／AAB 與校驗檔，四個附件的大小與 SHA-256 均已核對。私人儲存庫可見性與已發布的 `v0.5.0` 個人測試版保持原樣，未上傳 Google Play。
