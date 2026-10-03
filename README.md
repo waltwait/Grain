@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.6.2**、versionCode **25**，新增設定內檢查更新、下載與系統安裝入口；正式下載網址尚未設定，完整更新仍待部署及手機驗證，見 [App 內更新紀錄](docs/in-app-updates-v062.md)。最新已發布版仍為 **0.6.1**，個人富士版恢復十款富士 LUT，沿用 0.6.0 正式簽章，可直接更新 0.6.0 正式版；見 [富士濾鏡恢復紀錄](docs/personal-fuji-v061.md)。保留獨立照片編輯預覽、觀景窗左右滑動變焦與半透明參數面板。簽章備份與舊 debug 測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
+目前開發版本 **0.6.2**、versionCode **25**，新增設定內檢查更新、下載與系統安裝入口；正式 GitHub 更新來源已接好，成品已驗證，但含富士素材的公開發布仍待確認與核准，見 [App 內更新紀錄](docs/in-app-updates-v062.md)。儲存庫已改為 public，公開最新版仍為 **0.6.1**，個人富士版恢復十款富士 LUT，沿用 0.6.0 正式簽章，可直接更新 0.6.0 正式版；見 [富士濾鏡恢復紀錄](docs/personal-fuji-v061.md)。保留獨立照片編輯預覽、觀景窗左右滑動變焦與半透明參數面板。簽章備份與舊 debug 測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 

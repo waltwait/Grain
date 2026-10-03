@@ -2,7 +2,7 @@
 
 使用者於 2026-10-03 要求將 `waltwait/Grain` 改為 public，讓 App 能直接下載更新。本次沿用「設定 → 檢查更新 → 下載新版 → 安裝」，公開設定只解決版本資訊及 APK 的匿名存取；目前安裝仍開啟 Android 系統安裝畫面。
 
-狀態：正式 APK 與固定版本資訊已準備並驗證，公開設定、Release 及 Pages 部署尚待執行；發布後需核對匿名存取。
+狀態：儲存庫已改為 public，匿名 Release API 可取得既有最新版 0.6.1。0.6.2 APK 已驗證並上傳為草稿；公開發佈被自動核准審查拒絕，因尚未確認十款官方富士素材的公開再散布授權及使用者對此素材包的明確授權。目前版本資訊與下載頁只指向已發佈的 0.6.1；不將 0.6.2 草稿改用其他方式公開。
 
 ## 固定來源
 
@@ -11,7 +11,7 @@
 | 個人富士通道 | `https://raw.githubusercontent.com/waltwait/Grain/main/updates/personal-fuji/latest.json` |
 | 一般 release 通道 | `https://raw.githubusercontent.com/waltwait/Grain/main/updates/release/latest.json` |
 | 下載頁 | `https://waltwait.github.io/Grain/` |
-| 0.6.2 APK | `https://github.com/waltwait/Grain/releases/download/v0.6.2/Grain-0.6.2.apk` |
+| 目前公開 APK | `https://github.com/waltwait/Grain/releases/download/v0.6.1/Grain-0.6.1-personal-fuji.apk` |
 
 App 的預設更新網址依 build type 選擇通道；`personal` 保留十款富士 LUT，並沿用正式簽章。仍可用 `-PgrainUpdateUrl` 指定自架來源。一般通道不切換成個人包，個人通道不切換成缺少富士素材的包。
 
@@ -37,4 +37,4 @@ Android 12 以上提供符合條件的自我更新 API，但仍要求對應權�
 
 正式網址成品 `output/Grain-0.6.2.apk`，14,000,346 bytes，SHA-256 `f0d112f541b29ec368d627c79ced240215dc7a730838744d7bff9830d9c19a20`。與先前 `.invalid` 測試網址包的雜湊不同，測試包不發布。
 
-待 public 設定後核對匿名版本 JSON、APK 大小與 SHA-256，以及 Pages 部署。Samsung S24 Android 16 的安裝授權、取消及覆蓋更新仍待真機；目前無手機，不宣稱已通過。
+待核對固定 JSON、既有公開 APK 的匿名下載與 Pages 部署。0.6.2 草稿仍待使用者確認及核准，不表示已公開發布。Samsung S24 Android 16 的安裝授權、取消及覆蓋更新仍待真機；目前無手機，不宣稱已通過。
