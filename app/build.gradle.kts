@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Signing secrets stay local. Without this file, release builds remain unsigned.
+val releaseSigningFile = rootProject.file(".signing/release.properties")
+val releaseSigning = Properties().apply {
+    if (releaseSigningFile.isFile) releaseSigningFile.inputStream().use(::load)
+}
+fun releaseSigningValue(name: String): String = releaseSigning.getProperty(name)?.takeIf { it.isNotBlank() }
+    ?: throw GradleException("Missing $name in .signing/release.properties")
 
 android {
     namespace = "tw.luma.camera"
@@ -10,7 +20,7 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 21
+        versionCode = 22
         versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -19,9 +29,21 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    if (releaseSigningFile.isFile) {
+        signingConfigs {
+            create("grainRelease") {
+                storeFile = rootProject.file(releaseSigningValue("storeFile"))
+                storeType = releaseSigning.getProperty("storeType", "PKCS12")
+                storePassword = releaseSigningValue("storePassword")
+                keyAlias = releaseSigningValue("keyAlias")
+                keyPassword = releaseSigningValue("keyPassword")
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
+            if (releaseSigningFile.isFile) signingConfig = signingConfigs.getByName("grainRelease")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

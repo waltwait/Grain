@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.5.0**，整合現有功能並升版，見 [0.5.0 建置紀錄](docs/release-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
+目前開發版本 **0.5.0**，整合現有功能並升版，個人測試版見 [0.5.0 建置紀錄](docs/release-v050.md)。另備妥正式簽章的 Release APK／AAB，versionCode 22；發布準備、簽章備份與測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -80,6 +80,14 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
 目前個人富士測試版另存於 `output/Grain-0.5.0-personal-fuji-debug.apk`。APK 與官方富士 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+
+正式版成品為 `output/Grain-0.5.0-release.apk` 與 `output/Grain-0.5.0-release.aab`，不內建官方富士素材。Release 使用 `.signing/release.properties` 指定的正式 keystore；這個目錄、密碼與私鑰均不提交 Git。第一次可使用 `python3 scripts/create_release_keystore.py` 建立新簽章，或參考 [簽章設定範本](docs/release-signing.properties.example) 指定既有 keystore。建立後需自行安全備份整個 `.signing` 目錄。新簽章與既有 debug 簽章不同，不能直接覆蓋目前個人測試版；本次沒有移除手機上的 App 或搬移資料。
+
+```sh
+./gradlew :app:assembleRelease :app:bundleRelease
+```
+
+有簽章設定時產出 `app/build/outputs/apk/release/app-release.apk` 及 `app/build/outputs/bundle/release/app-release.aab`；未提供設定則產出未簽章成品，不應提供給使用者安裝。
 
 ## 安裝與操作
 

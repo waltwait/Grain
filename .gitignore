@@ -2,6 +2,9 @@
 .kotlin/
 **/build/
 local.properties
+.signing/
+*.jks
+*.keystore
 .idea/
 *.iml
 .DS_Store
@@ -9,6 +12,10 @@ local.properties
 captures/
 output/*.apk
 output/*.apk.sha256
+output/*.apk.idsig
+output/*.aab
+output/*.aab.sha256
+output/*-mapping.txt
 output/*.zip
 output/luts/
 scripts/__pycache__/

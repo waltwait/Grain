@@ -1,0 +1,7 @@
+# Copy this example to .signing/release.properties and keep the real file private.
+# Absolute paths are supported. Use forward slashes on Windows.
+storeFile=.signing/grain-release.jks
+storeType=PKCS12
+storePassword=REPLACE_LOCALLY
+keyAlias=grain-release
+keyPassword=REPLACE_LOCALLY
