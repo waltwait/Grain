@@ -258,7 +258,7 @@ fun CameraScreen(model: CameraViewModel) {
                     if (panel == "filters") {
                         FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,
                             maxHeight = (maxHeight - 56.dp).coerceAtLeast(48.dp), compact = maxHeight < 360.dp,
-                            onSeries = model::selectSeries, onVariant = model::selectLut,
+                            onSelect = model::selectLut,
                             onStrength = { value -> model.changeFilter { it.copy(strength = value) } },
                             onStrengthFinished = model::saveFilterStrength, onImport = openLut,
                             onMore = { panel = "filter" }, onClose = { panel = null }, modifier = Modifier.align(Alignment.BottomCenter))

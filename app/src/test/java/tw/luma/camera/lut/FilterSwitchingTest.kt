@@ -50,8 +50,25 @@ class FilterSwitchingTest {
         val imported = a.copy(id = "imported-hash", imported = true)
         val entries = listOf(a, b, imported)
         assertEquals(listOf(a), FilterGroup.FUJI.entries(entries))
-        assertEquals(listOf(imported), FilterGroup.IMPORTED.entries(entries))
-        assertEquals(entries, FilterGroup.ALL.entries(entries))
+        assertEquals(listOf(imported), FilterGroup.GRAIN.entries(entries))
+        assertEquals(FilterGroup.GRAIN, FilterGroup.of(a.copy(imported = true)))
+    }
+
+    @Test fun threeBrandGroupsExposeEveryFilmExactlyOnce() {
+        val versions = listOf("160", "400", "800").map { b.copy(id = "kodak-portra-$it") }
+        val imported = a.copy(id = "custom", imported = true)
+        val entries = listOf(a, imported) + versions
+        val visible = FilterGroup.entries.flatMap { it.entries(entries) }
+        assertEquals(entries.map { it.id }.sorted(), visible.map { it.id }.sorted())
+        assertEquals(versions, FilterGroup.KODAK.entries(entries))
+    }
+
+    @Test fun startingGroupTracksSelectionAndFallsBackWithoutFuji() {
+        val grain = a.copy(id = "grain-daylight")
+        assertEquals(FilterGroup.KODAK, FilterGroup.initial(listOf(a, b, grain), b.id))
+        assertEquals(FilterGroup.FUJI, FilterGroup.initial(listOf(a, b, grain), null))
+        assertEquals(FilterGroup.GRAIN, FilterGroup.initial(listOf(b, grain), null))
+        assertEquals(FilterGroup.GRAIN, FilterGroup.initial(listOf(a, b, grain.copy(imported = true)), grain.id))
     }
 
     @Test fun browsingAnotherCategoryDoesNotSelectItsFirstFilm() {

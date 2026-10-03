@@ -16,7 +16,6 @@ import tw.luma.camera.CameraUiState
 import tw.luma.camera.LutEntry
 import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.lut.CubeLut
-import tw.luma.camera.lut.FilterSeries
 import tw.luma.camera.lut.FilterSwitching
 
 @Preview(name = "Bottom film tray · Portra", widthDp = 360, heightDp = 620)
@@ -45,17 +44,15 @@ import tw.luma.camera.lut.FilterSwitching
     var state by remember { mutableStateOf(CameraUiState(luts = entries, selectedLut = entries[1].id,
         filter = FilterSettings(lut = entries[1].lut, strength = .75f))) }
     val switch = remember { FilterSwitching() }
-    val remembered = remember { mutableMapOf<String, String>() }
     val select: (String?) -> Unit = { id ->
         val next = entries.find { it.id == id }
         state = state.copy(selectedLut = next?.id, filter = switch.select(state.filter, state.selectedLut, next))
-        next?.let { remembered[FilterSeries.key(it)] = it.id }
     }
     MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFFFD45B), onPrimary = Color(0xFF231C08))) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF464D40), Color(0xFF1B2120))))) {
             NativeCameraToolbar(state, Modifier.align(Alignment.TopCenter), panel = {}) { Text("00:00") }
             FilterTray(entries, state.selectedLut, state.filter.strength, true, (maxHeight - 56.dp).coerceAtLeast(48.dp),
-                compact = maxHeight < 360.dp, onSeries = { select(it.preferred(remembered[it.id]).id) }, onVariant = select,
+                compact = maxHeight < 360.dp, onSelect = select,
                 onStrength = { state = state.copy(filter = state.filter.copy(strength = it)) }, onStrengthFinished = {},
                 onImport = {}, onMore = {}, onClose = {}, modifier = Modifier.align(Alignment.BottomCenter))
         }

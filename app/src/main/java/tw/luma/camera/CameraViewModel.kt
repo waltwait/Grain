@@ -29,7 +29,6 @@ import tw.luma.camera.lut.BundledLutLibrary
 import tw.luma.camera.lut.OriginalLutLibrary
 import tw.luma.camera.lut.KodakLutLibrary
 import tw.luma.camera.lut.FilterSwitching
-import tw.luma.camera.lut.FilterSeries
 import tw.luma.camera.storage.PhotoStorage
 import androidx.camera.video.VideoRecordEvent
 import java.io.File
@@ -129,17 +128,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         saveFilterStrength()
         val filter = filterSwitching.select(current.filter, current.selectedLut, entry)
         _state.update { it.copy(selectedLut = entry?.id, filter = filter) }
-        if (libraryReady) {
-            val editor = prefs.edit().putString("selectedLut", entry?.id)
-            entry?.let { editor.putString("seriesVariant-${FilterSeries.key(it)}", it.id) }
-            editor.apply()
-        }
-    }
-
-    fun selectSeries(series: FilterSeries) {
-        val current = _state.value.luts.find { it.id == _state.value.selectedLut && FilterSeries.key(it) == series.id }
-        val remembered = current?.id ?: prefs.getString("seriesVariant-${series.id}", null)
-        selectLut(series.preferred(remembered).id)
+        if (libraryReady) prefs.edit().putString("selectedLut", entry?.id).apply()
     }
 
     fun saveFilterStrength() {

@@ -35,7 +35,7 @@ class CameraExperienceDeviceTest {
     private fun model() = ViewModelProvider(ui.activity)[CameraViewModel::class.java]
     private fun ready() { ui.waitUntil(30_000) { model().state.value.ready } }
 
-    @Test fun filmGroupsOnlyBrowseAndSeriesRemembersVariantAndStrength() {
+    @Test fun threeBrandGroupsOnlyBrowseAndEachFilmKeepsItsStrength() {
         ready()
         val model = model()
         ui.waitUntil(10_000) { model.state.value.luts.any { it.id == "kodak-portra-800" } }
@@ -48,20 +48,28 @@ class CameraExperienceDeviceTest {
             }
             val frame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
             ui.onNodeWithTag("filter-picker").performClick()
+            ui.onNodeWithTag("filter-group-FUJI").assertTextContains("FUJIFILM")
+            ui.onNodeWithTag("filter-group-KODAK").assertTextContains("KODAK")
+            ui.onNodeWithTag("filter-group-GRAIN").assertTextContains("GRAIN")
+            ui.onNodeWithTag("filter-group-ALL").assertDoesNotExist()
+            ui.onNodeWithTag("filter-group-IMPORTED").assertDoesNotExist()
+            ui.onNodeWithTag("filter-variants").assertDoesNotExist()
             ui.onNodeWithTag("filter-group-KODAK").performClick()
             ui.runOnIdle { assertEquals("grain-daylight", model.state.value.selectedLut) }
-            ui.onNodeWithTag("filter-series-kodak-portra").performClick()
-            ui.waitUntil(5_000) { model.state.value.selectedLut == "kodak-portra-800" }
-            ui.runOnIdle { assertEquals(.25f, model.state.value.filter.strength) }
             ui.onNodeWithTag("filter-kodak-portra-160").performClick().assertIsSelected()
             ui.runOnIdle { assertEquals(.7f, model.state.value.filter.strength) }
-            ui.onNodeWithTag("filter-group-GRAIN").performClick()
+            ui.onNodeWithTag("filter-pager").performScrollToIndex(2)
             ui.runOnIdle { assertEquals("kodak-portra-160", model.state.value.selectedLut) }
-            ui.onNodeWithTag("filter-series-grain-daylight").performClick()
+            ui.onNodeWithTag("filter-kodak-portra-800").performClick()
+            ui.waitUntil(5_000) { model.state.value.selectedLut == "kodak-portra-800" }
+            ui.runOnIdle { assertEquals(.25f, model.state.value.filter.strength) }
+            ui.onNodeWithTag("filter-group-GRAIN").performClick()
+            ui.runOnIdle { assertEquals("kodak-portra-800", model.state.value.selectedLut) }
+            ui.onNodeWithTag("filter-grain-daylight").performClick()
             ui.waitUntil(5_000) { model.state.value.selectedLut == "grain-daylight" }
             ui.runOnIdle { assertEquals(.4f, model.state.value.filter.strength) }
             ui.onNodeWithTag("filter-group-KODAK").performClick()
-            ui.onNodeWithTag("filter-series-kodak-portra").performClick()
+            ui.onNodeWithTag("filter-kodak-portra-160").performClick()
             ui.runOnIdle {
                 assertEquals("kodak-portra-160", model.state.value.selectedLut)
                 assertEquals(.7f, model.state.value.filter.strength)
@@ -71,7 +79,7 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("shutter").assertIsEnabled()
             ui.onNodeWithTag("filter-original").performClick().assertIsSelected()
             ui.runOnIdle { assertNull(model.state.value.filter.lut) }
-            screenshot("grain-series-filter-tray.png")
+            screenshot("grain-brand-filter-tray.png")
             ui.onNodeWithTag("filter-close").performClick()
             ui.onNodeWithTag("filter-tray").assertDoesNotExist()
         } finally {
@@ -79,7 +87,7 @@ class CameraExperienceDeviceTest {
         }
     }
 
-    @Test fun settledFilmSwipeSelectsASeriesAndRestoresItsLastVariant() {
+    @Test fun settledFilmSwipeSelectsTheIndividualFilm() {
         ready()
         val model = model()
         ui.waitUntil(10_000) { model.state.value.luts.any { it.id == "kodak-portra-800" } }
@@ -88,9 +96,9 @@ class CameraExperienceDeviceTest {
             ui.runOnIdle { model.selectLut("kodak-portra-800") }
             ui.onNodeWithTag("filter-picker").performClick()
             ui.onNodeWithTag("filter-group-KODAK").performClick()
-            ui.onNodeWithTag("filter-series-pager").performTouchInput { swipeLeft(startX = width * .75f, endX = width * .25f) }
+            ui.onNodeWithTag("filter-pager").performTouchInput { swipeLeft(startX = width * .75f, endX = width * .25f) }
             ui.waitUntil(5_000) { model.state.value.selectedLut == "kodak-ektachrome-100-vs" }
-            ui.onNodeWithTag("filter-series-pager").performTouchInput { swipeRight(startX = width * .25f, endX = width * .75f) }
+            ui.onNodeWithTag("filter-pager").performTouchInput { swipeRight(startX = width * .25f, endX = width * .75f) }
             ui.waitUntil(5_000) { model.state.value.selectedLut == "kodak-portra-800" }
             ui.onNodeWithTag("filter-kodak-portra-800").assertIsSelected()
             ui.onNodeWithTag("filter-close").performClick()

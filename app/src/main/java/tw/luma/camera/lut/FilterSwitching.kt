@@ -18,15 +18,26 @@ class FilterSwitching(private val loadStrength: (String) -> Float? = { null }) {
 }
 
 enum class FilterGroup(val label: String) {
-    ALL("全部"), FUJI("富士"), KODAK("Kodak"), GRAIN("Grain"), IMPORTED("匯入");
-    fun entries(all: List<LutEntry>): List<LutEntry> = if (this == ALL) all else all.filter { of(it) == this }
+    FUJI("FUJIFILM"), KODAK("KODAK"), GRAIN("GRAIN");
+    fun entries(all: List<LutEntry>): List<LutEntry> = all.filter { of(it) == this }
 
     companion object {
+        fun initial(entries: List<LutEntry>, selectedId: String?): FilterGroup {
+            entries.find { it.id == selectedId }?.let { return of(it) }
+            return listOf(FUJI, GRAIN, KODAK).firstOrNull { it.entries(entries).isNotEmpty() } ?: FUJI
+        }
+
         fun of(entry: LutEntry) = when {
-            entry.imported -> IMPORTED
+            entry.imported -> GRAIN
             entry.id.startsWith("fuji-") -> FUJI
             entry.id.startsWith("kodak-") -> KODAK
             else -> GRAIN
+        }
+
+        fun title(entry: LutEntry) = when (of(entry)) {
+            FUJI -> entry.lut.title.removePrefix("富士 ")
+            KODAK -> entry.lut.title.removePrefix("Kodak ")
+            GRAIN -> entry.lut.title
         }
     }
 }
