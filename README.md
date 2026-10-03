@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前開發版本 **0.5.0**，整合現有功能並升版，個人測試版見 [0.5.0 建置紀錄](docs/release-v050.md)。另備妥正式簽章的 Release APK／AAB，versionCode 22；發布準備、簽章備份與測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
+目前開發版本 **0.6.0**、versionCode **23**，包含獨立照片編輯預覽、觀景窗左右滑動變焦與半透明參數面板，建置與成品見 [0.6.0 紀錄](docs/release-v060.md)。Release APK／AAB 沿用正式簽章；簽章備份與測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -39,7 +39,7 @@
 
 **0.5.0** 將目前拍照／錄影、三個英文濾鏡分類、手動白平衡、內建相簿、安靜存檔動畫與固定相機介面整合為新版 APK。沿用 0.4.10 的功能與原有 App 識別碼、簽章、偏好設定及匯入 LUT；版本號更新為 0.5.0／versionCode 21。
 
-0.5.0 Release 草稿另簡化相簿檢視頁：移除放大／還原、上一張／下一張按鈕，以左右滑動、雙指縮放及雙擊還原操作；畫面沒有手勢說明文字。
+**0.6.0** 整合 0.5.0 發布準備期間的介面與照片編輯更新，versionCode 由 22 升為 23，沿用 App 識別碼、正式簽章與既有資料格式。相簿檢視頁移除放大／還原、上一張／下一張按鈕，以左右滑動、雙指縮放及雙擊還原操作；畫面沒有手勢說明文字。
 
 觀景窗支援單指右滑放大、左滑縮小，拍照及錄影時皆可使用；保留點擊對焦、對焦後上下滑調曝光與雙指變焦，同一次滑動會鎖定方向。浮動參數面板改為半透明，按住或拖動 ISO、快門、曝光、白平衡、光圈及變焦滑桿時底色會再淡化，放開後平順恢復，控制位置與取景範圍保持固定。
 
@@ -54,7 +54,7 @@
 - 拍攝優先選擇接近 12MP 的尺寸；濾鏡處理在解碼時以二次方降採樣限制在 12MP 以下，降低記憶體用量。原圖選存保留相機原始 JPEG。
 - 可同時儲存原圖；EXIF 保留時間與可用拍攝參數，輸出方向正規化。預設不記錄位置。
 - 拍照／存檔使用快門與縮圖動畫回饋，成功不跳出通知；錯誤在底部固定區顯示。
-- 匯入相簿照片套用目前濾鏡，另存成品。
+- 獨立照片編輯頁：匯入後先預覽濾鏡、調強度及比較原圖，按儲存另存成品；不修改相機濾鏡設定或覆蓋原圖。
 - 照片／錄影模式；影片套用即時 LUT、可選收音，儲存至 `Movies/Grain`。
 - 單一倍率按鈕、向上浮出的橫向變焦滑桿、觀景窗雙指縮放；錄影中仍可調整。常用相機控制常駐觀景窗下方，濾鏡使用底部浮層，更多設定使用底部面板。
 - 手機全螢幕相機固定介面，按鈕圖示隨持握方向轉動；照片與影片方向獨立於畫面旋轉設定。
@@ -87,7 +87,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 目前個人富士測試版另存於 `output/Grain-0.5.0-personal-fuji-debug.apk`。APK 與官方富士 LUT 素材不提交 Git；個人測試 APK 另提供私人 GitHub Release 下載。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
-正式版成品為 `output/Grain-0.5.0-release.apk` 與 `output/Grain-0.5.0-release.aab`，不內建官方富士素材。Release 使用 `.signing/release.properties` 指定的正式 keystore；這個目錄、密碼與私鑰均不提交 Git。第一次可使用 `python3 scripts/create_release_keystore.py` 建立新簽章，或參考 [簽章設定範本](docs/release-signing.properties.example) 指定既有 keystore。建立後需自行安全備份整個 `.signing` 目錄。新簽章與既有 debug 簽章不同，不能直接覆蓋目前個人測試版；本次沒有移除手機上的 App 或搬移資料。
+正式版成品為 `output/Grain-0.6.0-release.apk` 與 `output/Grain-0.6.0-release.aab`，不內建官方富士素材。Release 使用 `.signing/release.properties` 指定的正式 keystore；這個目錄、密碼與私鑰均不提交 Git。第一次可使用 `python3 scripts/create_release_keystore.py` 建立新簽章，或參考 [簽章設定範本](docs/release-signing.properties.example) 指定既有 keystore。建立後需自行安全備份整個 `.signing` 目錄。正式簽章與既有 debug 簽章不同，不能直接覆蓋目前個人測試版；本次沒有移除手機上的 App 或搬移資料。
 
 ```sh
 ./gradlew :app:assembleRelease :app:bundleRelease
@@ -99,7 +99,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 1. 手機開啟開發人員選項與 USB 偵錯，接到電腦；在手機確認偵錯授權。
 2. Android Studio 選擇手機並按 Run，或執行 `adb install -r app/build/outputs/apk/debug/app-debug.apk`。
-3. 第一次啟動允許相機權限；如果沒有相機，仍可從「匯入照片」使用離線濾鏡。
+3. 第一次啟動允許相機權限；如果沒有相機，仍可從「編輯」選照片，預覽濾鏡後另存。
 4. 濾鏡浮層的「＋」選擇解壓縮後的 `.cube`；檔案會複製到 App 私有儲存區並放在 GRAIN。點濾鏡卡片或滑動停住時套用，調整強度後可直接按快門。
 5. 濾鏡浮層的調色按鈕可設定 LUT 輸入空間、影像亮度及查看作者／授權。「設定」檢視目前鏡頭能力，開啟原圖選存。
 6. 點左下角縮圖進入內建相簿；相簿顯示 Grain 建立的成品，照片支援放大及左右切換，影片可播放及拖曳進度。
