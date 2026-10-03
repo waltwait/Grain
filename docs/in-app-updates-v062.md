@@ -1,6 +1,6 @@
 # Grain 0.6.2：App 內更新
 
-狀態：開發中，尚未發布。更新頁、HTTPS 下載、APK 校驗及系統安裝入口已加入；下載網站與固定版本資訊網址尚未配置，完整更新流程仍待網站及手機驗證。最新已發布版本仍是私人 0.6.1。
+狀態：0.6.2 已接上 GitHub 固定更新通道，正式成品準備完成；使用者已要求儲存庫改為 public，公開及發布執行紀錄見 [公開更新來源](public-updates-v062.md)。最新已發布版本暫為 0.6.1，完整更新仍待匿名下載及手機驗證。
 
 ## 操作
 
@@ -26,14 +26,14 @@
 
 `website/` 是黑金下載頁範本，只提供一個最新版 APK 按鈕。頁面讀取相對路徑 `latest.json`，更新描述使用文字呈現；資料缺失或不合法時停用下載並提供重試。原始碼不帶 APK、富士素材、簽章私鑰或帳號權杖。
 
-建置時指定**實際可供 App 讀取的固定 HTTPS 版本描述網址**：
+個人建置預設使用 `https://raw.githubusercontent.com/waltwait/Grain/main/updates/personal-fuji/latest.json`，一般建置使用獨立的 `release` 通道。需要自架來源時可覆寫：
 
 ```sh
 ./gradlew :app:assemblePersonal -PgrainUpdateUrl=https://YOUR-HOST/grain/latest.json
 python3 scripts/verify_personal_fuji_apk.py app/build/outputs/apk/personal/app-personal.apk
 ```
 
-`YOUR-HOST` 是示意文字，必須替換為已驗證的正式網站。未提供屬性時更新頁會明確顯示「更新下載網站尚未設定」，這種 APK 只用於開發，不能稱為可用的更新版。
+`YOUR-HOST` 是自架來源示意文字，需替換為已驗證的正式網站。不傳屬性時沿用 GitHub 固定來源；只有明確傳入空白覆寫時，才顯示「更新下載網站尚未設定」。
 
 以同一個已簽章 APK 自動產生網站檔案，APK URL 需指向該次版本檔案：
 
@@ -46,7 +46,7 @@ python3 scripts/prepare_update_site.py app/build/outputs/apk/personal/app-person
 
 執行前設定 JDK 17 的 `JAVA_HOME`。腳本透過 aapt2 讀取 APK metadata、apksigner 驗證正式憑證、既有富士腳本驗證十款檔案原始雜湊；產生 APK、HTML／CSS／JS 與 `latest.json`，存於被 Git 忽略的 `output/update-site/`。只產出本機檔案，不執行部署。
 
-發布時先上傳不可變的版本 APK，再更新 `latest.json`。新版沿用同一個資訊網址；資訊檔應停用 HTTP 快取，版本 APK 可保留長快取。先確認 App 不需瀏覽器登入就能取得資訊與下載檔，才能發布接好網址的更新版。公開網站的素材分發範圍另行確認；目前個人富士 APK 保持既有私人範圍。
+發布時先上傳不可變的版本 APK，再更新 `updates/<channel>/latest.json`。新版沿用同一個資訊網址；資訊檔讀取會要求重新驗證快取，版本 APK 可保留長快取。使用者已於 2026-10-03 要求原儲存庫 public；現有 Release 附件也會公開，第三方素材仍沿用原來源與條款說明。
 
 ## 驗證
 

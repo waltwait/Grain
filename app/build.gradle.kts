@@ -14,6 +14,19 @@ val releaseSigning = Properties().apply {
 fun releaseSigningValue(name: String): String = releaseSigning.getProperty(name)?.takeIf { it.isNotBlank() }
     ?: throw GradleException("Missing $name in .signing/release.properties")
 
+val configuredUpdateUrl = providers.gradleProperty("grainUpdateUrl").orNull
+fun updateFeedField(channel: String): String {
+    val url = configuredUpdateUrl
+        ?: "https://raw.githubusercontent.com/waltwait/Grain/main/updates/$channel/latest.json"
+    if (url.isNotBlank()) {
+        val uri = URI(url)
+        require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) {
+            "grainUpdateUrl must be an HTTPS metadata URL without embedded credentials."
+        }
+    }
+    return "\"" + url.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+}
+
 android {
     namespace = "tw.luma.camera"
     compileSdk { version = release(37) }
@@ -23,14 +36,7 @@ android {
         targetSdk = 37
         versionCode = 25
         versionName = "0.6.2"
-        val updateUrl = providers.gradleProperty("grainUpdateUrl").orNull.orEmpty()
-        if (updateUrl.isNotBlank()) {
-            val uri = URI(updateUrl)
-            require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) {
-                "grainUpdateUrl must be an HTTPS metadata URL without embedded credentials."
-            }
-        }
-        buildConfigField("String", "UPDATE_FEED_URL", "\"" + updateUrl.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+        buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("release"))
         buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -51,7 +57,10 @@ android {
         }
     }
     buildTypes {
-        getByName("debug") { buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"") }
+        getByName("debug") {
+            buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"")
+            buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("personal-fuji"))
+        }
         release {
             isMinifyEnabled = true
             if (releaseSigningFile.isFile) signingConfig = signingConfigs.getByName("grainRelease")
@@ -61,6 +70,7 @@ android {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
             buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"")
+            buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("personal-fuji"))
         }
     }
     // Personal updates retain the official local pack and the installed release signature.

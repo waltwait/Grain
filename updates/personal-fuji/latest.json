@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "packageName": "tw.luma.camera",
+  "versionName": "0.6.2",
+  "versionCode": 25,
+  "minSdk": 29,
+  "channel": "personal-fuji",
+  "bundledFujiCount": 10,
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.2/Grain-0.6.2.apk",
+  "apkSize": 14000346,
+  "apkSha256": "f0d112f541b29ec368d627c79ced240215dc7a730838744d7bff9830d9c19a20",
+  "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
+  "notes": "新增 App 內檢查更新、下載進度、取消與安裝。\n保留十款富士濾鏡及原有相機、錄影、編輯與相簿功能。"
+}

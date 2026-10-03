@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "packageName": "tw.luma.camera",
+  "versionName": "0.6.0",
+  "versionCode": 23,
+  "minSdk": 29,
+  "channel": "release",
+  "bundledFujiCount": 0,
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.0/Grain-0.6.0-release.apk",
+  "apkSize": 11700290,
+  "apkSha256": "7ba9e955ce461954a86d07284aebf38beee6d53e8902587751898c6c25832fd2",
+  "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
+  "notes": "照片編輯、左右滑動變焦及半透明參數面板。"
+}
