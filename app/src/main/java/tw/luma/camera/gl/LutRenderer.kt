@@ -185,9 +185,10 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
         uploaded = lut
     }
 
-    fun draw(image: Int, width: Int, height: Int, settings: FilterSettings, transform: FloatArray = identity) {
+    fun draw(image: Int, width: Int, height: Int, settings: FilterSettings, transform: FloatArray = identity,
+        viewportX: Int = 0, viewportY: Int = 0) {
         if (uploaded !== settings.lut) grainTrace("Grain.lut.upload") { upload(settings.lut) }
-        GLES30.glViewport(0, 0, width, height)
+        GLES30.glViewport(viewportX, viewportY, width, height)
         GLES30.glUseProgram(program)
         vertices.position(0); GLES30.glVertexAttribPointer(position, 2, GLES30.GL_FLOAT, false, 16, vertices)
         vertices.position(2); GLES30.glVertexAttribPointer(uv, 2, GLES30.GL_FLOAT, false, 16, vertices)

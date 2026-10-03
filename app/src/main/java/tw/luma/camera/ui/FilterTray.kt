@@ -97,7 +97,7 @@ private fun TrayIcon(glyph: String, description: String, enabled: Boolean, tag: 
 }
 
 @Composable
-private fun FilmPicker(
+internal fun FilmPicker(
     entries: List<LutEntry>, selectedId: String?, enabled: Boolean, compact: Boolean,
     onSelect: (String?) -> Unit,
 ) {

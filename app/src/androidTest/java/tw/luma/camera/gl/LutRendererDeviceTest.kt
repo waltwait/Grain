@@ -22,6 +22,43 @@ class LutRendererDeviceTest {
         try { for (y in 0..1) for (x in 0..1) assertColor(pixels[y*2+x], output.getPixel(x,y)) }
         finally { input.recycle(); if (output !== input) output.recycle() }
     }
+    @Test fun photoPreviewViewportPreservesLetterboxingAndWindowOrientation() = EglCore().use {
+        LutRenderer(false).use { renderer ->
+            val bitmap = Bitmap.createBitmap(intArrayOf(Color.RED, Color.GREEN, Color.BLUE, Color.WHITE), 2, 2, Bitmap.Config.ARGB_8888)
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+            val input = LutRenderer.texture(GLES30.GL_TEXTURE_2D)
+            GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0)
+            val output = LutRenderer.texture(GLES30.GL_TEXTURE_2D)
+            GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, 4, 4, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
+            val fb = IntArray(1)
+            GLES30.glGenFramebuffers(1, fb, 0)
+            val pixels = RgbaReadback(16)
+            try {
+                GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fb[0])
+                GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, output, 0)
+                check(GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER) == GLES30.GL_FRAMEBUFFER_COMPLETE)
+                GLES30.glClearColor(0f, 0f, 0f, 1f)
+                GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+                val transform = FloatArray(16).also { matrix ->
+                    android.opengl.Matrix.setIdentityM(matrix, 0)
+                    android.opengl.Matrix.translateM(matrix, 0, 0f, 1f, 0f)
+                    android.opengl.Matrix.scaleM(matrix, 0, 1f, -1f, 1f)
+                }
+                renderer.draw(input, 2, 2, FilterSettings(), transform, viewportX = 1, viewportY = 1)
+                GLES30.glReadPixels(0, 0, 4, 4, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, pixels.pixels)
+                val colors = pixels.decode(16)
+                // FBO row zero is the window's bottom. The source's top row must appear above its bottom row.
+                assertColor(Color.BLUE, colors[5]); assertColor(Color.WHITE, colors[6])
+                assertColor(Color.RED, colors[9]); assertColor(Color.GREEN, colors[10])
+                for (i in listOf(0, 3, 12, 15)) assertColor(Color.BLACK, colors[i])
+            } finally {
+                bitmap.recycle()
+                GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+                GLES30.glDeleteFramebuffers(1, fb, 0)
+                GLES30.glDeleteTextures(2, intArrayOf(input, output), 0)
+            }
+        }
+    }
     @Test fun interpolated65GridMatchesCpuReference() {
         val lut = CubeLut.generate("Swap", 65) { r,g,b -> floatArrayOf(b,r,g) }
         val color = Color.rgb(37, 119, 213)

@@ -414,6 +414,121 @@ class CameraExperienceDeviceTest {
         } finally { bitmap.recycle(); uris.forEach { resolver.delete(it, null, null) } }
     }
 
+    @Test fun photoEditorPreviewsWithoutSavingAndExportsTheSelectedLookSeparately() {
+        ready()
+        val camera = model()
+        ui.waitUntil(10_000) { camera.state.value.luts.any { it.id == "builtin-2" } }
+        val before = camera.state.value
+        val resolver = ui.activity.contentResolver
+        val name = "GRAIN_EDITOR_TEST_${System.nanoTime()}.jpg"
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, name)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val source = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+        var output: android.net.Uri? = null
+        val bitmap = Bitmap.createBitmap(2048, 1536, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(80, 120, 170)) }
+        val editor = ViewModelProvider(ui.activity)[tw.luma.camera.editor.PhotoEditorViewModel::class.java]
+        try {
+            requireNotNull(resolver.openOutputStream(source)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+            requireNotNull(resolver.openFileDescriptor(source, "rw")).use { descriptor ->
+                androidx.exifinterface.media.ExifInterface(descriptor.fileDescriptor).apply {
+                    setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90.toString())
+                    saveAttributes()
+                }
+            }
+            resolver.update(source, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            val sourceBytes = requireNotNull(resolver.openInputStream(source)).use { it.readBytes() }
+            val sourceCount = ownPhotoCount()
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithContentDescription("照片 $name").performClick()
+            ui.onNodeWithTag("viewer-edit").performClick()
+            ui.onNodeWithTag("photo-editor").assertIsDisplayed()
+            ui.waitUntil(10_000) { editor.state.value.canSave }
+            ui.runOnIdle {
+                assertFalse(camera.state.value.ready)
+                assertEquals(768, editor.state.value.bitmap!!.width)
+                assertEquals(1024, editor.state.value.bitmap!!.height)
+            }
+            ui.onNodeWithTag("editor-group-GRAIN").performClick()
+            val filmIndex = camera.state.value.luts.filter {
+                tw.luma.camera.lut.FilterGroup.of(it) == tw.luma.camera.lut.FilterGroup.GRAIN
+            }.indexOfFirst { it.id == "builtin-2" }
+            ui.onNodeWithTag("filter-pager").performScrollToIndex(filmIndex)
+            ui.onNodeWithTag("filter-builtin-2").performClick()
+            ui.onNodeWithTag("editor-strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.5f) }
+            ui.waitUntil(10_000) { editor.state.value.canSave }
+            val selected = editor.state.value.selection.filter
+            ui.onNodeWithTag("editor-compare").performClick()
+            ui.onNodeWithTag("editor-save").assertIsNotEnabled()
+            assertEquals(selected, editor.state.value.selection.filter)
+            ui.onNodeWithTag("editor-compare").performClick()
+            ui.waitUntil(10_000) { editor.state.value.canSave }
+            ui.activityRule.scenario.recreate()
+            ui.onNodeWithTag("photo-editor").assertIsDisplayed()
+            ui.waitUntil(10_000) { editor.state.value.canSave }
+            assertEquals(.5f, editor.state.value.selection.filter.strength, 0f)
+            ui.runOnIdle {
+                assertEquals(sourceCount, ownPhotoCount())
+                assertNull(editor.state.value.savedUri)
+                assertEquals(before.filter, camera.state.value.filter)
+                assertEquals(before.selectedLut, camera.state.value.selectedLut)
+            }
+            ui.onNodeWithTag("editor-save").performClick()
+            ui.waitUntil(30_000) { editor.state.value.savedUri != null && !editor.state.value.saving }
+            output = editor.state.value.savedUri
+            assertNotEquals(source, output)
+            assertEquals(sourceCount + 1, ownPhotoCount())
+            assertArrayEquals(sourceBytes, requireNotNull(resolver.openInputStream(source)).use { it.readBytes() })
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(requireNotNull(output)).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+            assertEquals(1536, bounds.outWidth)
+            assertEquals(2048, bounds.outHeight)
+            val sampleOptions = android.graphics.BitmapFactory.Options().apply { inSampleSize = 16 }
+            val sourceSample = requireNotNull(resolver.openInputStream(source)).use {
+                requireNotNull(android.graphics.BitmapFactory.decodeStream(it, null, sampleOptions))
+            }
+            val resultSample = requireNotNull(resolver.openInputStream(output!!)).use {
+                requireNotNull(android.graphics.BitmapFactory.decodeStream(it, null, sampleOptions))
+            }
+            try {
+                val original = sourceSample.getPixel(sourceSample.width / 2, sourceSample.height / 2)
+                val result = resultSample.getPixel(resultSample.width / 2, resultSample.height / 2)
+                val channels = floatArrayOf(Color.red(original) / 255f, Color.green(original) / 255f, Color.blue(original) / 255f)
+                val mapped = requireNotNull(selected.lut).sample(channels[0], channels[1], channels[2])
+                val actual = intArrayOf(Color.red(result), Color.green(result), Color.blue(result))
+                for (channel in 0..2) assertEquals(((channels[channel] + mapped[channel]) * .5f * 255).toDouble(), actual[channel].toDouble(), 5.0)
+            } finally { sourceSample.recycle(); resultSample.recycle() }
+            requireNotNull(resolver.openInputStream(output!!)).use { input ->
+                val exif = androidx.exifinterface.media.ExifInterface(input)
+                assertEquals(androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL,
+                    exif.getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, -1))
+                assertTrue(exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_USER_COMMENT)!!.contains("strength=0.5"))
+            }
+            ui.onNodeWithTag("editor-save").assertIsNotEnabled()
+            screenshot("grain-photo-editor.png")
+            ui.onNodeWithTag("editor-back").performClick()
+            ui.onNodeWithTag("viewer-back").performClick()
+            ui.onNodeWithTag("gallery-close").performClick()
+            ready()
+        } finally {
+            ui.runOnIdle { editor.discard() }
+            bitmap.recycle()
+            output?.let { resolver.delete(it, null, null) }
+            resolver.delete(source, null, null)
+        }
+    }
+
+    private fun ownPhotoCount(): Int = ui.activity.contentResolver.query(
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID),
+        "${MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${MediaStore.Images.Media.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.Images.Media.IS_PENDING} = 0",
+        arrayOf("Pictures/Grain/", ui.activity.packageName), null,
+    )?.use { it.count } ?: 0
+
     private fun swipeViewfinder(right: Boolean) {
         ui.onNodeWithTag("viewfinder").performTouchInput {
             val leftPoint = Offset(width * .25f, height * .45f)

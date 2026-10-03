@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +59,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tw.luma.camera.gallery.GalleryViewModel
+import tw.luma.camera.editor.PhotoEditorViewModel
 import tw.luma.camera.CameraUiState
 import tw.luma.camera.CameraViewModel
 import tw.luma.camera.camera.CameraEngine
@@ -77,7 +79,10 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val state by model.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val galleryModel: GalleryViewModel = viewModel()
+    val editorModel: PhotoEditorViewModel = viewModel()
+    val destinations = rememberSaveableStateHolder()
     var galleryOpen by rememberSaveable { mutableStateOf(false) }
+    var editorOpen by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current
     var permitted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
@@ -93,22 +98,39 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
     val currentDensity by rememberUpdatedState(LocalDensity.current.density)
-    SideEffect { onCameraActive(!galleryOpen); engine?.setCaptureRotation(orientation.targetRotation) }
+    SideEffect { onCameraActive(!galleryOpen && !editorOpen); engine?.setCaptureRotation(orientation.targetRotation) }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permitted = it }
     val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         currentEngine?.let { model.startVideo(it, granted) }
         if (!granted) model.message("未授權麥克風，改為無聲錄影")
     }
     val lutImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::importLut) }
-    val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(model::importPhoto) }
+    val editPhoto: (android.net.Uri) -> Unit = { uri ->
+        panel = null
+        activeControl = null
+        model.pausePreview()
+        editorModel.open(uri)
+        editorOpen = true
+    }
+    val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(editPhoto) }
     val view = remember(context) { PreviewView(context).apply {
         implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         scaleType = PreviewView.ScaleType.FILL_CENTER
     } }
     val openPhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     val openLut = { lutImport.launch(arrayOf("*/*")) }
+    if (editorOpen) {
+        destinations.SaveableStateProvider("editor") {
+            PhotoEditorScreen(editorModel, state.luts, openPhoto,
+                { editorModel.discard(); editorOpen = false },
+                { uri -> model.photoEdited(uri); galleryModel.refresh() })
+        }
+        return
+    }
     if (galleryOpen) {
-        GalleryScreen(galleryModel, { galleryOpen = false }, { galleryOpen = false; openPhoto() })
+        destinations.SaveableStateProvider("gallery") {
+            GalleryScreen(galleryModel, { galleryOpen = false }, openPhoto, editPhoto)
+        }
         return
     }
     val openGallery = { model.pausePreview(); galleryOpen = true }
@@ -287,15 +309,15 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
+                CameraDock(state, model, shutter, openGallery, openPhoto, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
             } else Column(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.fillMaxWidth(), false)
+                CameraDock(state, model, shutter, openGallery, openPhoto, { panel = "settings" }, Modifier.fillMaxWidth(), false)
             }
         }
     }
     panel?.takeUnless { it == "filters" }?.let {
-        ControlsSheet(it, state, model, openLut, openPhoto) { panel = if (it == "filter") "filters" else null }
+        ControlsSheet(it, state, model, openLut) { panel = if (it == "filter") "filters" else null }
     }
 }
 
@@ -436,13 +458,16 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
 }
 
 @Composable
-private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, tools: () -> Unit, modifier: Modifier, landscape: Boolean) {
+private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, editPhoto: () -> Unit, tools: () -> Unit, modifier: Modifier, landscape: Boolean) {
     val enabled = !state.busy && !state.recording
     val modes: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
             CaptureMode.entries.forEach { mode -> TextButton(onClick = { model.mode(mode) }, enabled = enabled, modifier = Modifier.testTag(if (mode == CaptureMode.PHOTO) "mode-photo" else "mode-video")) {
                 Text(if (mode == CaptureMode.PHOTO) "照片" else "錄影", color = if (state.mode == mode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .6f), fontWeight = FontWeight.SemiBold)
             } }
+            TextButton(onClick = editPhoto, enabled = enabled, modifier = Modifier.testTag("open-photo-editor")) {
+                Text("編輯", color = Color.White.copy(alpha = .6f), fontWeight = FontWeight.SemiBold)
+            }
         }
     }
     val capture: @Composable () -> Unit = {
@@ -496,7 +521,7 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, importLut: () -> Unit, importPhoto: () -> Unit, dismiss: () -> Unit) {
+private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, importLut: () -> Unit, dismiss: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = dismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
@@ -543,7 +568,6 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     ToggleRow("同時儲存原圖", state.saveOriginal, !state.busy, model::saveOriginal)
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }
                     if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
-                    OutlinedButton(onClick = importPhoto, enabled = !state.busy && !state.recording) { Text("匯入照片套用濾鏡") }
                     OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
                     Spacer(Modifier.height(16.dp))
                     var deviceInfo by remember { mutableStateOf(false) }

@@ -10,6 +10,8 @@
 
 觀景窗新增單指左右滑動變焦，右滑放大、左滑縮小，從按下時的倍率計算，每 160 dp 約變化兩倍並限制在鏡頭實際範圍。拍照與錄影中使用同一路徑，同一次手勢依最初的水平／垂直方向鎖定，保留對焦後上下滑曝光與雙指變焦，多指操作不觸發單指滑動或點擊對焦。參數面板底色不透明度從 78% 降為 50%，按住或拖動滑桿時降為 18%，以 120 ms 動畫恢復；白平衡各滑桿共用操作狀態，數值、滑桿與取景範圍保持固定，沒有新增可見操作說明。
 
+照片匯入另改為獨立編輯頁，從相機下方、相簿或單張照片進入；先預覽濾鏡、調強度、比較原圖，再按儲存輸出新照片。編輯狀態不修改相機的 LUT 或偏好，取消不產生相簿檔案，儲存不覆蓋來源或顯示成功通知。GPU 預覽、輸出上限與生命週期見 [照片編輯紀錄](photo-editor-v050.md)。
+
 ## 正式簽章
 
 新增 `.signing/release.properties` 的本機設定支援，缺少設定時 Release 保持未簽章，不自動回退為 debug 簽章。設定存在但欄位不完整時，Gradle 會明確失敗，錯誤僅顯示缺少的欄位名稱。
@@ -22,7 +24,7 @@
 
 ## 驗證
 
-觀景窗手勢及透明面板修改後，`testDebugUnitTest`、`lintDebug`、`assembleDebugAndroidTest`、`assembleRelease` 與 `bundleRelease` 全部成功，耗時 **47 秒**。完整 **114 項 JVM 測試通過**，0 失敗／錯誤／跳過；新增四項測試涵蓋變焦手勢的螢幕密度、反向滑動、鏡頭上下限及無效觸控數值。手勢改用隨設定更新的 Compose density，Lint **0 錯誤、20 警告**。既有裝置測試增加拍照／錄影中左右滑動變焦及曝光保持不變的檢查，並保留相簿雙指放大、雙擊還原與左右滑動切換；本次只完成編譯，沒有執行裝置測試。本專案未提供 `testReleaseUnitTest` 任務，先前嘗試於執行前失敗後改用現有任務，未把它記為通過。
+照片編輯修改後，`testDebugUnitTest`、`lintDebug`、`assembleDebugAndroidTest`、`assembleRelease` 與 `bundleRelease` 全部成功，耗時 **52 秒**。完整 **126 項 JVM 測試通過**，0 失敗／錯誤／跳過；照片編輯新增 12 項測試涵蓋預覽更新／儲存時機、原圖比較、畫面比例與匯入限制。Lint **0 錯誤、20 警告**。照片編輯流程與 GPU 預覽方向的裝置測試完成編譯，涵蓋預覽不存檔、相機濾鏡及原圖 bytes 保持不變、旋轉後保留強度、來源尺寸與實際 LUT 混合輸出；保留既有拍照／錄影手勢和相簿檢查，本次未執行裝置測試。本專案未提供 `testReleaseUnitTest` 任務，先前嘗試於執行前失敗後改用現有任務，未把它記為通過。
 
 APK 的 package/version metadata、非 debuggable、APK Signature Scheme v2、RSA 4096 及新 certificate 已確認。`zipalign -c -P 16 4` 通過；六個 arm64-v8a／x86_64 native libraries 的所有 ELF LOAD segments 至少 16 KB 對齊。這是靜態封裝檢查，沒有實際在 16 KB 裝置執行。
 
@@ -34,7 +36,7 @@ AAB 的 JAR 簽章驗證成功，專案內 bundletool 的 `validate` 也通過�
 
 | 成品 | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `output/Grain-0.5.0-release.apk` | 11,667,522 | `83fd465c1b6abb6fa29f8852b88933414b12a2f565d1880b3166e67126140a1b` |
-| `output/Grain-0.5.0-release.aab` | 13,086,510 | `c655fd96ef8beeba0b08e5709e86e351ea127e0e889bb5559efacdf21f39829f` |
+| `output/Grain-0.5.0-release.apk` | 11,700,290 | `241b5b0c8fdcb698cf0e7df990db3d23dc1263285ce8114ca9e21a94aeffed46` |
+| `output/Grain-0.5.0-release.aab` | 13,133,421 | `6183117fa6b7514233250d449ad38a3922fabc4582bb2170227a5d703cf3b74a` |
 
 各有 `.sha256` 檔；R8 mapping 另存為 `output/Grain-0.5.0-release-mapping.txt`，不提交 Git。成品與簽章資訊均可重用，但不應重新產生 key 來取代已發布的 key。

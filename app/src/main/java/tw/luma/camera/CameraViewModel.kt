@@ -2,7 +2,6 @@ package tw.luma.camera
 
 import android.app.Application
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
@@ -244,33 +243,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun importPhoto(uri: Uri) {
-        if (_state.value.busy || _state.value.recording) return
-        val snapshot = _state.value
-        _state.update { it.copy(busy = true) }
+    fun photoEdited(uri: Uri) {
+        if (_state.value.savedUri == uri) return
+        _state.update { it.copy(savedUri = uri, thumbnail = null, savedMime = "image/jpeg",
+            captureFeedback = it.captureFeedback.mediaSaved()) }
         viewModelScope.launch {
-            var pendingFile: File? = null
-            try {
-                val source = File.createTempFile("luma-import-", ".jpg", getApplication<Application>().cacheDir)
-                pendingFile = source
-                val output = withContext(Dispatchers.IO) {
-                    requireNotNull(getApplication<Application>().contentResolver.openInputStream(uri)).use { input ->
-                        source.outputStream().use { target ->
-                            var count = 0L; val buffer = ByteArray(8192)
-                            while (true) { val n = input.read(buffer); if (n < 0) break; count += n; require(count <= 80L * 1024 * 1024) { "照片檔案超過 80 MB" }; target.write(buffer, 0, n) }
-                        }
-                    }
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeFile(source.absolutePath, bounds)
-                    require(bounds.outWidth.toLong() * bounds.outHeight in 1..50_000_000L) { "請使用 50MP 以下的照片" }
-                    PhotoStorage.processAndSave(getApplication(), source, snapshot.filter, false)
-                }
-                val thumb = loadMediaThumbnail(output)
-                _state.update { it.copy(savedUri = output, thumbnail = thumb, savedMime = "image/jpeg",
-                    captureFeedback = it.captureFeedback.mediaSaved()) }
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { message(e.message ?: "照片匯入失敗") }
-            finally { pendingFile?.delete(); _state.update { it.copy(busy = false) } }
+            val thumb = loadMediaThumbnail(uri)
+            _state.update { if (it.savedUri == uri) it.copy(thumbnail = thumb) else it }
         }
     }
 

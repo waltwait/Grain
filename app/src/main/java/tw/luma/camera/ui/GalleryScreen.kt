@@ -1,6 +1,7 @@
 package tw.luma.camera.ui
 
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -60,7 +61,7 @@ import tw.luma.camera.gallery.PhotoViewport
 import kotlin.math.min
 
 @Composable
-internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPhoto: () -> Unit) {
+internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPhoto: () -> Unit, editPhoto: (Uri) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
@@ -76,7 +77,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPho
     BackHandler { if (selected != null) selected = null else close() }
     Column(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().testTag("grain-gallery")) {
         if (selectedIndex >= 0) {
-            GalleryViewer(items, selectedIndex, model, { selected = null })
+            GalleryViewer(items, selectedIndex, model, { selected = null }, editPhoto)
         } else {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp).testTag("gallery-close")) { Text("‹ 相機") }
@@ -84,7 +85,10 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPho
                     Text("Grain", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Text("${state.items.size} 個拍攝片刻", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = .6f))
                 }
-                TextButton(onClick = model::refresh, enabled = !state.loading) { Text("重新整理") }
+                TextButton(onClick = importPhoto, modifier = Modifier.testTag("gallery-import-photo")) { Text("編輯") }
+                IconButton(onClick = model::refresh, enabled = !state.loading, modifier = Modifier.semantics { contentDescription = "重新整理相簿" }) {
+                    Text("↻", style = MaterialTheme.typography.titleLarge)
+                }
             }
             Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("全部", "照片", "影片").forEachIndexed { index, text ->
@@ -137,7 +141,7 @@ private fun GalleryThumbnail(item: GalleryItem, model: GalleryViewModel, modifie
 }
 
 @Composable
-private fun ColumnScope.GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: GalleryViewModel, back: () -> Unit) {
+private fun ColumnScope.GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: GalleryViewModel, back: () -> Unit, editPhoto: (Uri) -> Unit) {
     val pager = rememberPagerState(initialPage = initialPage) { items.size }
     val positions = remember { mutableMapOf<String, Long>() }
     var zoomed by remember { mutableStateOf(false) }
@@ -146,6 +150,8 @@ private fun ColumnScope.GalleryViewer(items: List<GalleryItem>, initialPage: Int
         TextButton(onClick = back, modifier = Modifier.heightIn(min = 48.dp).testTag("viewer-back")) { Text("‹ 相簿") }
         Spacer(Modifier.weight(1f))
         Text("${pager.currentPage + 1} / ${items.size}", color = Color.White.copy(alpha = .6f))
+        val current = items[pager.currentPage.coerceIn(items.indices)]
+        if (!current.video) TextButton(onClick = { editPhoto(current.uri) }, modifier = Modifier.testTag("viewer-edit")) { Text("編輯") }
     }
     HorizontalPager(state = pager, userScrollEnabled = !zoomed, key = { items[it].uri.toString() }, beyondViewportPageCount = 0,
         modifier = Modifier.fillMaxWidth().weight(1f).testTag("gallery-pager")) { page ->
