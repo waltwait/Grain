@@ -6,9 +6,13 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -22,6 +26,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
@@ -31,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -49,6 +55,8 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 enum class LiveControl(val title: String) { ISO("ISO"), SHUTTER("快門"), EV("曝光"), WB("白平衡"), APERTURE("光圈"), ZOOM("變焦") }
+
+private val LocalLiveControlInteractionSource = staticCompositionLocalOf<MutableInteractionSource?> { null }
 
 @Composable
 internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier) {
@@ -94,14 +102,20 @@ internal fun NativeCameraControls(
     var lastControl by remember { mutableStateOf<LiveControl?>(null) }
     LaunchedEffect(active) { if (active != null) lastControl = active }
     val popupControl = active ?: lastControl
+    val sliderInteraction = remember(popupControl) { MutableInteractionSource() }
+    val dragging by sliderInteraction.collectIsDraggedAsState()
+    val pressed by sliderInteraction.collectIsPressedAsState()
+    val adjusting = active != null && state.liveControlsEnabled && (dragging || pressed)
+    val panelOpacity by animateFloatAsState(if (adjusting) .18f else .5f, tween(120), label = "parameter-panel-opacity")
+    val chromeOpacity by animateFloatAsState(if (adjusting) .55f else 1f, tween(120), label = "parameter-chrome-opacity")
     val density = LocalDensity.current
     var stripHeight by remember(density) { mutableIntStateOf(with(density) { 56.dp.roundToPx() }) }
     var zoomHeight by remember(density) { mutableIntStateOf(with(density) { 52.dp.roundToPx() }) }
-    val lowerGradient = remember { Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .5f))) }
+    val lowerGradient = remember { Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .35f))) }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val anchorHeight = with(density) { stripHeight.toDp() + zoomHeight.toDp() }
         val popupWidth = minOf(480.dp, maxWidth - 24.dp)
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(lowerGradient)) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().graphicsLayer { alpha = chromeOpacity }.background(lowerGradient)) {
             Box(Modifier.fillMaxWidth().onSizeChanged { zoomHeight = it.height }.padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
                 val selected = active == LiveControl.ZOOM
                 val enabled = state.liveControlsEnabled && LiveControl.ZOOM.supported(state)
@@ -148,8 +162,8 @@ internal fun NativeCameraControls(
                 enter = fadeIn(tween(100)) + slideInVertically(tween(100, easing = LinearOutSlowInEasing)) { it / 12 },
                 exit = fadeOut(tween(90)) + slideOutVertically(tween(90, easing = LinearOutSlowInEasing)) { it / 16 },
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = anchorHeight + 6.dp).width(popupWidth)) {
-                Surface(shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .78f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = .12f))) {
+                Surface(shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = panelOpacity),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = .08f))) {
                     Column(Modifier.heightIn(max = (maxHeight - anchorHeight - 12.dp).coerceAtLeast(96.dp))
                         .verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -167,7 +181,9 @@ internal fun NativeCameraControls(
                                 }, style = MaterialTheme.typography.labelSmall)
                             }
                         }
-                        slider(popupControl, popupWidth - 24.dp, enabled)
+                        CompositionLocalProvider(LocalLiveControlInteractionSource provides sliderInteraction) {
+                            slider(popupControl, popupWidth - 24.dp, enabled)
+                        }
                     }
                 }
             }
@@ -238,8 +254,9 @@ private data class SliderValue(val value: Float, val range: ClosedFloatingPointR
 /** Keep a direct horizontal drag; right always increases the requested value. */
 @Composable
 internal fun HorizontalControlSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>, steps: Int, enabled: Boolean, modifier: Modifier) {
+    val interactionSource = LocalLiveControlInteractionSource.current ?: remember { MutableInteractionSource() }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Slider(value.coerceIn(range.start, range.endInclusive), onChange, enabled = enabled, valueRange = range, steps = steps,
-            modifier = modifier.heightIn(min = 48.dp))
+            interactionSource = interactionSource, modifier = modifier.heightIn(min = 48.dp))
     }
 }

@@ -92,6 +92,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var exposureDragging by remember { mutableStateOf(false) }
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
+    val currentDensity by rememberUpdatedState(LocalDensity.current.density)
     SideEffect { onCameraActive(!galleryOpen); engine?.setCaptureRotation(orientation.targetRotation) }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permitted = it }
     val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -149,6 +150,8 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             owned = next; engine = next; processor.settings = state.filter
             var multiTouch = false
             var startExposure = 0
+            var startZoom = 1f
+            var dragHorizontal: Boolean? = null
             val scale = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
                     if (model.state.value.liveControlsEnabled) model.zoom(model.state.value.capture.zoom * detector.scaleFactor)
@@ -177,15 +180,29 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                 override fun onScroll(first: MotionEvent?, event: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
                     val start = first ?: return false
                     val snapshot = model.state.value
-                    val anchor = exposureAnchor ?: return false
+                    if (multiTouch || !snapshot.liveControlsEnabled) return false
+                    val dx = event.x - start.x
                     val dy = event.y - start.y
-                    if (multiTouch || !snapshot.liveControlsEnabled || abs(dy) <= abs(event.x - start.x)) return false
+                    // Lock the first scroll direction so diagonal movement cannot change controls mid-drag.
+                    val horizontal = dragHorizontal ?: (abs(dx) > abs(dy)).also { dragHorizontal = it }
+                    if (horizontal) {
+                        if (snapshot.maxZoom <= snapshot.minZoom) return false
+                        activeControl = null
+                        exposureDragging = false
+                        exposureAnchor = null
+                        exposureFeedback = null
+                        focusFeedback = null
+                        model.zoom(ZoomControls.dragRatio(startZoom, dx, currentDensity,
+                            snapshot.minZoom, snapshot.maxZoom))
+                        return true
+                    }
+                    val anchor = exposureAnchor ?: return false
                     if (snapshot.capture.manual) {
                         return true
                     }
                     val caps = snapshot.capabilities
                     if (!caps.hasEv) return false
-                    val index = LiveControlMath.exposureIndex(startExposure, dy, context.resources.displayMetrics.density,
+                    val index = LiveControlMath.exposureIndex(startExposure, dy, currentDensity,
                         caps.exposureStep, caps.exposureRange.lower, caps.exposureRange.upper)
                     activeControl = null
                     exposureDragging = true
@@ -198,6 +215,8 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                     multiTouch = false
                     startExposure = model.state.value.capture.evIndex
+                    startZoom = model.state.value.capture.zoom
+                    dragHorizontal = null
                 }
                 if (event.pointerCount > 1) {
                     multiTouch = true
@@ -342,7 +361,7 @@ private fun FocusIndicator(feedback: FocusFeedback, onFinished: () -> Unit) {
 private fun PreviewArea(state: CameraUiState, model: CameraViewModel, view: PreviewView, granted: Boolean, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
     Box(modifier.background(Color.Black).testTag("viewfinder"), contentAlignment = Alignment.Center) {
         if (granted) {
-            AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "相機即時預覽，可點擊對焦及雙指變焦" })
+            AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "相機即時預覽，可點擊對焦、左右滑動或雙指變焦" })
             if (state.grid && state.ready) Canvas(Modifier.fillMaxSize()) {
                 for (i in 1..2) {
                     drawLine(Color.White.copy(alpha = .2f), Offset(size.width * i / 3, 0f), Offset(size.width * i / 3, size.height), 1.dp.toPx())

@@ -271,6 +271,14 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeLeft(startX = width * .8f, endX = width * .2f) }
             ui.waitUntil(5_000) { model().state.value.capture.zoom < rightZoom - .01f }
             ui.onNodeWithTag("control-zoom").performClick()
+            ui.runOnIdle { model().zoom(state.minZoom) }
+            swipeViewfinder(right = true)
+            ui.waitUntil(5_000) { model().state.value.capture.zoom > state.minZoom + .01f }
+            val viewfinderZoom = model().state.value.capture.zoom
+            assertEquals("Horizontal zoom must not adjust exposure", state.capture.evIndex, model().state.value.capture.evIndex)
+            ui.onNodeWithTag("focus-indicator").assertDoesNotExist()
+            swipeViewfinder(right = false)
+            ui.waitUntil(5_000) { model().state.value.capture.zoom < viewfinderZoom - .01f }
             ui.runOnIdle { model().zoom(1f) }
         }
         screenshot("luma-photo-ui.png")
@@ -307,6 +315,15 @@ class CameraExperienceDeviceTest {
                     up(0); up(1)
                 }
                 ui.waitUntil(5_000) { model.state.value.capture.zoom > sliderZoom && model.state.value.recordingNs > duration + 1_000_000_000L }
+                ui.runOnIdle { model.zoom(model.state.value.minZoom) }
+                val minimum = model.state.value.minZoom
+                val exposure = model.state.value.capture.evIndex
+                swipeViewfinder(right = true)
+                ui.waitUntil(5_000) { model.state.value.capture.zoom > minimum + .01f }
+                val horizontalZoom = model.state.value.capture.zoom
+                swipeViewfinder(right = false)
+                ui.waitUntil(5_000) { model.state.value.capture.zoom < horizontalZoom - .01f }
+                assertEquals(exposure, model.state.value.capture.evIndex)
                 assertEquals(RecordingStatus.RECORDING, model.state.value.recordingStatus)
             }
             val elapsed = model.state.value.recordingNs
@@ -395,6 +412,14 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("gallery-close").performClick()
             ready()
         } finally { bitmap.recycle(); uris.forEach { resolver.delete(it, null, null) } }
+    }
+
+    private fun swipeViewfinder(right: Boolean) {
+        ui.onNodeWithTag("viewfinder").performTouchInput {
+            val leftPoint = Offset(width * .25f, height * .45f)
+            val rightPoint = Offset(width * .75f, height * .45f)
+            swipe(if (right) leftPoint else rightPoint, if (right) rightPoint else leftPoint)
+        }
     }
 
     private fun screenshot(name: String) {

@@ -8,6 +8,8 @@
 
 相簿檢視頁移除放大／還原按鈕與上一張／下一張底列，照片使用左右滑動切換、雙指縮放與拖曳、雙擊還原比例。縮放時拖曳移動照片，還原後可繼續滑動換張；沒有新增畫面上的手勢說明。保留返回相簿、張數與影片播放控制，螢幕閱讀器仍可使用縮放／還原動作。
 
+觀景窗新增單指左右滑動變焦，右滑放大、左滑縮小，從按下時的倍率計算，每 160 dp 約變化兩倍並限制在鏡頭實際範圍。拍照與錄影中使用同一路徑，同一次手勢依最初的水平／垂直方向鎖定，保留對焦後上下滑曝光與雙指變焦，多指操作不觸發單指滑動或點擊對焦。參數面板底色不透明度從 78% 降為 50%，按住或拖動滑桿時降為 18%，以 120 ms 動畫恢復；白平衡各滑桿共用操作狀態，數值、滑桿與取景範圍保持固定，沒有新增可見操作說明。
+
 ## 正式簽章
 
 新增 `.signing/release.properties` 的本機設定支援，缺少設定時 Release 保持未簽章，不自動回退為 debug 簽章。設定存在但欄位不完整時，Gradle 會明確失敗，錯誤僅顯示缺少的欄位名稱。
@@ -20,7 +22,7 @@
 
 ## 驗證
 
-相簿修改後，`testDebugUnitTest`、`lintDebug`、`assembleDebugAndroidTest`、`assembleRelease` 與 `bundleRelease` 全部成功，耗時 **1 分 4 秒**。完整 **110 項 JVM 測試通過**，0 失敗／錯誤／跳過；Lint **0 錯誤、21 警告**。既有相簿裝置測試擴充為兩張測試照片，涵蓋雙指放大、雙擊還原與左右滑動切換；本次只完成編譯，沒有執行裝置測試。本專案未提供 `testReleaseUnitTest` 任務，先前嘗試於執行前失敗後改用現有任務，未把它記為通過。
+觀景窗手勢及透明面板修改後，`testDebugUnitTest`、`lintDebug`、`assembleDebugAndroidTest`、`assembleRelease` 與 `bundleRelease` 全部成功，耗時 **47 秒**。完整 **114 項 JVM 測試通過**，0 失敗／錯誤／跳過；新增四項測試涵蓋變焦手勢的螢幕密度、反向滑動、鏡頭上下限及無效觸控數值。手勢改用隨設定更新的 Compose density，Lint **0 錯誤、20 警告**。既有裝置測試增加拍照／錄影中左右滑動變焦及曝光保持不變的檢查，並保留相簿雙指放大、雙擊還原與左右滑動切換；本次只完成編譯，沒有執行裝置測試。本專案未提供 `testReleaseUnitTest` 任務，先前嘗試於執行前失敗後改用現有任務，未把它記為通過。
 
 APK 的 package/version metadata、非 debuggable、APK Signature Scheme v2、RSA 4096 及新 certificate 已確認。`zipalign -c -P 16 4` 通過；六個 arm64-v8a／x86_64 native libraries 的所有 ELF LOAD segments 至少 16 KB 對齊。這是靜態封裝檢查，沒有實際在 16 KB 裝置執行。
 
@@ -32,7 +34,7 @@ AAB 的 JAR 簽章驗證成功，專案內 bundletool 的 `validate` 也通過�
 
 | 成品 | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `output/Grain-0.5.0-release.apk` | 11,667,522 | `bc5781c3da54bcc055696bec46057e0ba4cdd5287dd902574dbe636d5693e5a1` |
-| `output/Grain-0.5.0-release.aab` | 13,081,045 | `2b83ff86bea2635159354897f6d2098853bd2f499eb7a9f192ded966c79a4f30` |
+| `output/Grain-0.5.0-release.apk` | 11,667,522 | `83fd465c1b6abb6fa29f8852b88933414b12a2f565d1880b3166e67126140a1b` |
+| `output/Grain-0.5.0-release.aab` | 13,086,510 | `c655fd96ef8beeba0b08e5709e86e351ea127e0e889bb5559efacdf21f39829f` |
 
 各有 `.sha256` 檔；R8 mapping 另存為 `output/Grain-0.5.0-release-mapping.txt`，不提交 Git。成品與簽章資訊均可重用，但不應重新產生 key 來取代已發布的 key。

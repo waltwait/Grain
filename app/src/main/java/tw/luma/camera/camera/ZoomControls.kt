@@ -1,8 +1,18 @@
 package tw.luma.camera.camera
 
 import java.util.Locale
+import kotlin.math.pow
 
 object ZoomControls {
+    /** Anchor each drag to its starting ratio; 160 dp to the right doubles magnification. */
+    fun dragRatio(start: Float, displacementX: Float, density: Float, min: Float, max: Float): Float {
+        if (!min.isFinite() || !max.isFinite() || min <= 0f || max < min) return start
+        val initial = (start.takeIf { it.isFinite() && it > 0f } ?: min).coerceIn(min, max)
+        if (!displacementX.isFinite() || !density.isFinite() || density <= 0f) return initial
+        return (initial.toDouble() * 2.0.pow(displacementX / (160.0 * density)))
+            .coerceIn(min.toDouble(), max.toDouble()).toFloat()
+    }
+
     fun presets(min: Float, max: Float): List<Float> {
         if (!min.isFinite() || !max.isFinite() || min <= 0f || max < min) return emptyList()
         val common = listOf(1f, 2f, 3f, 5f).filter { it in min..max }
