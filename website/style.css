@@ -1,0 +1,21 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #11110f; color: #ece9df; }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 90% 0, #353021 0, transparent 48%); }
+main { max-width: 680px; padding: 48px 28px 24px; margin: auto; min-height: 100svh; }
+.wordmark { font-size: 18px; font-weight: 650; letter-spacing: .28em; }
+.frame { width: 112px; height: 80px; border: 1px solid #6c634c; border-radius: 16px; margin: 64px 0 38px; position: relative; }
+.frame::before { content: ""; position: absolute; inset: 14px 27px; border: 1px solid #b9a66e; border-radius: 50%; }
+.grain-dot { position: absolute; width: 6px; height: 6px; background: #dbbd6e; border-radius: 50%; right: 14px; top: 13px; }
+.eyebrow { font-size: 12px; letter-spacing: .22em; color: #b5a98b; }
+h1 { font-size: clamp(38px, 8vw, 60px); line-height: 1.23; letter-spacing: -.035em; font-weight: 500; margin: 16px 0 22px; }
+.intro { color: #b8b5a9; font-size: 16px; }
+.release { margin-top: 48px; border-top: 1px solid #403e33; padding-top: 20px; }
+#version { font-size: 16px; }
+#notes { color: #b8b5a9; line-height: 1.7; white-space: pre-line; }
+#download { display: flex; justify-content: space-between; align-items: center; min-height: 54px; padding: 15px 22px; margin-top: 28px; background: #e2c577; color: #16150e; border-radius: 28px; text-decoration: none; font-weight: 600; }
+#download[hidden], button[hidden] { display: none; }
+#status { color: #c5bda8; line-height: 1.6; }
+button { background: transparent; color: #e2c577; border: 1px solid #6c634c; border-radius: 24px; padding: 12px 20px; min-height: 48px; cursor: pointer; font: inherit; }
+a:focus-visible, button:focus-visible { outline: 2px solid #ece9df; outline-offset: 5px; }
+footer { margin-top: 56px; color: #928d7d; font-size: 12px; }
+@media (min-width: 600px) { main { padding-top: 64px; } }

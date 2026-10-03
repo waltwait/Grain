@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 
 plugins {
     id("com.android.application")
@@ -20,8 +21,17 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 24
-        versionName = "0.6.1"
+        versionCode = 25
+        versionName = "0.6.2"
+        val updateUrl = providers.gradleProperty("grainUpdateUrl").orNull.orEmpty()
+        if (updateUrl.isNotBlank()) {
+            val uri = URI(updateUrl)
+            require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) {
+                "grainUpdateUrl must be an HTTPS metadata URL without embedded credentials."
+            }
+        }
+        buildConfigField("String", "UPDATE_FEED_URL", "\"" + updateUrl.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+        buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -41,6 +51,7 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") { buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"") }
         release {
             isMinifyEnabled = true
             if (releaseSigningFile.isFile) signingConfig = signingConfigs.getByName("grainRelease")
@@ -49,10 +60,11 @@ android {
         create("personal") {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"")
         }
     }
     // Personal updates retain the official local pack and the installed release signature.
-    sourceSets.getByName("personal").assets.srcDir("src/debug/assets")
+    sourceSets.getByName("personal").assets.directories.add("src/debug/assets")
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
@@ -93,6 +105,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.08.00"))

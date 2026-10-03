@@ -18,5 +18,6 @@ output/*.aab.sha256
 output/*-mapping.txt
 output/*.zip
 output/luts/
+output/update-site/
 scripts/__pycache__/
 app/src/debug/assets/luts/fujifilm/

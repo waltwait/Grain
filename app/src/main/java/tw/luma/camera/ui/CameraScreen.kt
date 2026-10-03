@@ -80,9 +80,11 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val context = LocalContext.current
     val galleryModel: GalleryViewModel = viewModel()
     val editorModel: PhotoEditorViewModel = viewModel()
+    val updateModel: tw.luma.camera.update.AppUpdateViewModel = viewModel()
     val destinations = rememberSaveableStateHolder()
     var galleryOpen by rememberSaveable { mutableStateOf(false) }
     var editorOpen by rememberSaveable { mutableStateOf(false) }
+    var updatesOpen by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current
     var permitted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
@@ -98,7 +100,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
     val currentDensity by rememberUpdatedState(LocalDensity.current.density)
-    SideEffect { onCameraActive(!galleryOpen && !editorOpen); engine?.setCaptureRotation(orientation.targetRotation) }
+    SideEffect { onCameraActive(!galleryOpen && !editorOpen && !updatesOpen); engine?.setCaptureRotation(orientation.targetRotation) }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permitted = it }
     val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         currentEngine?.let { model.startVideo(it, granted) }
@@ -119,6 +121,12 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     } }
     val openPhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     val openLut = { lutImport.launch(arrayOf("*/*")) }
+    if (updatesOpen) {
+        destinations.SaveableStateProvider("updates") {
+            AppUpdateScreen(updateModel) { updatesOpen = false }
+        }
+        return
+    }
     if (editorOpen) {
         destinations.SaveableStateProvider("editor") {
             PhotoEditorScreen(editorModel, state.luts, openPhoto,
@@ -317,7 +325,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         }
     }
     panel?.takeUnless { it == "filters" }?.let {
-        ControlsSheet(it, state, model, openLut) { panel = if (it == "filter") "filters" else null }
+        ControlsSheet(it, state, model, openLut, {
+            panel = null; activeControl = null; model.pausePreview(); updateModel.check(); updatesOpen = true
+        }) { panel = if (it == "filter") "filters" else null }
     }
 }
 
@@ -521,7 +531,7 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, importLut: () -> Unit, dismiss: () -> Unit) {
+private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, importLut: () -> Unit, updates: () -> Unit, dismiss: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = dismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
@@ -569,6 +579,7 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }
                     if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
                     OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
+                    OutlinedButton(onClick = updates, enabled = !state.busy && !state.recording, modifier = Modifier.testTag("open-updates")) { Text("檢查更新") }
                     Spacer(Modifier.height(16.dp))
                     var deviceInfo by remember { mutableStateOf(false) }
                     TextButton(onClick = { deviceInfo = !deviceInfo }, modifier = Modifier.testTag("device-info-toggle")) {

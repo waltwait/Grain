@@ -35,6 +35,33 @@ class CameraExperienceDeviceTest {
     private fun model() = ViewModelProvider(ui.activity)[CameraViewModel::class.java]
     private fun ready() { ui.waitUntil(30_000) { model().state.value.ready } }
 
+    @Test fun updateScreenPausesCameraAndReturnsWithoutChangingTheSelectedFilm() {
+        ready()
+        val before = model().state.value
+        ui.onNodeWithContentDescription("更多設定").performClick()
+        ui.onNodeWithTag("open-updates").performScrollTo().performClick()
+        ui.onNodeWithTag("app-update-screen").assertIsDisplayed()
+        ui.onNodeWithTag("viewfinder").assertDoesNotExist()
+        ui.onNodeWithTag("update-primary").assertIsDisplayed()
+        ui.runOnIdle {
+            assertFalse(model().state.value.ready)
+            assertEquals(before.selectedLut, model().state.value.selectedLut)
+            assertEquals(before.capture, model().state.value.capture)
+        }
+        ui.activityRule.scenario.recreate()
+        ui.onNodeWithTag("app-update-screen").assertIsDisplayed()
+        if (tw.luma.camera.BuildConfig.UPDATE_FEED_URL.isBlank()) {
+            ui.onNodeWithTag("update-primary").assertTextEquals("檢查更新").assertIsEnabled()
+            ui.onNodeWithTag("update-primary").performClick()
+            ui.onNodeWithTag("update-error").assertTextEquals("更新下載網站尚未設定")
+            ui.onNodeWithTag("update-primary").assertIsEnabled()
+        }
+        ui.onNodeWithText("返回").performClick()
+        ready()
+        ui.onNodeWithTag("viewfinder").assertIsDisplayed()
+        ui.runOnIdle { assertEquals(before.selectedLut, model().state.value.selectedLut) }
+    }
+
     @Test fun phoneCameraKeepsPortraitWhileGalleryReleasesTheWindow() {
         ready()
         org.junit.Assume.assumeTrue(ui.activity.resources.configuration.smallestScreenWidthDp < 600 && !ui.activity.isInMultiWindowMode)
