@@ -35,6 +35,21 @@ class CameraExperienceDeviceTest {
     private fun model() = ViewModelProvider(ui.activity)[CameraViewModel::class.java]
     private fun ready() { ui.waitUntil(30_000) { model().state.value.ready } }
 
+    @Test fun phoneCameraKeepsPortraitWhileGalleryReleasesTheWindow() {
+        ready()
+        org.junit.Assume.assumeTrue(ui.activity.resources.configuration.smallestScreenWidthDp < 600 && !ui.activity.isInMultiWindowMode)
+        ui.runOnIdle { assertEquals(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, ui.activity.requestedOrientation) }
+        ui.onNodeWithTag("open-gallery").performClick()
+        ui.onNodeWithTag("grain-gallery").assertIsDisplayed()
+        ui.onNodeWithTag("viewfinder").assertDoesNotExist()
+        ui.runOnIdle { assertEquals(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, ui.activity.requestedOrientation) }
+        ui.onNodeWithTag("gallery-close").performClick()
+        ready()
+        ui.runOnIdle { assertEquals(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, ui.activity.requestedOrientation) }
+        ui.onNodeWithTag("viewfinder").assertIsDisplayed()
+        ui.onNodeWithTag("shutter").assertIsEnabled()
+    }
+
     @Test fun photoSaveIsQuietAndKeepsTheViewfinderAndControlsInPlace() {
         ready()
         val model = model()

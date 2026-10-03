@@ -61,6 +61,7 @@ import tw.luma.camera.gallery.GalleryViewModel
 import tw.luma.camera.CameraUiState
 import tw.luma.camera.CameraViewModel
 import tw.luma.camera.camera.CameraEngine
+import tw.luma.camera.camera.CameraOrientation
 import tw.luma.camera.camera.FocusOutcome
 import kotlinx.coroutines.delay
 import tw.luma.camera.camera.shutterLabel
@@ -72,7 +73,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
-fun CameraScreen(model: CameraViewModel) {
+fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = CameraOrientation.UPRIGHT, onCameraActive: (Boolean) -> Unit = {}) {
     val state by model.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val galleryModel: GalleryViewModel = viewModel()
@@ -90,6 +91,8 @@ fun CameraScreen(model: CameraViewModel) {
     var exposureFeedback by remember { mutableStateOf<ExposureFeedback?>(null) }
     var exposureDragging by remember { mutableStateOf(false) }
     val currentEngine by rememberUpdatedState(engine)
+    val currentRotation by rememberUpdatedState(orientation.targetRotation)
+    SideEffect { onCameraActive(!galleryOpen); engine?.setCaptureRotation(orientation.targetRotation) }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permitted = it }
     val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         currentEngine?.let { model.startVideo(it, granted) }
@@ -142,6 +145,7 @@ fun CameraScreen(model: CameraViewModel) {
             val processor = LutSurfaceProcessor(targets) { error -> ContextCompat.getMainExecutor(context).execute { model.cameraError(error.message ?: "GPU 預覽失敗") } }
             val next = CameraEngine(context, lifecycle, view, processor, model::ready, model::actual, model::cameraError,
                 model::videoQuality, model::message)
+            next.setCaptureRotation(currentRotation)
             owned = next; engine = next; processor.settings = state.filter
             var multiTouch = false
             var startExposure = 0
@@ -389,7 +393,7 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
     Row(modifier.fillMaxWidth().background(gradient).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp),
             onClick = { panel("settings") }, enabled = !state.recording) {
-            Box(contentAlignment = Alignment.Center) { Text(state.videoQuality, color = Color.White, style = MaterialTheme.typography.labelMedium) }
+            Box(contentAlignment = Alignment.Center) { Text(state.videoQuality, Modifier.cameraControlRotation(), color = Color.White, style = MaterialTheme.typography.labelMedium) }
         } else GlassIcon("flash", if (state.capture.flash) "閃光燈已開啟" else "閃光燈設定", !state.recording && !state.busy, state.capture.flash) { panel("settings") }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
@@ -402,7 +406,7 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
                     contentDescription = "選擇底片 ${state.filter.lut?.title ?: "原色"}"
                 }) {
                 Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    CameraGlyph("lut", Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
+                    CameraGlyph("lut", Modifier.size(16.dp).cameraControlRotation()); Spacer(Modifier.width(6.dp))
                     Text(state.filter.lut?.title?.removePrefix("富士 ") ?: "原色", color = Color.White, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                 }
@@ -450,7 +454,7 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
 @Composable
 private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, click: () -> Unit) {
     Surface(onClick = click, enabled = enabled, shape = CircleShape, color = if (selected) Color.Black.copy(alpha = .22f) else Color.Transparent, modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
-        Box(contentAlignment = Alignment.Center) { CameraGlyph(icon, Modifier.size(25.dp), if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .35f)) }
+        Box(contentAlignment = Alignment.Center) { CameraGlyph(icon, Modifier.size(25.dp).cameraControlRotation(), if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .35f)) }
     }
 }
 

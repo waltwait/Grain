@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,14 @@ private fun SmallCameraChromePreview() = CameraChromePreview(LiveControl.ISO)
 @Composable
 private fun LandscapeCameraChromePreview() = CameraChromePreview(LiveControl.ZOOM)
 
+@Preview(name = "Phone held sideways · fixed layout", widthDp = 360, heightDp = 640)
+@Composable
+private fun SidewaysPhoneCameraChromePreview() = CameraChromePreview(null, rotation = 270)
+
+@Preview(name = "Phone upside down · fixed layout", widthDp = 360, heightDp = 640)
+@Composable
+private fun UpsideDownPhoneCameraChromePreview() = CameraChromePreview(null, rotation = 180)
+
 @Preview(name = "Large type · white balance", widthDp = 360, heightDp = 640, fontScale = 1.3f)
 @Composable
 private fun LargeTypeCameraChromePreview() = CameraChromePreview(LiveControl.WB)
@@ -53,7 +62,7 @@ private fun Camera2TemperatureChromePreview() = CameraChromePreview(LiveControl.
 private fun LandscapeWhiteBalanceChromePreview() = CameraChromePreview(LiveControl.WB)
 
 @Composable
-private fun CameraChromePreview(initialControl: LiveControl, cct: Boolean = false, gains: Boolean = false) {
+private fun CameraChromePreview(initialControl: LiveControl?, cct: Boolean = false, gains: Boolean = false, rotation: Int = 0) {
     var active by remember { mutableStateOf<LiveControl?>(initialControl) }
     var state by remember(initialControl, cct, gains) {
         mutableStateOf(CameraUiState(
@@ -69,7 +78,8 @@ private fun CameraChromePreview(initialControl: LiveControl, cct: Boolean = fals
             ),
         ))
     }
-    MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFFFD45B), onPrimary = Color(0xFF231C08))) {
+    CompositionLocalProvider(LocalCameraControlRotation provides rotation) {
+      MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFFFD45B), onPrimary = Color(0xFF231C08))) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF393E3A), Color(0xFF151918))))) {
             NativeCameraToolbar(state, Modifier.align(Alignment.TopCenter), panel = {}) { Text("00:00", color = Color.White) }
             NativeCameraControls(state, active, select = { active = it }, reset = { control ->
@@ -82,5 +92,6 @@ private fun CameraChromePreview(initialControl: LiveControl, cct: Boolean = fals
                     else HorizontalControlSlider(.5f, {}, 0f..1f, 0, enabled, Modifier.width(width))
                 }, modifier = Modifier.align(Alignment.BottomCenter))
         }
+      }
     }
 }

@@ -61,6 +61,7 @@ class CameraEngine(
     private var imageCapture: ImageCapture? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
+    private var captureRotation = view.display?.rotation ?: Surface.ROTATION_0
     private var caps = CameraCapabilities()
     private var settings = CaptureSettings()
     private var generation = 0
@@ -113,13 +114,13 @@ class CameraEngine(
                     if (video) {
                         val recorder = Recorder.Builder().setQualitySelector(QualitySelector.fromOrderedList(
                             listOf(Quality.FHD, Quality.HD, Quality.SD), FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build()
-                        val capture = VideoCapture.withOutput(recorder).also { it.targetRotation = view.display?.rotation ?: Surface.ROTATION_0 }
+                        val capture = VideoCapture.withOutput(recorder).also { it.targetRotation = captureRotation }
                         videoCapture = capture; imageCapture = null; group.addUseCase(capture)
                     } else {
                         val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                         .setResolutionSelector(ResolutionSelector.Builder().setResolutionStrategy(ResolutionStrategy(
                             android.util.Size(4000, 3000), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)).build())
-                        .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0).build()
+                        .setTargetRotation(captureRotation).build()
                         imageCapture = capture; videoCapture = null; group.addUseCase(capture)
                     }
                     view.viewPort?.let { group.setViewPort(it) }
@@ -292,11 +293,14 @@ class CameraEngine(
 
     fun setFilter(filter: tw.luma.camera.gl.FilterSettings) { processor.settings = filter }
 
+    /** Snapshot at the shutter/start action. Do not rotate Preview or an active video stream. */
+    fun setCaptureRotation(rotation: Int) { require(rotation in Surface.ROTATION_0..Surface.ROTATION_270); captureRotation = rotation }
+
     fun startVideo(audio: Boolean, callback: (VideoRecordEvent) -> Unit) {
         check(!closed && recording == null) { "錄影正在進行或相機已關閉" }
         check(!applying && !waitingForWhiteBalance) { "拍攝參數正在套用，請稍後再錄" }
         val capture = checkNotNull(videoCapture) { "錄影模式尚未就緒" }
-        capture.targetRotation = view.display?.rotation ?: Surface.ROTATION_0
+        capture.targetRotation = captureRotation
         val name = "GRAIN_${java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())}.mp4"
         val options = MediaStoreOutputOptions.Builder(context.contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
             .setContentValues(ContentValues().apply {
@@ -318,7 +322,7 @@ class CameraEngine(
         val capture = imageCapture
         if (capture == null || closed) { callback(Result.failure(IllegalStateException("相機尚未就緒"))); return }
         if (applying || waitingForWhiteBalance) { callback(Result.failure(IllegalStateException("拍攝參數正在套用，請稍後再拍"))); return }
-        capture.targetRotation = view.display?.rotation ?: Surface.ROTATION_0
+        capture.targetRotation = captureRotation
         capture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), executor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(result: ImageCapture.OutputFileResults) { callback(Result.success(latest)) }
             override fun onError(exception: ImageCaptureException) { callback(Result.failure(exception)) }

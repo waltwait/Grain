@@ -113,7 +113,7 @@ internal fun NativeCameraControls(
                         contentDescription = "變焦 $value"
                     }) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(value, style = MaterialTheme.typography.labelLarge,
+                        Text(value, Modifier.cameraControlRotation(), style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .55f))
                     }
                 }

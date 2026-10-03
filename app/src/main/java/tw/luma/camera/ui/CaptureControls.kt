@@ -150,7 +150,7 @@ internal fun SavedMediaButton(thumbnail: Bitmap?, revision: Long, saving: Boolea
         }) {
         Box(Modifier.fillMaxSize()) {
             Crossfade(thumbnail, animationSpec = tween(if (motion) 180 else 0), label = "saved-thumbnail",
-                modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = scale.value; scaleY = scale.value }) { bitmap ->
+                modifier = Modifier.fillMaxSize().cameraControlRotation().graphicsLayer { scaleX = scale.value; scaleY = scale.value }) { bitmap ->
                 if (bitmap != null) Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize().testTag("saved-thumbnail"), contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CameraGlyph("gallery", Modifier.size(25.dp)) }
             }
