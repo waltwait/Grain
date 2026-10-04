@@ -11,3 +11,7 @@
 APK 的 DEX 確認包含主頁 `gallery-photo-tab`、`gallery-edit-tab`、`gallery-import-editor` 與圖示返回 `update-back`，舊 `gallery-import-photo` 入口已不在正式 APK。十款富士原始 bytes、共 38 個 LUT 相關／native 檔案與 0.6.5 完全一致，原正式簽章與 16 KB ZIP 對齊通過。
 
 成品 `output/Grain-0.6.6-personal-fuji.apk`：14,016,730 bytes，SHA-256 `5fd445e416ecbb07e8ab15ba5cbec1dd874e6f69266956b81cc6e286368e1b6c`。
+
+2026-10-04 已推送 main 與 v0.6.6，標籤對應 `4e14fcc3f5430a11979a85bcb2e7ea8df25331db`。已發布 [私人 Release](https://github.com/waltwait/Grain/releases/tag/v0.6.6)，附件先以 Release 列表核對草稿的大小與 SHA-256，再發布；GitHub 最新版回報 v0.6.6、非草稿、非預發布，只有一個 APK，14,016,730 bytes 與 SHA-256 和本機成品一致。原 App 儲存庫維持 private=true、has_pages=false。
+
+公開下載頁 metadata 提交 `5bedc3f868261d8690343a936946fdbeb458cbab`，[部署 37182268573](https://github.com/waltwait/Grain-pages/actions/runs/37182268573) 成功。匿名線上 `latest.json` 與本機公開 metadata 完全相同，版本 0.6.6／29、access=github-login，頁面下載按鈕沿用私人最新 Release。公開儲存庫只同步原五個網頁／metadata 檔案，沒有 APK 或 LUT。
