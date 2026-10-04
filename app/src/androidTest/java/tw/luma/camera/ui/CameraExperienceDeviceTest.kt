@@ -818,11 +818,17 @@ class CameraExperienceDeviceTest {
         val resolver = ui.activity.contentResolver
         val name = resolver.query(edited, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
             ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: return null
-        val originalName = tw.luma.camera.storage.PhotoNames.originalOf(name) ?: return null
-        return resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.MediaColumns._ID),
-            "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ?",
-            arrayOf(originalName, "Pictures/Grain Edits/", ui.activity.packageName), null)?.use {
-            if (it.moveToFirst()) android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.getLong(0)) else null
+        val originalBase = tw.luma.camera.storage.PhotoNames.originalBase(name) ?: return null
+        return resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+            "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ?",
+            arrayOf("Pictures/Grain Edits/", ui.activity.packageName), null)?.use {
+            var found: android.net.Uri? = null
+            while (found == null && it.moveToNext()) {
+                if (it.getString(1).substringBeforeLast('.') == originalBase)
+                    found = android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.getLong(0))
+            }
+            found
         }
     }
 

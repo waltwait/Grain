@@ -47,7 +47,7 @@ class PhotoStorageDeviceTest {
         val (name, path) = requireNotNull(nameAndPath(uri))
         assertTrue(name, name.startsWith("GRAIN_EDIT_"))
         assertEquals("Pictures/Grain Edits/", path)
-        val original = requireNotNull(find(SaveTarget.EDIT, requireNotNull(PhotoNames.originalOf(name)))).also { written += it }
+        val original = requireNotNull(find(SaveTarget.EDIT, jpgOriginal(name))).also { written += it }
         assertArrayEquals(source.readBytes(), requireNotNull(resolver.openInputStream(original)).use { it.readBytes() })
         assertEquals("Edits must not touch the camera folder", cameraBefore, count(SaveTarget.CAMERA))
     }
@@ -58,13 +58,30 @@ class PhotoStorageDeviceTest {
         assertEquals(before + 1, count(SaveTarget.CAMERA))
         val singleName = requireNotNull(nameAndPath(single)).first
         assertTrue(singleName, singleName.startsWith("GRAIN_") && !singleName.startsWith("GRAIN_EDIT_"))
-        assertNull(find(SaveTarget.CAMERA, requireNotNull(PhotoNames.originalOf(singleName))))
+        assertNull(find(SaveTarget.CAMERA, jpgOriginal(singleName)))
 
         val pair = PhotoStorage.processAndSave(context, source, FilterSettings(), SaveTarget.CAMERA, saveOriginal = true).also { written += it }
         val pairName = requireNotNull(nameAndPath(pair)).first
-        written += requireNotNull(find(SaveTarget.CAMERA, requireNotNull(PhotoNames.originalOf(pairName))))
+        written += requireNotNull(find(SaveTarget.CAMERA, jpgOriginal(pairName)))
         assertEquals(before + 3, count(SaveTarget.CAMERA))
     }
+
+    @Test fun aNonJpegSourceKeepsItsOwnFormatAsTheOriginal() {
+        val png = File.createTempFile("storage-test-", ".png", context.cacheDir)
+        val bitmap = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(170, 120, 90)) }
+        try {
+            png.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            val uri = PhotoStorage.processAndSave(context, png, FilterSettings(), SaveTarget.EDIT).also { written += it }
+            val name = requireNotNull(nameAndPath(uri)).first
+            val originalName = requireNotNull(PhotoNames.originalBase(name)) + ".png"
+            val original = requireNotNull(find(SaveTarget.EDIT, originalName)).also { written += it }
+            assertEquals("image/png", resolver.getType(original))
+            assertArrayEquals(png.readBytes(), requireNotNull(resolver.openInputStream(original)).use { it.readBytes() })
+            assertEquals("The edited photo is always a JPEG", "image/jpeg", resolver.getType(uri))
+        } finally { bitmap.recycle(); png.delete() }
+    }
+
+    private fun jpgOriginal(editedName: String): String = requireNotNull(PhotoNames.originalBase(editedName)) + ".jpg"
 
     private fun nameAndPath(uri: Uri): Pair<String, String>? =
         resolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.RELATIVE_PATH), null, null, null)?.use {

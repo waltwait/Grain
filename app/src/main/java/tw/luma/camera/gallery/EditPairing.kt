@@ -10,8 +10,8 @@ internal data class EditPair(val edited: EditRow, val original: EditRow?)
 internal object EditPairing {
     /** Keeps the input order, lists only edited photos, and ignores originals whose edit is gone. */
     fun pair(rows: List<EditRow>): List<EditPair> {
-        val byName = rows.associateBy { it.name }
+        val originals = rows.filter { PhotoNames.isOriginal(it.name) }.associateBy { it.name.substringBeforeLast('.') }
         return rows.filterNot { PhotoNames.isOriginal(it.name) }
-            .map { edited -> EditPair(edited, PhotoNames.originalOf(edited.name)?.let(byName::get)) }
+            .map { edited -> EditPair(edited, PhotoNames.originalBase(edited.name)?.let(originals::get)) }
     }
 }

@@ -28,6 +28,13 @@ class EditPairingTest {
         assertEquals(listOf(EditPair(x, xOriginal), EditPair(duplicate, null)), pairs)
     }
 
+    @Test fun pairsAnOriginalWhateverItsExtension() {
+        val png = EditRow(6, "GRAIN_EDIT_x_original.png")
+        val heic = EditRow(7, "GRAIN_EDIT_y_original.heic")
+        assertEquals(listOf(EditPair(x, png), EditPair(y, heic)), EditPairing.pair(listOf(x, png, y, heic)))
+        assertTrue("An original of any extension is never listed on its own", EditPairing.pair(listOf(png, heic)).isEmpty())
+    }
+
     @Test fun emptyFolderGivesAnEmptyList() {
         assertTrue(EditPairing.pair(emptyList()).isEmpty())
     }

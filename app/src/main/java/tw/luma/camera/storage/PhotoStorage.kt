@@ -35,6 +35,7 @@ object PhotoStorage {
         }
         BitmapFactory.decodeFile(source.absolutePath, options)
         require(options.outWidth > 0 && options.outHeight > 0) { "照片無法解碼" }
+        val sourceType = options.outMimeType
         // Bound CPU bitmap memory too; tiling alone only bounds GPU allocations.
         while ((options.outWidth.toLong() / options.inSampleSize) * (options.outHeight / options.inSampleSize) > 12_000_000L) {
             options.inSampleSize *= 2
@@ -63,8 +64,9 @@ object PhotoStorage {
             // Publish the pair only after both files have been written successfully.
             val pending = mutableListOf<Uri>()
             try {
-                val finalUri = writePending(context, encoded, PhotoNames.edited(target, time), target.relativePath).also { pending += it }
-                if (saveOriginal) pending += writePending(context, source, PhotoNames.original(target, time), target.relativePath)
+                val finalUri = writePending(context, encoded, PhotoNames.edited(target, time), target.relativePath, "image/jpeg").also { pending += it }
+                if (saveOriginal) pending += writePending(context, source,
+                    PhotoNames.original(target, time, ImageFormat.extension(sourceType)), target.relativePath, ImageFormat.mimeType(sourceType))
                 for (uri in pending) context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
                 return finalUri
             } catch (e: Throwable) { pending.forEach { runCatching { context.contentResolver.delete(it, null, null) } }; throw e }
@@ -76,10 +78,10 @@ object PhotoStorage {
         }
     }
 
-    private fun writePending(context: Context, file: File, name: String, relativePath: String): Uri {
+    private fun writePending(context: Context, file: File, name: String, relativePath: String, mimeType: String): Uri {
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
             put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }

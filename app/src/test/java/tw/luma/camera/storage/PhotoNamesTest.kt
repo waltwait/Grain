@@ -20,15 +20,26 @@ class PhotoNamesTest {
         assertFalse(SaveTarget.CAMERA.alwaysSaveOriginal)
     }
 
-    @Test fun originalOfPairsOnlyEditedNames() {
-        assertEquals("GRAIN_EDIT_x_original.jpg", PhotoNames.originalOf("GRAIN_EDIT_x.jpg"))
-        assertNull(PhotoNames.originalOf("GRAIN_EDIT_x_original.jpg"))
-        assertNull(PhotoNames.originalOf("note.png"))
+    @Test fun originalBaseIsTheEditedNameWithoutExtensionPlusSuffix() {
+        assertEquals("GRAIN_EDIT_x_original", PhotoNames.originalBase("GRAIN_EDIT_x.jpg"))
+        assertNull(PhotoNames.originalBase("GRAIN_EDIT_x_original.jpg"))
+        assertNull(PhotoNames.originalBase("GRAIN_EDIT_x_original.png"))
+        assertNull(PhotoNames.originalBase("note.png"))
+    }
+
+    @Test fun originalKeepsTheSourceExtension() {
+        assertEquals("GRAIN_EDIT_20261004_201530_123_original.png", PhotoNames.original(SaveTarget.EDIT, time, "png"))
+        assertEquals("GRAIN_EDIT_20261004_201530_123_original.heic", PhotoNames.original(SaveTarget.EDIT, time, "heic"))
     }
 
     @Test fun isOriginalRecognizesTheSuffixOnly() {
         assertTrue(PhotoNames.isOriginal("GRAIN_EDIT_x_original.jpg"))
         assertFalse(PhotoNames.isOriginal("GRAIN_EDIT_x.jpg"))
         assertFalse("A renamed duplicate is not a recognized original", PhotoNames.isOriginal("GRAIN_EDIT_x_original (1).jpg"))
+    }
+
+    @Test fun isOriginalIgnoresTheExtension() {
+        assertTrue(PhotoNames.isOriginal("GRAIN_EDIT_x_original.png"))
+        assertTrue(PhotoNames.isOriginal("GRAIN_EDIT_x_original.heic"))
     }
 }
