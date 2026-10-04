@@ -15,7 +15,7 @@
 
 APK 確認 versionCode 38、versionName 0.7.5、非 debuggable，正式簽章憑證 SHA-256 `e6c756c9…c1217c8`（v2 簽章），16 KB ZIP 對齊與十款富士 LUT 原始 bytes 通過校驗；dex 內有「搜尋與篩選」「已選 」「已達上限」等新字串，舊的「編輯照片」按鈕字串已消失。APK 由 16,092,338 增加到 16,452,786 bytes。
 
-成品 `output/Grain-0.7.5-personal-fuji.apk`：16,452,786 bytes，SHA-256 `9cf03979d320e8c367e4e30ed962e9faaa763c61c7fabda69a436592f4ae80b5`。尚未推送、尚未建立 Release，`updates/personal-fuji/latest.json` 仍是 0.7.4。
+成品 `output/Grain-0.7.5-personal-fuji.apk`：16,452,786 bytes，SHA-256 `9cf03979d320e8c367e4e30ed962e9faaa763c61c7fabda69a436592f4ae80b5`。2026-10-04 已推送 main 與 v0.7.5，標籤對應 `58b7d8c709a9c2137056337f1d7b4485388beb05`。已發布 [公開 Release](https://github.com/waltwait/Grain/releases/tag/v0.7.5)，Release ID 403098806；草稿 APK 的大小與 SHA-256 核對後才公開。GitHub 最新版為 v0.7.5、非草稿、非預發布，只有一個 `Grain-0.7.5-personal-fuji.apk`，匿名下載連結回 200。`updates/personal-fuji/latest.json`（提交 `7091ffb`）在附件確認後、Release 公開約 6 秒後更新為 0.7.5／38；repo 內的檔案與本機產生的完全相同。
 
 沒有手機連線：**勾選樣式、標題列文字、多濾鏡實際輸出與耗時（估計每張 1–2 秒、20 個輸出可能超過 30 秒，未實測）、重試與被回收後接續、搜尋與膠片索引在實際照片量上的速度，都沒有實機驗證。**
 
