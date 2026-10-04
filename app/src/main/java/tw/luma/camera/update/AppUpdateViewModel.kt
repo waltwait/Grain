@@ -32,7 +32,16 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
     @Volatile private var revision = 0L
     private val directory = File(application.cacheDir, "grain-updates")
 
-    fun check() {
+    private var launchChecked = false
+
+    /** Runs at most once per launch; a failure stays silent until the user opens the update page. */
+    fun checkOnLaunch() {
+        if (!UpdatePrompt.shouldCheckOnLaunch(BuildConfig.UPDATE_FEED_URL, launchChecked)) return
+        launchChecked = true
+        check(silent = true)
+    }
+
+    fun check(silent: Boolean = false) {
         if (state.value.busy) return
         if (BuildConfig.UPDATE_FEED_URL.isBlank()) { error("更新下載網站尚未設定"); return }
         val id = ++revision
@@ -53,7 +62,7 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
                     old.copy(info = next, checking = false, download = old.download.takeIf { sameFile }, error = null)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
-              catch (failure: Exception) { if (id == revision) error(readable(failure, "無法連線到更新網站")) }
+              catch (failure: Exception) { if (id == revision && !silent) error(readable(failure, "無法連線到更新網站")) }
               finally { if (id == revision) mutableState.update { it.copy(checking = false) } }
         }
     }

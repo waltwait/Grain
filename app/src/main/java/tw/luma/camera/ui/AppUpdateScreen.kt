@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
@@ -70,7 +71,9 @@ fun AppUpdateScreen(model: AppUpdateViewModel, back: () -> Unit) {
             state.info?.let { info ->
                 Text(if (state.available) "新版 " + info.versionName else "已是最新版", style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.testTag("update-version"))
-                if (info.notes.isNotBlank()) Text(info.notes, style = MaterialTheme.typography.bodyMedium)
+                tw.luma.camera.update.UpdatePrompt.notesToShow(state.available, info.notes)?.let {
+                    Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                }
             }
             if (state.downloading) {
                 LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth().testTag("update-progress"))

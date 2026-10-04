@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -80,6 +81,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val galleryModel: GalleryViewModel = viewModel()
     val editorModel: PhotoEditorViewModel = viewModel()
     val updateModel: tw.luma.camera.update.AppUpdateViewModel = viewModel()
+    val updateState by updateModel.state.collectAsStateWithLifecycle()
+    val newVersion = updateState.info?.versionName?.takeIf { updateState.available }
+    LaunchedEffect(Unit) { updateModel.checkOnLaunch() }
     val destinations = rememberSaveableStateHolder()
     var galleryOpen by rememberSaveable { mutableStateOf(false) }
     var updatesOpen by rememberSaveable { mutableStateOf(false) }
@@ -280,7 +284,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         }
                     }
                     if (permitted && state.cameraError == null) {
-                        CameraToolbar(state, model, Modifier.align(Alignment.TopCenter)) {
+                        CameraToolbar(state, model, newVersion, Modifier.align(Alignment.TopCenter)) {
                             activeControl = null
                             panel = if (it == "filters" && panel == "filters") null else it
                         }
@@ -307,7 +311,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         }
     }
     panel?.takeUnless { it == "filters" }?.let {
-        ControlsSheet(it, state, model, openLut, {
+        ControlsSheet(it, state, model, newVersion, openLut, {
             panel = null; activeControl = null; model.pausePreview()
             if (tw.luma.camera.BuildConfig.UPDATE_FEED_URL.isNotBlank()) updateModel.check()
             updatesOpen = true
@@ -418,12 +422,12 @@ private fun RecordingClock(model: CameraViewModel, status: RecordingStatus) {
 }
 
 @Composable
-private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, modifier: Modifier, panel: (String) -> Unit) {
-    NativeCameraToolbar(state, modifier, panel = panel) { RecordingClock(model, state.recordingStatus) }
+private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, newVersion: String?, modifier: Modifier, panel: (String) -> Unit) {
+    NativeCameraToolbar(state, modifier, panel = panel, updateAvailable = newVersion != null) { RecordingClock(model, state.recordingStatus) }
 }
 
 @Composable
-internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, clock: @Composable () -> Unit) {
+internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, clock: @Composable () -> Unit) {
     val gradient = remember { Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent)) }
     Row(modifier.fillMaxWidth().background(gradient).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp),
@@ -447,7 +451,7 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
                 }
             }
         }
-        GlassIcon("tune", "更多設定", !state.busy && !state.recording) { panel("settings") }
+        GlassIcon("tune", "更多設定", !state.busy && !state.recording, badge = updateAvailable) { panel("settings") }
     }
 }
 
@@ -474,12 +478,12 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
         if (landscape) {
             capture()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                gallery(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, model::toggleFront)
+                gallery(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, click = model::toggleFront)
             }
             TextButton(onClick = tools, enabled = enabled) { Text("設定", color = Color.White.copy(alpha = .7f)) }
         } else {
             Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                gallery(); capture(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, model::toggleFront)
+                gallery(); capture(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, click = model::toggleFront)
             }
         }
         CameraStatusLine(state.message)
@@ -487,9 +491,14 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
 }
 
 @Composable
-private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, click: () -> Unit) {
-    Surface(onClick = click, enabled = enabled, shape = CircleShape, color = if (selected) Color.Black.copy(alpha = .22f) else Color.Transparent, modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
-        Box(contentAlignment = Alignment.Center) { CameraGlyph(icon, Modifier.size(25.dp).cameraControlRotation(), if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .35f)) }
+private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, badge: Boolean = false, click: () -> Unit) {
+    Surface(onClick = click, enabled = enabled, shape = CircleShape, color = if (selected) Color.Black.copy(alpha = .22f) else Color.Transparent,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = description; if (badge) stateDescription = "有新版" }) {
+        Box(contentAlignment = Alignment.Center) {
+            CameraGlyph(icon, Modifier.size(25.dp).cameraControlRotation(), if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .35f))
+            if (badge) Box(Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 9.dp).size(8.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape).testTag("update-badge"))
+        }
     }
 }
 
@@ -523,7 +532,7 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, importLut: () -> Unit, updates: () -> Unit, dismiss: () -> Unit) {
+private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraViewModel, newVersion: String?, importLut: () -> Unit, updates: () -> Unit, dismiss: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = dismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
@@ -571,7 +580,7 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }
                     if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
                     OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
-                    OutlinedButton(onClick = updates, enabled = !state.busy && !state.recording, modifier = Modifier.testTag("open-updates")) { Text("檢查更新") }
+                    OutlinedButton(onClick = updates, enabled = !state.busy && !state.recording, modifier = Modifier.testTag("open-updates")) { Text(tw.luma.camera.update.UpdatePrompt.entryLabel(newVersion)) }
                     Spacer(Modifier.height(16.dp))
                     var deviceInfo by remember { mutableStateOf(false) }
                     TextButton(onClick = { deviceInfo = !deviceInfo }, modifier = Modifier.testTag("device-info-toggle")) {
