@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.6.3",
-  "versionCode": 26,
+  "versionName": "0.6.4",
+  "versionCode": 27,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.3/Grain-0.6.3-personal-fuji.apk",
-  "apkSize": 14000342,
-  "apkSha256": "eeb0ff2a6b782f82b394c77b17414df08befd4503791caa7a2cf0ef4dc382193",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.4/Grain-0.6.4-personal-fuji.apk",
+  "apkSize": 14000346,
+  "apkSha256": "599e36fe339048c7d1889158895937b7543d0ab66d15e9c63f4c81e3910e397e",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "保留十款富士濾鏡與原正式簽章。設定內「檢查更新」開啟私人 GitHub 最新版本，登入後下載及安裝。"
+  "notes": "拍照畫面的模式列只保留「照片／錄影」，照片編輯放在相簿。保留十款富士濾鏡與原正式簽章。"
 }

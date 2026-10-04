@@ -317,10 +317,10 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openGallery, openPhoto, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
+                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
             } else Column(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openGallery, openPhoto, { panel = "settings" }, Modifier.fillMaxWidth(), false)
+                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.fillMaxWidth(), false)
             }
         }
     }
@@ -470,16 +470,13 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
 }
 
 @Composable
-private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, editPhoto: () -> Unit, tools: () -> Unit, modifier: Modifier, landscape: Boolean) {
+private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, tools: () -> Unit, modifier: Modifier, landscape: Boolean) {
     val enabled = !state.busy && !state.recording
     val modes: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
             CaptureMode.entries.forEach { mode -> TextButton(onClick = { model.mode(mode) }, enabled = enabled, modifier = Modifier.testTag(if (mode == CaptureMode.PHOTO) "mode-photo" else "mode-video")) {
                 Text(if (mode == CaptureMode.PHOTO) "照片" else "錄影", color = if (state.mode == mode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .6f), fontWeight = FontWeight.SemiBold)
             } }
-            TextButton(onClick = editPhoto, enabled = enabled, modifier = Modifier.testTag("open-photo-editor")) {
-                Text("編輯", color = Color.White.copy(alpha = .6f), fontWeight = FontWeight.SemiBold)
-            }
         }
     }
     val capture: @Composable () -> Unit = {
