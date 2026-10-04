@@ -11,3 +11,9 @@
 APK DEX 已確認 `gallery-title` 與既有主頁 tab／批次編輯 UI 標記，重新整理相簿的描述已移除。十款富士 LUT 原始 bytes、共 38 個 LUT／native 檔案與 0.6.8 完全相同；原正式簽章與 16 KB ZIP 對齊通過。
 
 成品 `output/Grain-0.6.9-personal-fuji.apk`：14,049,494 bytes，SHA-256 `b49b2b82a9509fc068af40a1dbaa7acfddeca535dcc3640234ee4069ac2c802e`。
+
+2026-10-04 已推送 main 與 v0.6.9，標籤對應 `a2b12052e8d52fd8ba506b496b2129586971e3aa`。已發布 [私人 Release](https://github.com/waltwait/Grain/releases/tag/v0.6.9)，Release ID 402971970；草稿 APK 的大小與 SHA-256 核對後才發布。GitHub 最新版為 v0.6.9、非草稿、非預發布，只有一個 `Grain-0.6.9-personal-fuji.apk`；發布後附件大小、SHA-256 與標準下載網址和本機 metadata 相同。App 維持 private=true、has_pages=false。
+
+公開下載頁 metadata 提交 `1ad1d9eb24203c09e68a2f9872800e25d73bbacb`，[部署 37196694850](https://github.com/waltwait/Grain-pages/actions/runs/37196694850) 成功。匿名線上 `latest.json` 與本機公開 metadata 完全相同，版本 0.6.9／32、access=github-login。公開儲存庫仍只有六個既有網頁／說明／metadata 檔案，沒有 APK 或 LUT。
+
+字體建議另提供離線 HTML 與實際字型對照圖，存於被 Git 忽略的 `output/font-preview/`，含字體來源與 OFL 授權。推薦 Newsreader 品牌標題搭配 Noto Sans TC 操作文字；另比較 DM Sans 與 Noto Serif TC。此設計預覽未加入 APK 或公開下載頁。
