@@ -29,6 +29,10 @@ import tw.luma.camera.lut.BundledLutLibrary
 import tw.luma.camera.lut.OriginalLutLibrary
 import tw.luma.camera.lut.KodakLutLibrary
 import tw.luma.camera.lut.FilterSwitching
+import android.content.ContentUris
+import android.provider.MediaStore
+import tw.luma.camera.gallery.LatestMedia
+import tw.luma.camera.gallery.MediaRow
 import tw.luma.camera.storage.PhotoStorage
 import tw.luma.camera.storage.SaveTarget
 import androidx.camera.video.VideoRecordEvent
@@ -99,6 +103,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         _state.update { it.copy(saveOriginal = prefs.getBoolean("saveOriginal", false), grid = prefs.getBoolean("grid", true), recordWithAudio = prefs.getBoolean("recordWithAudio", true)) }
+        loadLatestMedia()
         viewModelScope.launch {
             val entries = withContext(Dispatchers.IO) {
                 val originals = runCatching { grainTrace("Grain.lut.loadOriginals") {
@@ -272,6 +277,34 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         } catch (e: Exception) { _state.update { it.copy(recordingStatus = RecordingStatus.IDLE) }; message(e.message ?: "錄影啟動失敗") }
+    }
+
+    /** Fills the corner button with the newest camera shot at launch; a capture made in the meantime wins. */
+    private fun loadLatestMedia() {
+        viewModelScope.launch {
+            val latest = withContext(Dispatchers.IO) { queryLatestMedia() } ?: return@launch
+            val uri = ContentUris.withAppendedId(
+                if (latest.video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI, latest.id)
+            val thumb = loadMediaThumbnail(uri)
+            _state.update {
+                if (it.savedUri != null) it
+                else it.copy(savedUri = uri, savedMime = if (latest.video) "video/mp4" else "image/jpeg", thumbnail = thumb)
+            }
+        }
+    }
+
+    /** Camera shots only: edits live in their own folder and never replace this thumbnail. */
+    private fun queryLatestMedia(): MediaRow? {
+        val app = getApplication<Application>()
+        val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0"
+        fun first(collection: Uri, path: String, video: Boolean): MediaRow? = try {
+            app.contentResolver.query(collection, arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATE_ADDED), selection,
+                arrayOf(path, app.packageName), "${MediaStore.MediaColumns.DATE_ADDED} DESC, ${MediaStore.MediaColumns._ID} DESC")
+                ?.use { if (it.moveToFirst()) MediaRow(it.getLong(0), it.getLong(1), video) else null }
+        } catch (_: Exception) { null }
+        return LatestMedia.newest(listOfNotNull(
+            first(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, SaveTarget.CAMERA.queryPath, false),
+            first(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "Movies/Grain/", true)))
     }
 
     // Publishing a photo succeeded even if the optional small preview cannot be loaded.
