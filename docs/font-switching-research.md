@@ -1,5 +1,7 @@
 # Grain 換字體研究
 
+> 後續：使用者決定不做設定切換與「系統預設」選項，0.7.2 起固定使用 Grain 經典字體（Noto Sans TC＋Newsreader），見 [0.7.2 發布紀錄](release-v072.md)。以下保留當時的研究與數據。
+
 2026-10-04 研究，尚未實作。問題是「App 能不能讓使用者在設定裡換字體、要怎麼做、APK 要多大」。結論：可行，建議把字體打包進 App，用 Compose 的 `FontFamily` 加上 `MaterialTheme` 的 `Typography` 一次套用，換字體即時生效不用重啟；中文字體必須子集化才不會讓 APK 暴增。
 
 ## 目前狀態
