@@ -804,6 +804,12 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("viewer-original-toggle").performClick().assertTextEquals("看改完")
             ui.onNodeWithTag("viewer-original-toggle").performClick().assertTextEquals("看原圖")
             ui.onNodeWithTag("viewer-original-toggle").performClick().assertTextEquals("看改完")
+            // Paging away shows the neighbor's edit (it has no original here), and coming back starts on the edit again.
+            ui.onNodeWithTag("gallery-pager").performTouchInput { swipeRight() }
+            ui.waitUntil(10_000) { ui.onAllNodesWithTag("viewer-original-toggle").fetchSemanticsNodes().isEmpty() }
+            ui.onNodeWithTag("gallery-pager").performTouchInput { swipeLeft() }
+            ui.waitUntil(10_000) { ui.onAllNodesWithTag("viewer-original-toggle").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithTag("viewer-original-toggle").assertTextEquals("看原圖")
             ui.onNodeWithTag("viewer-back").performClick()
             ui.onNodeWithContentDescription("照片 $base.jpg").performClick()
             ui.onNodeWithTag("viewer-original-toggle").assertTextEquals("看原圖")

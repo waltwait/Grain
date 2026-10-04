@@ -218,24 +218,27 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
     var editing by rememberSaveable { mutableStateOf(false) }
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
-    var showOriginal by rememberSaveable { mutableStateOf(false) }
+    var originalShownFor by rememberSaveable { mutableStateOf<String?>(null) }
     var currentUri by rememberSaveable { mutableStateOf(items[initialPage].uri.toString()) }
     val latestItems by rememberUpdatedState(items)
     // Keep the same source photo selected when saving inserts a new item at the start of the album.
     LaunchedEffect(pager) {
         var orderedUris = latestItems.map { it.uri.toString() }
+        val select = { uri: String ->
+            originalShownFor = OriginalChoice.afterCurrentChanged(originalShownFor, currentUri, uri)
+            currentUri = uri
+        }
         snapshotFlow { latestItems to pager.settledPage }.collect { (nextItems, page) ->
             val nextUris = nextItems.map { it.uri.toString() }
             if (orderedUris != nextUris) {
                 val index = nextUris.indexOf(currentUri).takeIf { it >= 0 } ?: page.coerceIn(nextItems.indices)
                 orderedUris = nextUris
-                currentUri = nextUris[index]
+                select(nextUris[index])
                 pager.scrollToPage(index)
-            } else currentUri = nextUris[page.coerceIn(nextItems.indices)]
+            } else select(nextUris[page.coerceIn(nextItems.indices)])
         }
     }
     val current = items.firstOrNull { it.uri.toString() == currentUri } ?: items[pager.settledPage.coerceIn(items.indices)]
-    LaunchedEffect(currentUri) { showOriginal = false }
     LaunchedEffect(entries) { editor.setLuts(entries) }
     LaunchedEffect(editing, current.uri) {
         if (current.video) editing = false
@@ -256,7 +259,9 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
                 key = { items[it].uri.toString() }, beyondViewportPageCount = 0,
                 modifier = Modifier.fillMaxSize().testTag("gallery-pager")) { page ->
                 val active = page == pager.settledPage
-                val item = items[page].let { if (showOriginal && active && it.original != null) it.copy(uri = it.original, original = null) else it }
+                val item = items[page].let {
+                    if (active && it.original != null && OriginalChoice.isShown(originalShownFor, it.uri.toString())) it.copy(uri = it.original, original = null) else it
+                }
                 key(item.uri) {
                     if (item.video && active) GalleryVideo(item, positions[item.uri.toString()] ?: 0) { positions[item.uri.toString()] = it }
                     else if (item.video) GalleryThumbnail(item, model, Modifier.fillMaxSize())
@@ -278,9 +283,9 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
                         .semantics { contentDescription = if (editState.savedUri != null && editState.selection.savedFilter == editState.selection.filter) "已儲存" else "儲存新照片" }) {
                     if (editState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
-                } else if (current.original != null) TextButton(onClick = { showOriginal = !showOriginal },
+                } else if (current.original != null) TextButton(onClick = { originalShownFor = OriginalChoice.toggle(originalShownFor, current.uri.toString()) },
                     modifier = Modifier.align(Alignment.CenterEnd).heightIn(min = 48.dp).testTag("viewer-original-toggle")) {
-                    Text(if (showOriginal) "看改完" else "看原圖")
+                    Text(if (OriginalChoice.isShown(originalShownFor, current.uri.toString())) "看改完" else "看原圖")
                 }
             }
         }
