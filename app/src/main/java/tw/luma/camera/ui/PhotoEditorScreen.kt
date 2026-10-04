@@ -14,6 +14,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -22,6 +26,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -113,7 +118,14 @@ private fun EditorFilters(state: PhotoEditorUiState, entries: List<LutEntry>, mo
     var group by rememberSaveable { mutableStateOf(FilterGroup.initial(entries, selection.selectedId)) }
     LaunchedEffect(selection.selectedId) { active?.let { group = FilterGroup.of(it) } }
     val visible = remember(entries, group) { group.entries(entries) }
-    Surface(modifier, color = Color(0xFF18191C)) {
+    // Keep horizontal filter gestures inside this panel, even at the carousel's ends.
+    val filterScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = Offset(available.x, 0f)
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity) = Velocity(available.x, 0f)
+        }
+    }
+    Surface(modifier.nestedScroll(filterScroll), color = Color(0xFF18191C)) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(active?.let(FilterGroup::title) ?: "原色", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,

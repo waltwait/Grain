@@ -402,6 +402,12 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("editor-save").assertIsNotEnabled()
         ui.onNodeWithTag("gallery-photo-tab").performClick().assertIsSelected()
         ui.onNodeWithTag("gallery-filter-1").assertIsSelected()
+        ui.onNodeWithTag("gallery-tabs-pager").performTouchInput { swipeLeft() }
+        ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
+        ui.onNodeWithTag("editor-choose").assertIsDisplayed()
+        ui.onNodeWithTag("gallery-tabs-pager").performTouchInput { swipeRight() }
+        ui.onNodeWithTag("gallery-photo-tab").assertIsSelected()
+        ui.onNodeWithTag("gallery-filter-1").assertIsSelected()
         ui.onNodeWithTag("gallery-close").performClick()
         ready()
         ui.onNodeWithTag("camera-ready").assertExists()
@@ -503,6 +509,27 @@ class CameraExperienceDeviceTest {
             ui.waitUntil(10_000) { importEditor.state.value.canSave }
             val importBitmap = importEditor.state.value.bitmap
             val importFilter = importEditor.state.value.selection.filter
+            ui.activityRule.scenario.recreate()
+            ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
+            ui.waitUntil(10_000) { importEditor.state.value.canSave }
+            ui.onNodeWithTag("photo-editor-preview").performTouchInput { swipeRight() }
+            ui.onNodeWithTag("gallery-photo-tab").assertIsSelected()
+            ui.onNodeWithTag("gallery-tabs-pager").performTouchInput { swipeLeft() }
+            ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
+            ui.waitUntil(10_000) { importEditor.state.value.canSave }
+            ui.runOnIdle {
+                assertSame("Swiping tabs must preserve the import preview", importBitmap, importEditor.state.value.bitmap)
+                assertEquals(importFilter, importEditor.state.value.selection.filter)
+            }
+            ui.onNodeWithTag("filter-pager").performScrollToIndex(0)
+            ui.onNodeWithTag("filter-pager").performTouchInput { swipeRight() }
+            ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
+            ui.onNodeWithTag("filter-pager").performScrollToIndex(filmIndex)
+            ui.onNodeWithTag("filter-builtin-2").performClick()
+            ui.onNodeWithTag("editor-strength").performScrollTo().performTouchInput { swipeRight() }
+            ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
+            ui.onNodeWithTag("editor-strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.25f) }
+            ui.waitUntil(10_000) { importEditor.state.value.canSave }
             ui.onNodeWithTag("gallery-photo-tab").performClick()
             ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithContentDescription("照片 $name").performClick()

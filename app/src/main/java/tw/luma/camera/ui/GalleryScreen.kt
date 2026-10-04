@@ -65,6 +65,7 @@ import androidx.media3.ui.compose.ContentFrame
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tw.luma.camera.LutEntry
 import tw.luma.camera.camera.ZoomControls
 import tw.luma.camera.editor.PhotoEditorViewModel
@@ -80,7 +81,12 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     val importEditor: PhotoEditorViewModel = viewModel(key = "gallery-import-editor")
     val importState by importEditor.state.collectAsStateWithLifecycle()
     val tabs = rememberSaveableStateHolder()
-    var editing by rememberSaveable { mutableStateOf(false) }
+    val tabPager = rememberPagerState { 2 }
+    val tabScope = rememberCoroutineScope()
+    val editing = tabPager.currentPage == 1
+    val changeTab: (Boolean) -> Unit = { next ->
+        if (!importState.saving) tabScope.launch { tabPager.animateScrollToPage(if (next) 1 else 0) }
+    }
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val grid = rememberLazyGridState()
@@ -99,7 +105,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     val selectedIndex = items.indexOfFirst { it.uri.toString() == selected }
     val goBack: () -> Unit = {
         if (!importState.saving) {
-            if (editing) editing = false
+            if (editing || tabPager.targetPage == 1) changeTab(false)
             else { importEditor.discard(); editor.discard(); close() }
         }
     }
@@ -116,7 +122,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     Text("Grain", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     if (!editing) Text("${state.items.size}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
                 }
-                if (editing) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave,
+                if (editing) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
                     modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("editor-save")
                         .semantics { contentDescription = "儲存新照片" }) {
                     if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -126,8 +132,10 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     Text("↻", style = MaterialTheme.typography.titleLarge)
                 }
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (editing) tabs.SaveableStateProvider("editor") {
+            HorizontalPager(state = tabPager, userScrollEnabled = !importState.saving,
+                key = { if (it == 0) "photos" else "editor" }, beyondViewportPageCount = 0,
+                modifier = Modifier.weight(1f).fillMaxWidth().testTag("gallery-tabs-pager")) { page ->
+                if (page == 1) tabs.SaveableStateProvider("editor") {
                     if (importState.bitmap == null && !importState.loading && importState.error == null) {
                         Box(Modifier.fillMaxSize().testTag("photo-editor"), contentAlignment = Alignment.Center) {
                             FilledTonalButton(onClick = choosePhoto, modifier = Modifier.heightIn(min = 48.dp).testTag("editor-choose")) {
@@ -148,7 +156,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                         when {
                             state.error != null -> GalleryEmpty(state.error!!, "重試", model::refresh)
                             state.loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                            items.isEmpty() -> GalleryEmpty(if (filter == 2) "還沒有影片" else if (filter == 1) "還沒有照片" else "把下一個片刻留在 Grain", "編輯照片", { editing = true })
+                            items.isEmpty() -> GalleryEmpty(if (filter == 2) "還沒有影片" else if (filter == 1) "還沒有照片" else "把下一個片刻留在 Grain", "編輯照片", { changeTab(true) })
                             else -> LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), state = grid,
                                 contentPadding = PaddingValues(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 items(items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
@@ -165,7 +173,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     }
                 }
             }
-            PhotoEditTabs(editing, !importState.saving, { editing = it }, "gallery-photo-tab", "gallery-edit-tab",
+            PhotoEditTabs(editing, !importState.saving, changeTab, "gallery-photo-tab", "gallery-edit-tab",
                 Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
         }
     }
