@@ -31,6 +31,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import tw.luma.camera.LutEntry
+import tw.luma.camera.editor.FilterChoice
 import tw.luma.camera.editor.PhotoEditorUiState
 import tw.luma.camera.editor.PhotoEditorViewModel
 import tw.luma.camera.editor.PhotoPreviewView
@@ -73,7 +74,7 @@ private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel
                     Text(if (state.selection.comparing) "濾鏡" else "原圖")
                 }
                 if (choosePhoto != null) TextButton(onClick = choosePhoto, enabled = !state.saving,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-replace")) { Text(if (state.isBatch) "重選照片" else "換照片") }
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-replace")) { Text(if (state.sources.size > 1) "重選照片" else "換照片") }
             }
             state.error?.let { message ->
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .7f)).padding(horizontal = 12.dp),
@@ -121,16 +122,18 @@ private fun EditorFilters(state: PhotoEditorUiState, entries: List<LutEntry>, mo
     val selection = state.selection
     val active = remember(entries, selection.selectedId) { entries.find { it.id == selection.selectedId } }
     var group by rememberSaveable { mutableStateOf(FilterGroup.initial(entries, selection.selectedId)) }
-    LaunchedEffect(selection.selectedId) { active?.let { group = FilterGroup.of(it) } }
+    LaunchedEffect(selection.selectedId) { if (selection.chosen.size <= 1) active?.let { group = FilterGroup.of(it) } }
     val visible = remember(entries, group) { group.entries(entries) }
     // Keep horizontal filter gestures inside this panel, even at the carousel's ends.
     Surface(modifier.nestedScroll(EditorHorizontalScroll), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(active?.let(FilterGroup::title) ?: NO_FILTER_LABEL, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(FilterChoice.summary(selection.chosen.size, state.sources.size, active?.let(FilterGroup::title), NO_FILTER_LABEL),
+                    Modifier.weight(1f).testTag("editor-filter-summary"), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = if (FilterChoice.atLimit(selection.chosen.size, state.sources.size)) MaterialTheme.colorScheme.error else Color.Unspecified,
                     style = MaterialTheme.typography.titleSmall)
                 TextButton(onClick = { model.selectLut(null) }, enabled = state.canEdit,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-original").semantics { selected = selection.selectedId == null }) { Text(NO_FILTER_LABEL) }
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-original").semantics { selected = selection.chosen.isEmpty() }) { Text(NO_FILTER_LABEL) }
             }
             LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(FilterGroup.entries) { item ->
@@ -141,7 +144,7 @@ private fun EditorFilters(state: PhotoEditorUiState, entries: List<LutEntry>, mo
             if (visible.isEmpty()) Box(Modifier.fillMaxWidth().heightIn(min = 72.dp), contentAlignment = Alignment.Center) {
                 Text("尚無濾鏡", style = MaterialTheme.typography.bodyMedium)
             } else key(group, visible.map { it.id }) {
-                FilmPicker(visible, selection.selectedId, state.canEdit, true, model::selectLut)
+                FilmPicker(visible, selection.selectedId, state.canEdit, true, { id -> if (id != null) model.toggleLut(id) }, chosen = selection.chosen.toSet())
             }
             if (active != null) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("強度", style = MaterialTheme.typography.labelMedium)

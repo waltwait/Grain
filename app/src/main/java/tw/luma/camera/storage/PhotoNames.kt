@@ -14,15 +14,22 @@ object PhotoNames {
     private const val ORIGINAL_SUFFIX = "_original"
     private const val EDITED_EXTENSION = ".jpg"
 
-    fun edited(target: SaveTarget, time: String): String = target.prefix + time + EDITED_EXTENSION
+    /** Output number [index] of one photo: the first keeps the plain name, further filters get -2, -3, … */
+    fun edited(target: SaveTarget, time: String, index: Int = 1): String =
+        target.prefix + time + (if (index > 1) "-$index" else "") + EDITED_EXTENSION
 
     fun original(target: SaveTarget, time: String, extension: String = "jpg"): String =
         target.prefix + time + ORIGINAL_SUFFIX + "." + extension
 
     fun isOriginal(name: String): Boolean = name.substringBeforeLast('.').endsWith(ORIGINAL_SUFFIX)
 
-    /** The original's file name without extension for an edited photo's name, or null when [editedName] is not an edited photo. */
+    private val outputNumber = Regex("-\\d+$")
+
+    /**
+     * The original's file name without extension for an edited photo's name, or null when [editedName] is not an edited photo.
+     * Every output of one photo (… .jpg, …-2.jpg, …-3.jpg) shares the same original.
+     */
     fun originalBase(editedName: String): String? =
         if (!editedName.endsWith(EDITED_EXTENSION) || isOriginal(editedName)) null
-        else editedName.removeSuffix(EDITED_EXTENSION) + ORIGINAL_SUFFIX
+        else editedName.removeSuffix(EDITED_EXTENSION).replace(outputNumber, "") + ORIGINAL_SUFFIX
 }

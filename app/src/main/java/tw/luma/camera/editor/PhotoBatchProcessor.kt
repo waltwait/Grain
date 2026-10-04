@@ -6,8 +6,11 @@ import kotlin.coroutines.coroutineContext
 
 enum class PhotoBatchStatus { PENDING, SAVED, FAILED }
 
+/** One output: [source] photo rendered with the filter [filterId] (null when no filter is chosen). */
 data class PhotoBatchItem(val source: String, val status: PhotoBatchStatus = PhotoBatchStatus.PENDING,
-    val output: String? = null, val error: String? = null)
+    val output: String? = null, val error: String? = null, val filterId: String? = null) {
+    val id: String get() = if (filterId == null) source else "$source|$filterId"
+}
 
 data class PhotoBatchProgress(val items: List<PhotoBatchItem>, val running: Boolean = false,
     val currentIndex: Int? = null, val cancelRequested: Boolean = false, val stopped: Boolean = false) {
@@ -18,12 +21,16 @@ data class PhotoBatchProgress(val items: List<PhotoBatchItem>, val running: Bool
 
     companion object {
         const val MAX_PHOTOS = 20
+        const val MAX_OUTPUTS = 20
 
-        fun pending(sources: List<String>): PhotoBatchProgress {
+        /** Jobs are ordered photo by photo, every chosen filter of a photo before the next photo. */
+        fun pending(sources: List<String>, filterIds: List<String?> = listOf(null)): PhotoBatchProgress {
             val unique = sources.distinct()
+            val filters = filterIds.distinct().ifEmpty { listOf(null) }
             require(unique.isNotEmpty() && unique.size <= MAX_PHOTOS) { "一次最多選 $MAX_PHOTOS 張照片" }
             require(unique.all { it.isNotBlank() }) { "照片無法讀取" }
-            return PhotoBatchProgress(unique.map(::PhotoBatchItem))
+            require(unique.size * filters.size <= MAX_OUTPUTS) { "一次最多輸出 $MAX_OUTPUTS 張" }
+            return PhotoBatchProgress(unique.flatMap { source -> filters.map { PhotoBatchItem(source, filterId = it) } })
         }
     }
 }
@@ -33,7 +40,7 @@ internal object PhotoBatchProcessor {
     suspend fun run(previous: PhotoBatchProgress, shouldStop: () -> Boolean,
         process: suspend (String) -> String, progress: (PhotoBatchProgress) -> Unit): PhotoBatchProgress {
         var state = PhotoBatchProgress(previous.items.map {
-            if (it.status == PhotoBatchStatus.SAVED) it else PhotoBatchItem(it.source)
+            if (it.status == PhotoBatchStatus.SAVED) it else PhotoBatchItem(it.source, filterId = it.filterId)
         }, running = true)
         progress(state)
         for (index in state.items.indices) {
@@ -45,12 +52,12 @@ internal object PhotoBatchProcessor {
             }
             state = state.copy(currentIndex = index)
             progress(state)
-            val source = state.items[index].source
+            val job = state.items[index]
             val result = try {
-                PhotoBatchItem(source, PhotoBatchStatus.SAVED, output = process(source))
+                job.copy(status = PhotoBatchStatus.SAVED, output = process(job.id))
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                PhotoBatchItem(source, PhotoBatchStatus.FAILED, error = error.message ?: "照片未儲存")
+                job.copy(status = PhotoBatchStatus.FAILED, error = error.message ?: "照片未儲存")
             }
             state = state.copy(items = state.items.toMutableList().also { it[index] = result }, cancelRequested = shouldStop())
             progress(state)

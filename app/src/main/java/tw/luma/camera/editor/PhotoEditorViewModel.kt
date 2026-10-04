@@ -35,7 +35,9 @@ data class PhotoEditorUiState(
     val previewIndex: Int = 0,
     val batch: PhotoBatchProgress? = null,
 ) {
-    val isBatch get() = sources.size > 1
+    /** One output per photo and checked filter; more than one is exported as a batch. */
+    val jobCount get() = FilterChoice.outputs(sources.size, selection.chosen.size)
+    val isBatch get() = jobCount > 1
     val canEdit get() = bitmap != null && !loading && !saving
     val canSave get() = canEdit && !selection.comparing && selection.renderedRevision == selection.revision &&
         (if (isBatch) batch == null || batch.remainingCount > 0 else selection.canSave) &&
@@ -60,8 +62,12 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         ?: savedState.get<String>("source-uri")?.let(::listOf).orEmpty()
     private val restoredIndex = (savedState.get<Int>("preview-index") ?: 0).coerceIn(0, maxOf(0, restoredSources.lastIndex))
     private val restoredStrength = savedState.get<Float>("strength")?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+    private val restoredChosen = (savedState.get<ArrayList<String>>("chosen")?.distinct()
+        ?: listOfNotNull(savedState.get<String>("selectedId"))).take(PhotoBatchProgress.MAX_OUTPUTS)
+    private val stems = savedState.get<ArrayList<String>>("batch-stems").orEmpty()
+        .mapNotNull { line -> line.split('\t', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap().toMutableMap()
     private val _state = MutableStateFlow(PhotoEditorUiState(selection = PhotoEditSelection(
-        selectedId = savedState["selectedId"], filter = FilterSettings(strength = restoredStrength)),
+        selectedId = savedState["selectedId"], chosen = restoredChosen, filter = FilterSettings(strength = restoredStrength)),
         sources = restoredSources, previewIndex = restoredIndex, batch = restoreBatch()))
     val state = _state.asStateFlow()
 
@@ -101,6 +107,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         savedState["sources"] = ArrayList(sources)
         savedState["preview-index"] = 0
         savedState["selectedId"] = null
+        savedState.remove<ArrayList<String>>("chosen")
         savedState["strength"] = 1f
         savedState.remove<String>("source")
         savedState["source-uri"] = sources.first()
@@ -160,11 +167,27 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         }
     }
 
+    /** Picks exactly one filter, or none for null; this is also what the "no filter" button does. */
     fun selectLut(id: String?) {
         if (!_state.value.canEdit) return
         val current = _state.value.selection
         val entry = entries.find { it.id == id }
-        adjust(switching.select(current.filter, current.selectedId, entry), entry?.id)
+        adjust(switching.select(current.filter, current.selectedId, entry), entry?.id, chosen = listOfNotNull(entry?.id))
+    }
+
+    /** Checks or unchecks a filter. Every checked filter is rendered for every photo; the preview shows the one checked last. */
+    fun toggleLut(id: String) {
+        val state = _state.value
+        if (!state.canEdit) return
+        val current = state.selection
+        if (entries.none { it.id == id }) return
+        val chosen = FilterChoice.toggle(current.chosen, id, state.sources.size)
+        if (chosen == current.chosen) return // Refused: it would pass the output limit.
+        val primaryId = FilterChoice.primary(chosen, current.selectedId, id)
+        val primary = entries.find { it.id == primaryId }
+        val filter = if (current.chosen.isEmpty() || primary == null) switching.select(current.filter, current.selectedId, primary)
+        else current.filter.copy(lut = primary.lut, encoding = primary.lut.suggestedEncoding) // One strength for all checked filters.
+        adjust(filter, primaryId, chosen = chosen)
     }
 
     fun strength(value: Float) {
@@ -172,15 +195,18 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         adjust(_state.value.selection.filter.copy(strength = value.coerceIn(0f, 1f)))
     }
 
-    private fun adjust(filter: FilterSettings, id: String? = _state.value.selection.selectedId, resetBatch: Boolean = true) {
-        val changed = filter != _state.value.selection.filter || id != _state.value.selection.selectedId
+    private fun adjust(filter: FilterSettings, id: String? = _state.value.selection.selectedId, resetBatch: Boolean = true,
+        chosen: List<String> = _state.value.selection.chosen) {
+        val current = _state.value.selection
+        val changed = filter != current.filter || id != current.selectedId || chosen != current.chosen
         if (resetBatch && changed) clearBatch()
         _state.update {
-            val next = it.selection.adjusted(filter, id)
+            val next = it.selection.adjusted(filter, id, chosen)
             it.copy(selection = next, error = if (next === it.selection) it.error else null,
                 batch = if (resetBatch && changed) null else it.batch)
         }
         savedState["selectedId"] = id
+        savedState["chosen"] = ArrayList(chosen)
         savedState["strength"] = filter.strength
     }
 
@@ -219,42 +245,63 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
     }
 
     private fun saveBatch(current: PhotoEditorUiState, cached: File, onSaved: (Uri) -> Unit) {
-        val filter = current.selection.filter
+        val base = current.selection.filter
+        val chosen = current.selection.chosen
+        val filterIds: List<String?> = chosen.ifEmpty { listOf(null) }
+        val filters: Map<String?, FilterSettings> = filterIds.associateWith { id ->
+            entries.find { it.id == id }?.let { base.copy(lut = it.lut, encoding = it.lut.suggestedEncoding) } ?: base
+        }
+        val outputNumbers = filterIds.withIndex().associate { it.value to it.index + 1 }
         val cachedSource = current.sources[current.previewIndex]
-        val previous = current.batch ?: PhotoBatchProgress.pending(current.sources)
-        val alreadySaved = previous.items.filter { it.status == PhotoBatchStatus.SAVED }.map { it.source }.toSet()
+        val previous = current.batch ?: PhotoBatchProgress.pending(current.sources, filterIds)
+        val jobs = previous.items.associateBy { it.id }
+        val alreadySaved = previous.items.filter { it.status == PhotoBatchStatus.SAVED }.map { it.id }.toSet()
+        // The first output of a photo that gets saved also writes the one original its outputs share.
+        val withOriginal = previous.items.filter { it.status == PhotoBatchStatus.SAVED }.map { it.source }.toMutableSet()
         stopRequested = false
         _state.update { it.copy(saving = true, error = null) }
         savingJob = viewModelScope.launch {
+            var working: Pair<String, File>? = null // The photo being rendered; its copy is reused for its next filter.
             try {
                 val result = PhotoBatchProcessor.run(previous, { stopRequested }, { id ->
+                    val job = jobs.getValue(id)
                     withContext(Dispatchers.IO) {
-                        val reused = id == cachedSource
-                        val file = if (reused) cached else File.createTempFile("batch-", ".image", cache)
-                        try {
-                            if (!reused) {
-                                val activeContext = coroutineContext
-                                requireNotNull(getApplication<Application>().contentResolver.openInputStream(Uri.parse(id))) { "照片無法讀取" }.use { input ->
-                                    file.outputStream().use { output -> PhotoImportIo.copy(input, output) { activeContext.ensureActive() } }
+                        val file = working?.takeIf { it.first == job.source }?.second ?: run {
+                            working?.second?.takeIf { it != cached }?.delete()
+                            working = null
+                            val reused = job.source == cachedSource
+                            val copy = if (reused) cached else File.createTempFile("batch-", ".image", cache)
+                            try {
+                                if (!reused) {
+                                    val activeContext = coroutineContext
+                                    requireNotNull(getApplication<Application>().contentResolver.openInputStream(Uri.parse(job.source))) { "照片無法讀取" }.use { input ->
+                                        copy.outputStream().use { output -> PhotoImportIo.copy(input, output) { activeContext.ensureActive() } }
+                                    }
+                                    PhotoEditorSource.validate(copy)
                                 }
-                                PhotoEditorSource.validate(file)
-                            }
-                            ensureActive()
-                            PhotoStorage.processAndSave(getApplication(), file, filter, SaveTarget.EDIT).toString()
-                        } finally { if (!reused) file.delete() }
+                            } catch (error: Throwable) { if (!reused) copy.delete(); throw error }
+                            working = job.source to copy
+                            copy
+                        }
+                        ensureActive()
+                        val time = stems.getOrPut(job.source) { PhotoStorage.timeStamp().also { persistStems() } }
+                        PhotoStorage.processAndSave(getApplication(), file, filters.getValue(job.filterId), SaveTarget.EDIT,
+                            saveOriginal = job.source !in withOriginal, time = time, index = outputNumbers.getValue(job.filterId))
+                            .toString().also { withOriginal += job.source }
                     }
                 }, { progress ->
                     persistBatch(progress)
                     _state.update { it.copy(batch = progress) }
                 })
-                val saved = result.items.lastOrNull { it.status == PhotoBatchStatus.SAVED && it.source !in alreadySaved }?.output?.let(Uri::parse)
+                val saved = result.items.lastOrNull { it.status == PhotoBatchStatus.SAVED && it.id !in alreadySaved }?.output?.let(Uri::parse)
                 _state.update { it.copy(savedUri = saved ?: it.savedUri,
-                    selection = if (result.remainingCount == 0) it.selection.copy(savedFilter = filter) else it.selection) }
+                    selection = if (result.remainingCount == 0) it.selection.copy(savedFilter = base) else it.selection) }
                 // Refresh the gallery and camera thumbnail once, rather than for every exported photo.
                 saved?.let(onSaved)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { _state.update { it.copy(error = error.message ?: "照片未儲存") } }
             finally {
+                working?.second?.takeIf { it != cached }?.delete()
                 _state.update { it.copy(saving = false, batch = it.batch?.copy(running = false, currentIndex = null)) }
                 setLuts(entries)
             }
@@ -270,28 +317,34 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
     private fun persistBatch(progress: PhotoBatchProgress) {
         val saved = progress.items.filter { it.status == PhotoBatchStatus.SAVED }
         savedState["batch-started"] = true
-        savedState["batch-sources"] = ArrayList(saved.map { it.source })
+        savedState["batch-sources"] = ArrayList(saved.map { it.id })
         savedState["batch-outputs"] = ArrayList(saved.map { requireNotNull(it.output) })
-        savedState["batch-failed"] = ArrayList(progress.items.filter { it.status == PhotoBatchStatus.FAILED }.map { it.source })
+        savedState["batch-failed"] = ArrayList(progress.items.filter { it.status == PhotoBatchStatus.FAILED }.map { it.id })
+    }
+
+    private fun persistStems() {
+        savedState["batch-stems"] = ArrayList(stems.map { (source, time) -> "$source\t$time" })
     }
 
     private fun restoreBatch(): PhotoBatchProgress? {
-        if (restoredSources.size < 2 || savedState.get<Boolean>("batch-started") != true) return null
+        val jobs = runCatching { PhotoBatchProgress.pending(restoredSources, restoredChosen).items }.getOrNull() ?: return null
+        if (jobs.size < 2 || savedState.get<Boolean>("batch-started") != true) return null
         val saved = savedState.get<ArrayList<String>>("batch-sources").orEmpty()
             .zip(savedState.get<ArrayList<String>>("batch-outputs").orEmpty()).toMap()
         val failed = savedState.get<ArrayList<String>>("batch-failed").orEmpty().toSet()
-        val items = restoredSources.map { id ->
+        val items = jobs.map { job ->
             when {
-                saved[id] != null -> PhotoBatchItem(id, PhotoBatchStatus.SAVED, output = saved[id])
-                id in failed -> PhotoBatchItem(id, PhotoBatchStatus.FAILED, error = "照片未儲存")
-                else -> PhotoBatchItem(id)
+                saved[job.id] != null -> job.copy(status = PhotoBatchStatus.SAVED, output = saved[job.id])
+                job.id in failed -> job.copy(status = PhotoBatchStatus.FAILED, error = "照片未儲存")
+                else -> job
             }
         }
         return PhotoBatchProgress(items, stopped = items.any { it.status == PhotoBatchStatus.PENDING })
     }
 
     private fun clearBatch() {
-        listOf("batch-started", "batch-sources", "batch-outputs", "batch-failed").forEach { savedState.remove<Any>(it) }
+        listOf("batch-started", "batch-sources", "batch-outputs", "batch-failed", "batch-stems").forEach { savedState.remove<Any>(it) }
+        stems.clear()
     }
 
     private fun updateGrants(sources: List<String>) {
@@ -327,6 +380,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         savedState.remove<String>("source")
         savedState.remove<String>("source-uri")
         savedState.remove<String>("selectedId")
+        savedState.remove<ArrayList<String>>("chosen")
         savedState.remove<Float>("strength")
         _state.value = PhotoEditorUiState()
     }

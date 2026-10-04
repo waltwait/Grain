@@ -24,8 +24,15 @@ object PhotoStorage {
         ExifInterface.TAG_EXPOSURE_BIAS_VALUE, ExifInterface.TAG_FLASH, ExifInterface.TAG_EXPOSURE_PROGRAM, ExifInterface.TAG_EXPOSURE_MODE)
 
     /** Returns the edited photo's Uri; an edit target also publishes a byte copy of [source] next to it. */
+    /** The time part of a saved photo's name; the outputs of one photo share it. */
+    fun timeStamp(): String = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+
+    /**
+     * [time] and [index] name the output: the first output of a photo is GRAIN_EDIT_<time>.jpg, later ones get -2, -3, …
+     * and share the one original, which only the first call for a photo writes ([saveOriginal]).
+     */
     fun processAndSave(context: Context, source: File, filter: FilterSettings, target: SaveTarget,
-        saveOriginal: Boolean = target.alwaysSaveOriginal): Uri {
+        saveOriginal: Boolean = target.alwaysSaveOriginal, time: String = timeStamp(), index: Int = 1): Uri {
         val exif = ExifInterface(source)
         val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -60,11 +67,10 @@ object PhotoStorage {
                 setAttribute(ExifInterface.TAG_USER_COMMENT, "LUT=${filter.lut?.title ?: "Original"}; strength=${filter.strength}; input=${filter.encoding.name}; imageEV=${filter.brightnessEv}")
                 saveAttributes()
             }
-            val time = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
             // Publish the pair only after both files have been written successfully.
             val pending = mutableListOf<Uri>()
             try {
-                val finalUri = writePending(context, encoded, PhotoNames.edited(target, time), target.relativePath, "image/jpeg").also { pending += it }
+                val finalUri = writePending(context, encoded, PhotoNames.edited(target, time, index), target.relativePath, "image/jpeg").also { pending += it }
                 if (saveOriginal) pending += writePending(context, source,
                     PhotoNames.original(target, time, ImageFormat.extension(sourceType)), target.relativePath, ImageFormat.mimeType(sourceType))
                 for (uri in pending) context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)

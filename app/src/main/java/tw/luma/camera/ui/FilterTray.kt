@@ -99,8 +99,10 @@ private fun TrayIcon(glyph: String, description: String, enabled: Boolean, tag: 
 @Composable
 internal fun FilmPicker(
     entries: List<LutEntry>, selectedId: String?, enabled: Boolean, compact: Boolean,
-    onSelect: (String?) -> Unit,
+    onSelect: (String?) -> Unit, chosen: Set<String>? = null,
 ) {
+    // With a set of checked films (the editor) taps check or uncheck and swiping only browses; without one (the camera) swiping selects.
+    val multi = chosen != null
     val ids = remember(entries) { entries.map { it.id } }
     val cursor = remember(ids) { FilterBrowseCursor(ids, selectedId) }
     val pager = rememberPagerState(initialPage = cursor.initialPage) { entries.size }
@@ -113,13 +115,13 @@ internal fun FilmPicker(
     LaunchedEffect(pager, cursor) {
         snapshotFlow { pager.isScrollInProgress to pager.settledPage }.collect { (scrolling, page) ->
             if (!scrolling) cursor.settledAt(page)?.let { id ->
-                if (canPick) pick(id)
+                if (canPick && !multi) pick(id)
             }
         }
     }
     LaunchedEffect(selectedId) {
         val page = ids.indexOf(selectedId)
-        if (page >= 0 && pager.currentPage != page && !pager.isScrollInProgress) pager.animateScrollToPage(page)
+        if (!multi && page >= 0 && pager.currentPage != page && !pager.isScrollInProgress) pager.animateScrollToPage(page)
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val cardWidth = (maxWidth * .44f).coerceIn(136.dp, 184.dp).coerceAtMost(maxWidth)
@@ -127,7 +129,7 @@ internal fun FilmPicker(
             contentPadding = PaddingValues(horizontal = ((maxWidth - cardWidth) / 2).coerceAtLeast(0.dp), vertical = 4.dp),
             userScrollEnabled = enabled, key = { ids[it] }, modifier = Modifier.fillMaxWidth().testTag("filter-pager")) { page ->
             val film = entries[page]
-            FilmCard(film, film.id == selectedId, enabled, compact) {
+            FilmCard(film, if (chosen != null) film.id in chosen else film.id == selectedId, enabled, compact) {
                 pick(film.id)
                 scope.launch { pager.animateScrollToPage(page) }
             }

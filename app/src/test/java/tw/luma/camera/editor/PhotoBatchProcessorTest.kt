@@ -110,4 +110,40 @@ class PhotoBatchProcessorTest {
         assertThrows(IllegalArgumentException::class.java) { PhotoBatchProgress.pending(emptyList()) }
         assertThrows(IllegalArgumentException::class.java) { PhotoBatchProgress.pending(listOf("")) }
     }
+
+    @Test fun aPhotoWithSeveralFiltersBecomesOneJobPerFilterPhotoByPhoto() {
+        val jobs = PhotoBatchProgress.pending(listOf("a", "b"), listOf("x", "y")).items
+        assertEquals(listOf("a" to "x", "a" to "y", "b" to "x", "b" to "y"), jobs.map { it.source to it.filterId })
+        assertEquals(4, jobs.map { it.id }.toSet().size)
+    }
+
+    @Test fun withoutFiltersEachJobIsIdentifiedBySourceAlone() {
+        assertEquals(listOf("a", "b"), PhotoBatchProgress.pending(listOf("a", "b")).items.map { it.id })
+    }
+
+    @Test fun theOutputLimitCoversPhotosTimesFilters() {
+        assertEquals(20, PhotoBatchProgress.pending(List(5) { "p$it" }, List(4) { "f$it" }).items.size)
+        assertThrows(IllegalArgumentException::class.java) { PhotoBatchProgress.pending(List(5) { "p$it" }, List(5) { "f$it" }) }
+    }
+
+    @Test fun duplicateFiltersAreExportedOnce() {
+        assertEquals(2, PhotoBatchProgress.pending(listOf("a"), listOf("x", "x", "y")).items.size)
+    }
+
+    @Test fun jobsAreExportedInOrderAndRetryRedoesOnlyTheFailedOne() = runBlocking {
+        val first = PhotoBatchProcessor.run(PhotoBatchProgress.pending(listOf("a", "b"), listOf("x", "y")), { false }, {
+            if (it == "a|y") throw IOException("disk full")
+            "saved-$it"
+        }, {})
+        assertEquals(3, first.savedCount)
+        assertEquals(1, first.failedCount)
+        assertEquals("a", first.items[1].source)
+        assertEquals("y", first.items[1].filterId)
+        val retried = mutableListOf<String>()
+        val result = PhotoBatchProcessor.run(first, { false }, { retried += it; "retry-$it" }, {})
+        assertEquals(listOf("a|y"), retried)
+        assertEquals(4, result.savedCount)
+        assertEquals(listOf("a", "a", "b", "b"), result.items.map { it.source })
+        assertEquals(listOf("x", "y", "x", "y"), result.items.map { it.filterId })
+    }
 }

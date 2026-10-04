@@ -42,4 +42,20 @@ class PhotoNamesTest {
         assertTrue(PhotoNames.isOriginal("GRAIN_EDIT_x_original.png"))
         assertTrue(PhotoNames.isOriginal("GRAIN_EDIT_x_original.heic"))
     }
+
+    @Test fun furtherOutputsOfTheSamePhotoGetASequenceNumber() {
+        assertEquals("GRAIN_EDIT_20261004_201530_123.jpg", PhotoNames.edited(SaveTarget.EDIT, time, 1))
+        assertEquals("GRAIN_EDIT_20261004_201530_123-2.jpg", PhotoNames.edited(SaveTarget.EDIT, time, 2))
+        assertEquals("GRAIN_EDIT_20261004_201530_123-10.jpg", PhotoNames.edited(SaveTarget.EDIT, time, 10))
+    }
+
+    @Test fun everyOutputOfAPhotoPointsAtTheSameOriginal() {
+        assertEquals("GRAIN_EDIT_x_original", PhotoNames.originalBase("GRAIN_EDIT_x-2.jpg"))
+        assertEquals("GRAIN_EDIT_x_original", PhotoNames.originalBase("GRAIN_EDIT_x-17.jpg"))
+        assertEquals("GRAIN_EDIT_x_original", PhotoNames.originalBase("GRAIN_EDIT_x.jpg"))
+    }
+
+    @Test fun aRenamedDuplicateStillDoesNotFindAnOriginal() {
+        assertEquals("GRAIN_EDIT_x (1)_original", PhotoNames.originalBase("GRAIN_EDIT_x (1).jpg"))
+    }
 }

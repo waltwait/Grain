@@ -38,4 +38,15 @@ class EditPairingTest {
     @Test fun emptyFolderGivesAnEmptyList() {
         assertTrue(EditPairing.pair(emptyList()).isEmpty())
     }
+
+    @Test fun severalOutputsOfOnePhotoShareItsOriginal() {
+        val second = EditRow(8, "GRAIN_EDIT_x-2.jpg")
+        val third = EditRow(9, "GRAIN_EDIT_x-3.jpg")
+        val pairs = EditPairing.pair(listOf(third, second, x, xOriginal))
+        assertEquals(listOf(EditPair(third, xOriginal), EditPair(second, xOriginal), EditPair(x, xOriginal)), pairs)
+    }
+
+    @Test fun anOutputWhoseOriginalIsMissingHasNone() {
+        assertEquals(listOf(EditPair(EditRow(8, "GRAIN_EDIT_x-2.jpg"), null)), EditPairing.pair(listOf(EditRow(8, "GRAIN_EDIT_x-2.jpg"))))
+    }
 }

@@ -531,7 +531,8 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("filter-pager").performTouchInput { swipeRight() }
             ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
             ui.onNodeWithTag("filter-pager").performScrollToIndex(filmIndex)
-            ui.onNodeWithTag("filter-builtin-2").performClick()
+            // Swiping only browses; the checked film stays checked (tapping it again would uncheck it).
+            ui.runOnIdle { assertEquals(listOf("builtin-2"), importEditor.state.value.selection.chosen) }
             ui.onNodeWithTag("editor-strength").performScrollTo().performTouchInput { swipeRight() }
             ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
             ui.onNodeWithTag("editor-strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.25f) }
@@ -794,6 +795,54 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("gallery-photo-tab").performClick()
         ui.waitForIdle()
         assertEquals(photosTop, titleTop(), 0.5f)
+    }
+
+    @Test fun severalFiltersOnOnePhotoExportOneOutputEachAndShareTheOriginal() {
+        ready()
+        val resolver = ui.activity.contentResolver
+        val importEditor = ViewModelProvider(ui.activity).get("gallery-import-editor", tw.luma.camera.editor.PhotoEditorViewModel::class.java)
+        val bitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(90, 130, 170)) }
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "GRAIN_MULTI_TEST_${System.nanoTime()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val source = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+        var outputs: List<android.net.Uri> = emptyList()
+        try {
+            requireNotNull(resolver.openOutputStream(source)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+            resolver.update(source, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            val before = ownPhotoCount("Pictures/Grain Edits/")
+            val ids = model().state.value.luts.filter { tw.luma.camera.lut.FilterGroup.of(it) == tw.luma.camera.lut.FilterGroup.GRAIN }.take(2).map { it.id }
+            assertEquals(2, ids.size)
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.runOnIdle { importEditor.open(source) }
+            ui.waitUntil(10_000) { importEditor.state.value.bitmap != null }
+            ui.onNodeWithTag("editor-group-GRAIN").performClick()
+            ids.forEach { id ->
+                ui.onNodeWithTag("filter-$id").performClick()
+                ui.waitForIdle()
+            }
+            ui.runOnIdle { assertEquals(ids, importEditor.state.value.selection.chosen) }
+            ui.onNodeWithTag("editor-filter-summary").assertTextEquals("已選 2 個濾鏡 · 將輸出 2 張")
+            ui.waitUntil(10_000) { importEditor.state.value.canSave }
+            ui.onNodeWithTag("editor-save").performClick()
+            ui.waitUntil(30_000) { !importEditor.state.value.saving && importEditor.state.value.batch?.savedCount == 2 }
+            outputs = importEditor.state.value.batch!!.items.mapNotNull { it.output }.map(android.net.Uri::parse)
+            assertEquals("Two outputs and one shared original", before + 3, ownPhotoCount("Pictures/Grain Edits/"))
+            val names = outputs.map { uri ->
+                requireNotNull(resolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)).use { it.moveToFirst(); it.getString(0) }
+            }
+            assertEquals(1, names.count { it.endsWith("-2.jpg") })
+            assertEquals("Both outputs point at the same original", 1, names.map { tw.luma.camera.storage.PhotoNames.originalBase(it) }.toSet().size)
+        } finally {
+            ui.runOnIdle { importEditor.discard() }
+            outputs.forEach { deleteWithOriginal(it) }
+            resolver.delete(source, null, null)
+            bitmap.recycle()
+        }
     }
 
     @Test fun emptyVideoFilterOffersNoEditButton() {

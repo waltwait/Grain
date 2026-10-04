@@ -147,7 +147,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                         fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB))
                     // Every tab has a second line, so the title never shifts when switching between them.
                     val subtitle = GalleryHeader.subtitle(editing, state.items.size, state.edits.size,
-                        if (importState.isBatch) importState.previewIndex + 1 to importState.sources.size else null,
+                        if (importState.sources.size > 1) importState.previewIndex + 1 to importState.sources.size else null,
                         filteredCount = items.size.takeIf { filtering })
                     Text(subtitle, maxLines = 1, style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
