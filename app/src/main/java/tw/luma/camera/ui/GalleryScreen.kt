@@ -128,12 +128,9 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Grain", modifier = Modifier.testTag("gallery-title"), fontFamily = NewsreaderBrand, style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB))
-                    // The second line is always laid out (a blank one when there is nothing to say) so the title never shifts between tabs.
-                    val subtitle = when {
-                        !editing -> "${state.items.size}"
-                        importState.isBatch -> "${importState.previewIndex + 1} / ${importState.sources.size}"
-                        else -> " "
-                    }
+                    // Every tab has a second line, so the title never shifts when switching between them.
+                    val subtitle = GalleryHeader.subtitle(editing, state.items.size, state.edits.size,
+                        if (importState.isBatch) importState.previewIndex + 1 to importState.sources.size else null)
                     Text(subtitle, maxLines = 1, style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                 }
