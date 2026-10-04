@@ -3,6 +3,9 @@ package tw.luma.camera.ui
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -50,6 +53,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -70,12 +74,21 @@ import tw.luma.camera.gallery.PhotoViewport
 import kotlin.math.min
 
 @Composable
-internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPhoto: () -> Unit,
+internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     editor: PhotoEditorViewModel, entries: List<LutEntry>, onSaved: (Uri) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
+    val importEditor: PhotoEditorViewModel = viewModel(key = "gallery-import-editor")
+    val importState by importEditor.state.collectAsStateWithLifecycle()
+    val tabs = rememberSaveableStateHolder()
+    var editing by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val grid = rememberLazyGridState()
+    val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let(importEditor::open)
+    }
+    val choosePhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    LaunchedEffect(entries) { importEditor.setLuts(entries) }
     val lifecycle = LocalLifecycleOwner.current
     DisposableEffect(model, lifecycle) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) model.refresh() }
@@ -84,44 +97,76 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPho
     }
     val items = remember(state.items, filter) { state.items.filter { filter == 0 || it.video == (filter == 2) } }
     val selectedIndex = items.indexOfFirst { it.uri.toString() == selected }
-    BackHandler(enabled = selectedIndex < 0) { close() }
+    val goBack: () -> Unit = {
+        if (!importState.saving) {
+            if (editing) editing = false
+            else { importEditor.discard(); editor.discard(); close() }
+        }
+    }
+    BackHandler(enabled = selectedIndex < 0, onBack = goBack)
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("grain-gallery")) {
         if (selectedIndex >= 0) {
             GalleryViewer(items, selectedIndex, model, editor, entries, { selected = null }, onSaved)
         } else Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp).testTag("gallery-close")) { Text("‹ 相機") }
-                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                    Text("Grain", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                    Text("${state.items.size} 個拍攝片刻", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = .6f))
+            Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                BackIconButton(onClick = goBack, enabled = !importState.saving,
+                    modifier = Modifier.align(Alignment.CenterStart).testTag("gallery-close"),
+                    description = if (editing) "返回照片" else "返回相機")
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Grain", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    if (!editing) Text("${state.items.size}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
                 }
-                TextButton(onClick = importPhoto, modifier = Modifier.testTag("gallery-import-photo")) { Text("編輯") }
-                IconButton(onClick = model::refresh, enabled = !state.loading, modifier = Modifier.semantics { contentDescription = "重新整理相簿" }) {
+                if (editing) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave,
+                    modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("editor-save")
+                        .semantics { contentDescription = "儲存新照片" }) {
+                    if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
+                } else IconButton(onClick = model::refresh, enabled = !state.loading,
+                    modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).semantics { contentDescription = "重新整理相簿" }) {
                     Text("↻", style = MaterialTheme.typography.titleLarge)
                 }
             }
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("全部", "照片", "影片").forEachIndexed { index, text ->
-                    FilterChip(selected = filter == index, onClick = { filter = index }, label = { Text(text) }, modifier = Modifier.testTag("gallery-filter-$index"))
-                }
-            }
-            when {
-                state.error != null -> GalleryEmpty(state.error!!, "重試", model::refresh)
-                state.loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                items.isEmpty() -> GalleryEmpty(if (filter == 2) "還沒有影片" else if (filter == 1) "還沒有照片" else "把下一個片刻留在 Grain", "匯入照片", importPhoto)
-                else -> LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), state = grid,
-                    contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    items(items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
-                        Surface(onClick = { selected = item.uri.toString() }, shape = RoundedCornerShape(8.dp), color = Color(0xFF18191C),
-                            modifier = Modifier.aspectRatio(1f).testTag("gallery-item").semantics { contentDescription = "${if (item.video) "影片" else "照片"} ${item.name}" }) {
-                            Box {
-                                GalleryThumbnail(item, model, Modifier.fillMaxSize())
-                                if (item.video) Text("▶ ${durationLabel(item.durationMs)}", Modifier.align(Alignment.BottomEnd).padding(5.dp).background(Color.Black.copy(alpha = .7f), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (editing) tabs.SaveableStateProvider("editor") {
+                    if (importState.bitmap == null && !importState.loading && importState.error == null) {
+                        Box(Modifier.fillMaxSize().testTag("photo-editor"), contentAlignment = Alignment.Center) {
+                            FilledTonalButton(onClick = choosePhoto, modifier = Modifier.heightIn(min = 48.dp).testTag("editor-choose")) {
+                                CameraGlyph("add", Modifier.size(20.dp), LocalContentColor.current)
+                                Spacer(Modifier.width(8.dp))
+                                Text("匯入照片")
+                            }
+                        }
+                    } else PhotoEditorBody(importState, importEditor, entries, choosePhoto, choosePhoto, onSaved,
+                        Modifier.fillMaxSize().testTag("photo-editor"))
+                } else tabs.SaveableStateProvider("photos") {
+                    Column(Modifier.fillMaxSize()) {
+                        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("全部", "照片", "影片").forEachIndexed { index, text ->
+                                FilterChip(selected = filter == index, onClick = { filter = index }, label = { Text(text) }, modifier = Modifier.testTag("gallery-filter-$index"))
+                            }
+                        }
+                        when {
+                            state.error != null -> GalleryEmpty(state.error!!, "重試", model::refresh)
+                            state.loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                            items.isEmpty() -> GalleryEmpty(if (filter == 2) "還沒有影片" else if (filter == 1) "還沒有照片" else "把下一個片刻留在 Grain", "編輯照片", { editing = true })
+                            else -> LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), state = grid,
+                                contentPadding = PaddingValues(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                items(items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
+                                    Surface(onClick = { selected = item.uri.toString() }, shape = RoundedCornerShape(2.dp), color = Color(0xFF18191C),
+                                        modifier = Modifier.aspectRatio(1f).testTag("gallery-item").semantics { contentDescription = "${if (item.video) "影片" else "照片"} ${item.name}" }) {
+                                        Box {
+                                            GalleryThumbnail(item, model, Modifier.fillMaxSize())
+                                            if (item.video) Text("▶ ${durationLabel(item.durationMs)}", Modifier.align(Alignment.BottomEnd).padding(5.dp).background(Color.Black.copy(alpha = .7f), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+            PhotoEditTabs(editing, !importState.saving, { editing = it }, "gallery-photo-tab", "gallery-edit-tab",
+                Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
         }
     }
 }
@@ -208,12 +253,9 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
         AnimatedVisibility(chromeVisible, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .8f), Color.Transparent)))
                 .statusBarsPadding().displayCutoutPadding().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                IconButton(onClick = goBack, enabled = !editState.saving,
-                    modifier = Modifier.align(Alignment.CenterStart).size(48.dp)
-                        .testTag(if (editing) "editor-back" else "viewer-back")
-                        .semantics { contentDescription = if (editing) "返回照片" else "返回相簿" }) {
-                    CameraGlyph("back", Modifier.size(24.dp))
-                }
+                BackIconButton(onClick = goBack, enabled = !editState.saving,
+                    modifier = Modifier.align(Alignment.CenterStart).testTag(if (editing) "editor-back" else "viewer-back"),
+                    description = if (editing) "返回照片" else "返回相簿")
                 Text("${items.indexOf(current) + 1} / ${items.size}", Modifier.align(Alignment.Center),
                     color = Color.White.copy(alpha = .8f), style = MaterialTheme.typography.labelLarge)
                 if (editing) IconButton(onClick = { editor.save(onSaved) }, enabled = editState.canSave,
@@ -227,24 +269,29 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
         AnimatedVisibility(!current.video && chromeVisible, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .9f))))
                 .navigationBarsPadding().displayCutoutPadding().padding(top = 8.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
-                Row(Modifier.widthIn(max = 300.dp).fillMaxWidth().selectableGroup()) {
-                    listOf("照片", "編輯").forEachIndexed { index, label ->
-                        val selected = editing == (index == 1)
-                        Tab(selected = selected, onClick = {
-                            if (index == 1) editor.openForViewer(current.uri)
-                            editing = index == 1
-                            controlsVisible = true
-                        },
-                            enabled = !editState.saving && !pager.isScrollInProgress,
-                            selectedContentColor = MaterialTheme.colorScheme.primary,
-                            unselectedContentColor = Color.White.copy(alpha = .6f),
-                            modifier = Modifier.weight(1f).heightIn(min = 52.dp).testTag(if (index == 0) "viewer-photo-tab" else "viewer-edit")) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(label, Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.labelLarge)
-                                Box(Modifier.width(24.dp).height(2.dp).background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(1.dp)))
-                            }
-                        }
-                    }
+                PhotoEditTabs(editing, !editState.saving && !pager.isScrollInProgress, { next ->
+                    if (next) editor.openForViewer(current.uri)
+                    editing = next
+                    controlsVisible = true
+                }, "viewer-photo-tab", "viewer-edit")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhotoEditTabs(editing: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit,
+    photoTag: String, editTag: String, modifier: Modifier = Modifier) {
+    Row(modifier.widthIn(max = 300.dp).fillMaxWidth().selectableGroup()) {
+        listOf("照片", "編輯").forEachIndexed { index, label ->
+            val selected = editing == (index == 1)
+            Tab(selected = selected, onClick = { onChange(index == 1) }, enabled = enabled,
+                selectedContentColor = MaterialTheme.colorScheme.primary,
+                unselectedContentColor = Color.White.copy(alpha = .6f),
+                modifier = Modifier.weight(1f).heightIn(min = 52.dp).testTag(if (index == 0) photoTag else editTag)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(label, Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.labelLarge)
+                    Box(Modifier.width(24.dp).height(2.dp).background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(1.dp)))
                 }
             }
         }

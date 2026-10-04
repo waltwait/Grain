@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.6.5",
-  "versionCode": 28,
+  "versionName": "0.6.6",
+  "versionCode": 29,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.5/Grain-0.6.5-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.6/Grain-0.6.6-personal-fuji.apk",
   "apkSize": 14016730,
-  "apkSha256": "e37502e2861ba11251e1adf7bd134718f7be5700848c8629b71b41ab7151e956",
+  "apkSha256": "5fd445e416ecbb07e8ab15ba5cbec1dd874e6f69266956b81cc6e286368e1b6c",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "照片檢視改為黑底滿版與「照片／編輯」tab，切換保留縮放、濾鏡和強度。影片播放／暫停改為圖示；編輯直接使用目前照片，儲存另存新照片。保留十款富士 LUT 與原正式簽章。"
+  "notes": "點左下縮圖後的相簿主頁改為「照片／編輯」tab，外部照片匯入與濾鏡預覽整合到編輯 tab，切換保留草稿。返回統一使用箭頭圖示，沒有中文返回文字。保留十款富士 LUT 與原正式簽章。"
 }

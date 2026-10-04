@@ -1,7 +1,6 @@
 package tw.luma.camera.ui
 
 import android.net.Uri
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,33 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tw.luma.camera.LutEntry
 import tw.luma.camera.editor.PhotoEditorUiState
 import tw.luma.camera.editor.PhotoEditorViewModel
 import tw.luma.camera.editor.PhotoPreviewView
 import tw.luma.camera.lut.FilterGroup
 import kotlin.math.roundToInt
-
-@Composable
-internal fun PhotoEditorScreen(model: PhotoEditorViewModel, entries: List<LutEntry>, choosePhoto: () -> Unit,
-    close: () -> Unit, onSaved: (Uri) -> Unit) {
-    val state by model.state.collectAsStateWithLifecycle()
-    LaunchedEffect(entries) { model.setLuts(entries) }
-    BackHandler { if (!state.saving) close() }
-    Column(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().testTag("photo-editor")) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = close, enabled = !state.saving, modifier = Modifier.heightIn(min = 48.dp).testTag("editor-back")) { Text("‹ 返回") }
-            Text("編輯照片", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1)
-            FilledTonalButton(onClick = { model.save(onSaved) }, enabled = state.canSave,
-                modifier = Modifier.heightIn(min = 48.dp).testTag("editor-save")) {
-                if (state.saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else Text(if (state.savedUri != null && state.selection.savedFilter == state.selection.filter) "已儲存" else "儲存")
-            }
-        }
-        PhotoEditorBody(state, model, entries, choosePhoto, choosePhoto, onSaved, Modifier.weight(1f).fillMaxWidth())
-    }
-}
 
 @Composable
 internal fun PhotoEditorBody(state: PhotoEditorUiState, model: PhotoEditorViewModel, entries: List<LutEntry>,
@@ -82,7 +60,7 @@ private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel
             Row(Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = .4f), RoundedCornerShape(12.dp))) {
                 TextButton(onClick = model::compare, enabled = state.canEdit,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("editor-compare").semantics { selected = state.selection.comparing }) {
-                    Text(if (state.selection.comparing) "返回預覽" else "原圖")
+                    Text(if (state.selection.comparing) "濾鏡" else "原圖")
                 }
                 if (choosePhoto != null) TextButton(onClick = choosePhoto, enabled = !state.saving,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("editor-replace")) { Text("換照片") }

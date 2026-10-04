@@ -22,7 +22,6 @@ import tw.luma.camera.CaptureMode
 import tw.luma.camera.RecordingStatus
 import tw.luma.camera.camera.ZoomControls
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -83,7 +82,6 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val updateModel: tw.luma.camera.update.AppUpdateViewModel = viewModel()
     val destinations = rememberSaveableStateHolder()
     var galleryOpen by rememberSaveable { mutableStateOf(false) }
-    var editorOpen by rememberSaveable { mutableStateOf(false) }
     var updatesOpen by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current
     var permitted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -100,26 +98,17 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
     val currentDensity by rememberUpdatedState(LocalDensity.current.density)
-    SideEffect { onCameraActive(!galleryOpen && !editorOpen && !updatesOpen); engine?.setCaptureRotation(orientation.targetRotation) }
+    SideEffect { onCameraActive(!galleryOpen && !updatesOpen); engine?.setCaptureRotation(orientation.targetRotation) }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permitted = it }
     val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         currentEngine?.let { model.startVideo(it, granted) }
         if (!granted) model.message("未授權麥克風，改為無聲錄影")
     }
     val lutImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::importLut) }
-    val editPhoto: (android.net.Uri) -> Unit = { uri ->
-        panel = null
-        activeControl = null
-        model.pausePreview()
-        editorModel.open(uri)
-        editorOpen = true
-    }
-    val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(editPhoto) }
     val view = remember(context) { PreviewView(context).apply {
         implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         scaleType = PreviewView.ScaleType.FILL_CENTER
     } }
-    val openPhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     val openLut = { lutImport.launch(arrayOf("*/*")) }
     if (updatesOpen) {
         destinations.SaveableStateProvider("updates") {
@@ -127,17 +116,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         }
         return
     }
-    if (editorOpen) {
-        destinations.SaveableStateProvider("editor") {
-            PhotoEditorScreen(editorModel, state.luts, openPhoto,
-                { editorModel.discard(); editorOpen = false },
-                { uri -> model.photoEdited(uri); galleryModel.refresh() })
-        }
-        return
-    }
     if (galleryOpen) {
         destinations.SaveableStateProvider("gallery") {
-            GalleryScreen(galleryModel, { galleryOpen = false }, openPhoto, editorModel, state.luts,
+            GalleryScreen(galleryModel, { galleryOpen = false }, editorModel, state.luts,
                 { uri -> model.photoEdited(uri); galleryModel.refresh() })
         }
         return

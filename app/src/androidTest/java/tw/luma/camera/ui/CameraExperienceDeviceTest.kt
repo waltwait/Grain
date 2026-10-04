@@ -54,7 +54,7 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("update-primary").assertTextEquals("檢查更新").assertIsEnabled()
             ui.onNodeWithTag("update-error").assertDoesNotExist()
         }
-        ui.onNodeWithText("返回").performClick()
+        ui.onNodeWithTag("update-back").performClick()
         ready()
         ui.onNodeWithTag("viewfinder").assertIsDisplayed()
         ui.runOnIdle { assertEquals(before.selectedLut, model().state.value.selectedLut) }
@@ -393,8 +393,15 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("open-gallery").performClick()
         ui.onNodeWithTag("grain-gallery").assertIsDisplayed()
         ui.runOnIdle { assertFalse("Camera must be suspended in the gallery", model().state.value.ready) }
+        ui.onNodeWithTag("gallery-photo-tab").assertIsSelected()
+        ui.onNodeWithTag("gallery-import-photo").assertDoesNotExist()
         ui.onNodeWithTag("gallery-filter-2").performClick().assertIsSelected()
         ui.onNodeWithTag("gallery-filter-1").performClick().assertIsSelected()
+        ui.onNodeWithTag("gallery-edit-tab").performClick().assertIsSelected()
+        ui.onNodeWithTag("editor-choose").assertIsDisplayed()
+        ui.onNodeWithTag("editor-save").assertIsNotEnabled()
+        ui.onNodeWithTag("gallery-photo-tab").performClick().assertIsSelected()
+        ui.onNodeWithTag("gallery-filter-1").assertIsSelected()
         ui.onNodeWithTag("gallery-close").performClick()
         ready()
         ui.onNodeWithTag("camera-ready").assertExists()
@@ -469,6 +476,7 @@ class CameraExperienceDeviceTest {
         var output: android.net.Uri? = null
         val bitmap = Bitmap.createBitmap(2048, 1536, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(80, 120, 170)) }
         val editor = ViewModelProvider(ui.activity)[tw.luma.camera.editor.PhotoEditorViewModel::class.java]
+        val importEditor = ViewModelProvider(ui.activity).get("gallery-import-editor", tw.luma.camera.editor.PhotoEditorViewModel::class.java)
         try {
             requireNotNull(resolver.openOutputStream(source)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
             requireNotNull(resolver.openFileDescriptor(source, "rw")).use { descriptor ->
@@ -482,6 +490,20 @@ class CameraExperienceDeviceTest {
             val sourceBytes = requireNotNull(resolver.openInputStream(source)).use { it.readBytes() }
             val sourceCount = ownPhotoCount()
             ui.onNodeWithTag("open-gallery").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.runOnIdle { importEditor.open(source) }
+            ui.waitUntil(10_000) { importEditor.state.value.canSave }
+            val filmIndex = camera.state.value.luts.filter {
+                tw.luma.camera.lut.FilterGroup.of(it) == tw.luma.camera.lut.FilterGroup.GRAIN
+            }.indexOfFirst { it.id == "builtin-2" }
+            ui.onNodeWithTag("editor-group-GRAIN").performClick()
+            ui.onNodeWithTag("filter-pager").performScrollToIndex(filmIndex)
+            ui.onNodeWithTag("filter-builtin-2").performClick()
+            ui.onNodeWithTag("editor-strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.25f) }
+            ui.waitUntil(10_000) { importEditor.state.value.canSave }
+            val importBitmap = importEditor.state.value.bitmap
+            val importFilter = importEditor.state.value.selection.filter
+            ui.onNodeWithTag("gallery-photo-tab").performClick()
             ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithContentDescription("照片 $name").performClick()
             ui.onNodeWithTag("viewer-edit").performClick()
@@ -493,9 +515,6 @@ class CameraExperienceDeviceTest {
                 assertEquals(1024, editor.state.value.bitmap!!.height)
             }
             ui.onNodeWithTag("editor-group-GRAIN").performClick()
-            val filmIndex = camera.state.value.luts.filter {
-                tw.luma.camera.lut.FilterGroup.of(it) == tw.luma.camera.lut.FilterGroup.GRAIN
-            }.indexOfFirst { it.id == "builtin-2" }
             ui.onNodeWithTag("filter-pager").performScrollToIndex(filmIndex)
             ui.onNodeWithTag("filter-builtin-2").performClick()
             ui.onNodeWithTag("editor-strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.5f) }
@@ -569,10 +588,18 @@ class CameraExperienceDeviceTest {
             }
             ui.onNodeWithTag("editor-back").performClick()
             ui.onNodeWithTag("viewer-back").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.waitUntil(10_000) { importEditor.state.value.canSave }
+            ui.runOnIdle {
+                assertSame("Viewing and editing another photo must preserve the import draft", importBitmap, importEditor.state.value.bitmap)
+                assertEquals(importFilter, importEditor.state.value.selection.filter)
+                assertNull(importEditor.state.value.savedUri)
+            }
+            ui.onNodeWithTag("gallery-photo-tab").performClick()
             ui.onNodeWithTag("gallery-close").performClick()
             ready()
         } finally {
-            ui.runOnIdle { editor.discard() }
+            ui.runOnIdle { editor.discard(); importEditor.discard() }
             bitmap.recycle()
             output?.let { resolver.delete(it, null, null) }
             resolver.delete(source, null, null)

@@ -61,7 +61,7 @@ fun AppUpdateScreen(model: AppUpdateViewModel, back: () -> Unit) {
     }
     Column(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().testTag("app-update-screen")) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = close) { Text("返回") }
+            BackIconButton(onClick = close, modifier = Modifier.testTag("update-back"))
             Text("版本與更新", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
