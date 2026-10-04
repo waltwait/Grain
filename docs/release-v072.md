@@ -17,6 +17,10 @@ APK 確認 versionCode 35、versionName 0.7.2、非 debuggable，正式簽章憑
 
 成品 `output/Grain-0.7.2-personal-fuji.apk`：SHA-256 `412d46cfe1f2a3c3820ccd7b84a32b6b9664f62c483bbea5893d575840b0e37d`。
 
+2026-10-04 已推送 main 與 v0.7.2，標籤對應 `d1b56d736f850970edd402979ce42b3f92d0d143`。已發布 [公開 Release](https://github.com/waltwait/Grain/releases/tag/v0.7.2)，Release ID 403060485；草稿 APK 的大小與 SHA-256 核對後才公開。GitHub 最新版為 v0.7.2、非草稿、非預發布，只有一個 `Grain-0.7.2-personal-fuji.apk`，匿名下載連結回 200。`updates/personal-fuji/latest.json`（提交 `ea59654`）在附件確認後才更新為 0.7.2／35；repo 內的檔案與本機產生的完全相同。
+
+要看到自動檢查的小金點，手機要先裝 0.7.2，再發布更高的版本；0.7.1 以前的 App 沒有開 App 時檢查的程式。
+
 沒有手機連線：**字形、字重、行距與缺字備援沒有在實機看過**，小金點的位置與大小、自動檢查的實際網路行為也沒有實測；裝置測試沒有為這次的更新提示新增（結果取決於網路與線上版本）。
 
 ## 維護注意
