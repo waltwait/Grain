@@ -426,8 +426,21 @@ class CameraExperienceDeviceTest {
             ui.waitUntil(10_000) { ui.onAllNodesWithTag("gallery-photo").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithTag("gallery-photo").performTouchInput { pinch(start0 = center - Offset(30f, 0f), start1 = center + Offset(30f, 0f), end0 = center - Offset(90f, 0f), end1 = center + Offset(90f, 0f)) }
             ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已放大"))
+            ui.onNodeWithTag("viewer-edit").performClick().assertIsSelected()
+            ui.onNodeWithTag("photo-editor").assertIsDisplayed()
+            ui.onNodeWithTag("editor-replace").assertDoesNotExist()
+            ui.onNodeWithTag("viewer-photo-tab").performClick().assertIsSelected()
+            ui.waitUntil(10_000) { ui.onAllNodesWithTag("gallery-photo").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已放大"))
             ui.onNodeWithTag("gallery-photo").performTouchInput { doubleClick(center) }
             ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "原始比例"))
+            ui.onNodeWithTag("viewer-photo-tab").assertIsDisplayed()
+            ui.onNodeWithTag("gallery-photo").performTouchInput { click(center) }
+            ui.waitUntil(5_000) { ui.onAllNodesWithTag("viewer-photo-tab").fetchSemanticsNodes().isEmpty() }
+            ui.onNodeWithTag("viewer-photo-tab").assertDoesNotExist()
+            ui.onNodeWithTag("gallery-photo").performTouchInput { click(center) }
+            ui.waitUntil(5_000) { ui.onAllNodesWithTag("viewer-photo-tab").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithTag("viewer-photo-tab").assertIsDisplayed()
             ui.onNodeWithTag("gallery-pager").performTouchInput { swipeLeft() }
             ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 ${names.first()}").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithTag("gallery-photo").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "原始比例"))
@@ -488,6 +501,17 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("editor-strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.5f) }
             ui.waitUntil(10_000) { editor.state.value.canSave }
             val selected = editor.state.value.selection.filter
+            val previewBitmap = editor.state.value.bitmap
+            ui.onNodeWithTag("viewer-photo-tab").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithContentDescription("照片 $name").assertIsDisplayed()
+            ui.onNodeWithTag("viewer-edit").performClick()
+            ui.waitUntil(10_000) { editor.state.value.canSave }
+            ui.runOnIdle {
+                assertSame("Tab switching must reuse the decoded source", previewBitmap, editor.state.value.bitmap)
+                assertEquals(selected, editor.state.value.selection.filter)
+                assertNull(editor.state.value.savedUri)
+            }
             ui.onNodeWithTag("editor-compare").performClick()
             ui.onNodeWithTag("editor-save").assertIsNotEnabled()
             assertEquals(selected, editor.state.value.selection.filter)
@@ -536,6 +560,13 @@ class CameraExperienceDeviceTest {
             }
             ui.onNodeWithTag("editor-save").assertIsNotEnabled()
             screenshot("grain-photo-editor.png")
+            ui.onNodeWithTag("editor-back").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithTag("viewer-edit").performClick()
+            ui.runOnIdle {
+                assertEquals("Saving must keep editing the original source", selected, editor.state.value.selection.filter)
+                assertEquals(output, editor.state.value.savedUri)
+            }
             ui.onNodeWithTag("editor-back").performClick()
             ui.onNodeWithTag("viewer-back").performClick()
             ui.onNodeWithTag("gallery-close").performClick()

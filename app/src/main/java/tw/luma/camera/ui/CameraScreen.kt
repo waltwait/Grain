@@ -137,7 +137,8 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     }
     if (galleryOpen) {
         destinations.SaveableStateProvider("gallery") {
-            GalleryScreen(galleryModel, { galleryOpen = false }, openPhoto, editPhoto)
+            GalleryScreen(galleryModel, { galleryOpen = false }, openPhoto, editorModel, state.luts,
+                { uri -> model.photoEdited(uri); galleryModel.refresh() })
         }
         return
     }
@@ -519,6 +520,17 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
         when (name) {
             "add" -> { line(.5f,.15f,.5f,.85f); line(.15f,.5f,.85f,.5f) }
             "close" -> { line(.23f,.23f,.77f,.77f); line(.77f,.23f,.23f,.77f) }
+            "play" -> drawPath(Path().apply { moveTo(w*.3f,h*.18f); lineTo(w*.8f,h*.5f); lineTo(w*.3f,h*.82f); close() }, tint)
+            "pause" -> {
+                drawRoundRect(tint, Offset(w*.25f,h*.2f), androidx.compose.ui.geometry.Size(w*.16f,h*.6f), androidx.compose.ui.geometry.CornerRadius(w*.025f))
+                drawRoundRect(tint, Offset(w*.59f,h*.2f), androidx.compose.ui.geometry.Size(w*.16f,h*.6f), androidx.compose.ui.geometry.CornerRadius(w*.025f))
+            }
+            "back" -> { line(.66f,.2f,.34f,.5f); line(.34f,.5f,.66f,.8f) }
+            "check" -> { line(.18f,.51f,.4f,.73f); line(.4f,.73f,.82f,.27f) }
+            "edit" -> {
+                drawPath(Path().apply { moveTo(w*.18f,h*.7f); lineTo(w*.68f,h*.2f); lineTo(w*.8f,h*.32f); lineTo(w*.3f,h*.82f); lineTo(w*.18f,h*.82f); close() }, tint, style = stroke)
+                line(.6f,.28f,.72f,.4f)
+            }
             "flash" -> drawPath(Path().apply { moveTo(w*.6f,h*.07f); lineTo(w*.22f,h*.55f); lineTo(w*.48f,h*.55f); lineTo(w*.4f,h*.93f); lineTo(w*.8f,h*.42f); lineTo(w*.55f,h*.42f); close() }, tint, style = stroke)
             "tune" -> { for ((y,x) in listOf(.24f to .32f,.5f to .68f,.76f to .4f)) { line(.1f,y,.9f,y); drawCircle(Color.Black, w*.09f, Offset(w*x,h*y)); drawCircle(tint, w*.09f, Offset(w*x,h*y), style = stroke) } }
             "lut" -> { drawCircle(tint,w*.24f,Offset(w*.36f,h*.36f),style=stroke); drawCircle(tint,w*.24f,Offset(w*.64f,h*.36f),style=stroke); drawCircle(tint,w*.24f,Offset(w*.5f,h*.65f),style=stroke) }

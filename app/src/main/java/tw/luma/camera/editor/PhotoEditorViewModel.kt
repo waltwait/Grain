@@ -72,7 +72,14 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         savedState["selectedId"] = null
         savedState["strength"] = 1f
         savedState.remove<String>("source")
+        savedState["source-uri"] = uri.toString()
         load(uri, null)
+    }
+
+    fun openForViewer(uri: Uri) {
+        if (savedState.get<String>("source-uri") == uri.toString() &&
+            (_state.value.loading || source != null)) return
+        open(uri)
     }
 
     private fun load(uri: Uri?, cached: File?) {
@@ -173,6 +180,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         source?.delete()
         source = null
         savedState.remove<String>("source")
+        savedState.remove<String>("source-uri")
         savedState.remove<String>("selectedId")
         savedState.remove<Float>("strength")
         _state.value = PhotoEditorUiState()

@@ -3,6 +3,9 @@ package tw.luma.camera.ui
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -15,15 +18,19 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,14 +61,17 @@ import androidx.media3.ui.compose.ContentFrame
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import tw.luma.camera.LutEntry
 import tw.luma.camera.camera.ZoomControls
+import tw.luma.camera.editor.PhotoEditorViewModel
 import tw.luma.camera.gallery.GalleryItem
 import tw.luma.camera.gallery.GalleryViewModel
 import tw.luma.camera.gallery.PhotoViewport
 import kotlin.math.min
 
 @Composable
-internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPhoto: () -> Unit, editPhoto: (Uri) -> Unit) {
+internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPhoto: () -> Unit,
+    editor: PhotoEditorViewModel, entries: List<LutEntry>, onSaved: (Uri) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
@@ -74,11 +84,11 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit, importPho
     }
     val items = remember(state.items, filter) { state.items.filter { filter == 0 || it.video == (filter == 2) } }
     val selectedIndex = items.indexOfFirst { it.uri.toString() == selected }
-    BackHandler { if (selected != null) selected = null else close() }
-    Column(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().testTag("grain-gallery")) {
+    BackHandler(enabled = selectedIndex < 0) { close() }
+    Box(Modifier.fillMaxSize().background(Color.Black).testTag("grain-gallery")) {
         if (selectedIndex >= 0) {
-            GalleryViewer(items, selectedIndex, model, { selected = null }, editPhoto)
-        } else {
+            GalleryViewer(items, selectedIndex, model, editor, entries, { selected = null }, onSaved)
+        } else Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp).testTag("gallery-close")) { Text("‹ 相機") }
                 Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
@@ -141,39 +151,120 @@ private fun GalleryThumbnail(item: GalleryItem, model: GalleryViewModel, modifie
 }
 
 @Composable
-private fun ColumnScope.GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: GalleryViewModel, back: () -> Unit, editPhoto: (Uri) -> Unit) {
+private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: GalleryViewModel,
+    editor: PhotoEditorViewModel, entries: List<LutEntry>, back: () -> Unit, onSaved: (Uri) -> Unit) {
     val pager = rememberPagerState(initialPage = initialPage) { items.size }
     val positions = remember { mutableMapOf<String, Long>() }
+    val savedTabs = rememberSaveableStateHolder()
+    val editState by editor.state.collectAsStateWithLifecycle()
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
-    LaunchedEffect(pager.currentPage) { zoomed = false }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = back, modifier = Modifier.heightIn(min = 48.dp).testTag("viewer-back")) { Text("‹ 相簿") }
-        Spacer(Modifier.weight(1f))
-        Text("${pager.currentPage + 1} / ${items.size}", color = Color.White.copy(alpha = .6f))
-        val current = items[pager.currentPage.coerceIn(items.indices)]
-        if (!current.video) TextButton(onClick = { editPhoto(current.uri) }, modifier = Modifier.testTag("viewer-edit")) { Text("編輯") }
+    var currentUri by rememberSaveable { mutableStateOf(items[initialPage].uri.toString()) }
+    val latestItems by rememberUpdatedState(items)
+    // Keep the same source photo selected when saving inserts a new item at the start of the album.
+    LaunchedEffect(pager) {
+        var orderedUris = latestItems.map { it.uri.toString() }
+        snapshotFlow { latestItems to pager.settledPage }.collect { (nextItems, page) ->
+            val nextUris = nextItems.map { it.uri.toString() }
+            if (orderedUris != nextUris) {
+                val index = nextUris.indexOf(currentUri).takeIf { it >= 0 } ?: page.coerceIn(nextItems.indices)
+                orderedUris = nextUris
+                currentUri = nextUris[index]
+                pager.scrollToPage(index)
+            } else currentUri = nextUris[page.coerceIn(nextItems.indices)]
+        }
     }
-    HorizontalPager(state = pager, userScrollEnabled = !zoomed, key = { items[it].uri.toString() }, beyondViewportPageCount = 0,
-        modifier = Modifier.fillMaxWidth().weight(1f).testTag("gallery-pager")) { page ->
-        val current = items[page]
-        val active = page == pager.settledPage
-        key(current.uri) {
-            if (current.video && active) GalleryVideo(current, positions[current.uri.toString()] ?: 0) { positions[current.uri.toString()] = it }
-            else if (current.video) GalleryThumbnail(current, model, Modifier.fillMaxSize())
-            else GalleryPhoto(current, model, page == pager.settledPage) { zoomed = it }
+    val current = items.firstOrNull { it.uri.toString() == currentUri } ?: items[pager.settledPage.coerceIn(items.indices)]
+    LaunchedEffect(entries) { editor.setLuts(entries) }
+    LaunchedEffect(editing, current.uri) {
+        if (current.video) editing = false
+        else if (editing) editor.openForViewer(current.uri)
+    }
+    val goBack: () -> Unit = {
+        if (!editState.saving) {
+            if (editing) editing = false else { editor.discard(); back() }
+        }
+    }
+    BackHandler(onBack = goBack)
+    Box(Modifier.fillMaxSize()) {
+        if (editing) savedTabs.SaveableStateProvider("editor") {
+            PhotoEditorBody(editState, editor, entries, null, { editor.openForViewer(current.uri) }, onSaved,
+                Modifier.fillMaxSize().safeDrawingPadding().padding(top = 56.dp, bottom = 64.dp).testTag("photo-editor"))
+        } else savedTabs.SaveableStateProvider("photo") {
+            HorizontalPager(state = pager, userScrollEnabled = !zoomed && !editState.saving,
+                key = { items[it].uri.toString() }, beyondViewportPageCount = 0,
+                modifier = Modifier.fillMaxSize().testTag("gallery-pager")) { page ->
+                val item = items[page]
+                val active = page == pager.settledPage
+                key(item.uri) {
+                    if (item.video && active) GalleryVideo(item, positions[item.uri.toString()] ?: 0) { positions[item.uri.toString()] = it }
+                    else if (item.video) GalleryThumbnail(item, model, Modifier.fillMaxSize())
+                    else GalleryPhoto(item, model, active, controlsVisible, { controlsVisible = !controlsVisible }, { zoomed = it })
+                }
+            }
+        }
+        val chromeVisible = editing || current.video || controlsVisible
+        AnimatedVisibility(chromeVisible, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
+            Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .8f), Color.Transparent)))
+                .statusBarsPadding().displayCutoutPadding().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                IconButton(onClick = goBack, enabled = !editState.saving,
+                    modifier = Modifier.align(Alignment.CenterStart).size(48.dp)
+                        .testTag(if (editing) "editor-back" else "viewer-back")
+                        .semantics { contentDescription = if (editing) "返回照片" else "返回相簿" }) {
+                    CameraGlyph("back", Modifier.size(24.dp))
+                }
+                Text("${items.indexOf(current) + 1} / ${items.size}", Modifier.align(Alignment.Center),
+                    color = Color.White.copy(alpha = .8f), style = MaterialTheme.typography.labelLarge)
+                if (editing) IconButton(onClick = { editor.save(onSaved) }, enabled = editState.canSave,
+                    modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("editor-save")
+                        .semantics { contentDescription = if (editState.savedUri != null && editState.selection.savedFilter == editState.selection.filter) "已儲存" else "儲存新照片" }) {
+                    if (editState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
+                }
+            }
+        }
+        AnimatedVisibility(!current.video && chromeVisible, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
+            Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .9f))))
+                .navigationBarsPadding().displayCutoutPadding().padding(top = 8.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
+                Row(Modifier.widthIn(max = 300.dp).fillMaxWidth().selectableGroup()) {
+                    listOf("照片", "編輯").forEachIndexed { index, label ->
+                        val selected = editing == (index == 1)
+                        Tab(selected = selected, onClick = {
+                            if (index == 1) editor.openForViewer(current.uri)
+                            editing = index == 1
+                            controlsVisible = true
+                        },
+                            enabled = !editState.saving && !pager.isScrollInProgress,
+                            selectedContentColor = MaterialTheme.colorScheme.primary,
+                            unselectedContentColor = Color.White.copy(alpha = .6f),
+                            modifier = Modifier.weight(1f).heightIn(min = 52.dp).testTag(if (index == 0) "viewer-photo-tab" else "viewer-edit")) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(label, Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.labelLarge)
+                                Box(Modifier.width(24.dp).height(2.dp).background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(1.dp)))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
+private val PanSaver = Saver<Offset, List<Float>>(save = { listOf(it.x, it.y) }, restore = { Offset(it[0], it[1]) })
+
 @Composable
-private fun GalleryPhoto(item: GalleryItem, model: GalleryViewModel, active: Boolean, onZoom: (Boolean) -> Unit) {
+private fun GalleryPhoto(item: GalleryItem, model: GalleryViewModel, active: Boolean, controlsVisible: Boolean,
+    onTap: () -> Unit, onZoom: (Boolean) -> Unit) {
     var bitmap by remember(item.uri) { mutableStateOf<Bitmap?>(null) }
     var failed by remember(item.uri) { mutableStateOf(false) }
-    var scale by remember(item.uri) { mutableFloatStateOf(1f) }
-    var pan by remember(item.uri) { mutableStateOf(Offset.Zero) }
+    var scale by rememberSaveable(item.uri.toString()) { mutableFloatStateOf(1f) }
+    var pan by rememberSaveable(item.uri.toString(), stateSaver = PanSaver) { mutableStateOf(Offset.Zero) }
+    val tapped by rememberUpdatedState(onTap)
     val zoomChanged by rememberUpdatedState(onZoom)
     LaunchedEffect(active, item.uri) {
         if (active) {
+            zoomChanged(scale > 1.01f)
             try { bitmap = model.photo(item); failed = false }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { failed = true }
@@ -186,6 +277,10 @@ private fun GalleryPhoto(item: GalleryItem, model: GalleryViewModel, active: Boo
         val image = bitmap
         if (image != null) {
             val fit = min(viewportW / image.width, viewportH / image.height)
+            LaunchedEffect(viewportW, viewportH, image) {
+                pan = Offset(PhotoViewport.clampPan(pan.x, image.width * fit * scale, viewportW),
+                    PhotoViewport.clampPan(pan.y, image.height * fit * scale, viewportH))
+            }
             val transform = rememberTransformableState { centroid, zoom, offset, _ ->
                 val nextScale = (scale * zoom).coerceIn(1f, 5f)
                 val ratio = nextScale / scale
@@ -199,7 +294,9 @@ private fun GalleryPhoto(item: GalleryItem, model: GalleryViewModel, active: Boo
             }
             Image(remember(image) { image.asImageBitmap() }, "照片 ${item.name}", contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().transformable(transform, enabled = active, canPan = { scale > 1.01f })
-                    .pointerInput(item.uri) { detectTapGestures(onDoubleTap = { scale = 1f; pan = Offset.Zero; zoomChanged(false) }) }
+                    .pointerInput(item.uri, active) {
+                        if (active) detectTapGestures(onTap = { tapped() }, onDoubleTap = { scale = 1f; pan = Offset.Zero; zoomChanged(false) })
+                    }
                     .semantics {
                         stateDescription = if (scale > 1.01f) "已放大" else "原始比例"
                         customActions = if (!active) emptyList() else listOf(
@@ -209,6 +306,7 @@ private fun GalleryPhoto(item: GalleryItem, model: GalleryViewModel, active: Boo
                                 zoomChanged(scale > 1.01f)
                                 true
                             },
+                            CustomAccessibilityAction(if (controlsVisible) "隱藏工具列" else "顯示工具列") { tapped(); true },
                         )
                     }
                     .graphicsLayer { scaleX = scale; scaleY = scale; translationX = pan.x; translationY = pan.y }.testTag("gallery-photo"))
@@ -255,7 +353,7 @@ private fun GalleryVideo(item: GalleryItem, resumeMs: Long, savePosition: (Long)
     }
     SideEffect { view.keepScreenOn = playing }
     DisposableEffect(view) { onDispose { view.keepScreenOn = false } }
-    Column(Modifier.fillMaxSize().testTag("gallery-video")) {
+    Column(Modifier.fillMaxSize().safeDrawingPadding().testTag("gallery-video")) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             ContentFrame(player, Modifier.fillMaxSize(), surfaceType = SURFACE_TYPE_TEXTURE_VIEW)
             if (buffering && error == null) CircularProgressIndicator(Modifier.size(28.dp))
@@ -281,7 +379,10 @@ private fun VideoControls(player: Player, playing: Boolean, enabled: Boolean) {
         }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        FilledTonalButton(onClick = { if (player.isPlaying) player.pause() else { if (player.playbackState == Player.STATE_ENDED) player.seekTo(0); player.play() } }, enabled = enabled, modifier = Modifier.testTag("video-play")) { Text(if (playing) "暫停" else "播放") }
+        FilledTonalIconButton(onClick = { if (player.isPlaying) player.pause() else { if (player.playbackState == Player.STATE_ENDED) player.seekTo(0); player.play() } }, enabled = enabled,
+            modifier = Modifier.size(48.dp).testTag("video-play").semantics { contentDescription = if (playing) "暫停" else "播放" }) {
+            CameraGlyph(if (playing) "pause" else "play", Modifier.size(24.dp), LocalContentColor.current)
+        }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Slider(value = (drag ?: if (duration > 0) position.toFloat() / duration else 0f).coerceIn(0f, 1f),
                 onValueChange = { drag = it }, onValueChangeFinished = { drag?.let { player.seekTo((it * duration).toLong()) }; drag = null },
