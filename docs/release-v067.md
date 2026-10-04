@@ -12,4 +12,6 @@ APK DEX 包含 `gallery-tabs-pager`、`gallery-photo-tab`、`gallery-edit-tab`�
 
 成品 `output/Grain-0.6.7-personal-fuji.apk`：14,016,730 bytes，SHA-256 `75609e72b83b4c0a57697934e8ea09ba47197297b284a451bfdb7d1732df946e`。
 
-發布進度待補。
+2026-10-04 已推送 main 與 v0.6.7，標籤對應 `694d26b9d7c33c9ce83797fca53fe517aab0fa55`。已發布 [私人 Release](https://github.com/waltwait/Grain/releases/tag/v0.6.7)，Release ID 402879708；草稿核對附件大小與 SHA-256 後才發布。GitHub 草稿附件的 temporary untagged URL 於發布後轉為正式 v0.6.7 URL，最終網址也已與 metadata 核對一致。最新版為 v0.6.7、非草稿、非預發布，只有一個 APK，大小與 SHA-256 和本機成品相同。App 儲存庫維持 private=true、has_pages=false。
+
+公開下載頁 metadata 提交 `068e722f04b9269324b98abdde5474896bb60ffe`，[部署 37183312032](https://github.com/waltwait/Grain-pages/actions/runs/37183312032) 成功。匿名線上 `latest.json` 與本機公開 metadata 完全相同，版本 0.6.7／30、access=github-login，下載按鈕沿用私人最新 Release。公開儲存庫仍只有六個既有網頁／說明／metadata 檔案，沒有 APK 或 LUT。
