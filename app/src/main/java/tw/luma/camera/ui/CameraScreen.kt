@@ -119,7 +119,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     if (galleryOpen) {
         destinations.SaveableStateProvider("gallery") {
             GalleryScreen(galleryModel, { galleryOpen = false }, editorModel, state.luts,
-                { uri -> model.photoEdited(uri); galleryModel.refresh() })
+                { galleryModel.refresh() })
         }
         return
     }
@@ -593,7 +593,7 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                         }}"
                         Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n色溫控制：$wb$wbResult",
                             Modifier.padding(vertical = 12.dp).testTag("device-info"), style = MaterialTheme.typography.bodyMedium)
-                        Text("照片：Pictures/Grain\n影片：Movies/Grain", style = MaterialTheme.typography.bodySmall)
+                        Text("照片：Pictures/Grain\n編輯：Pictures/Grain Edits\n影片：Movies/Grain", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

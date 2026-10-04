@@ -244,16 +244,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun photoEdited(uri: Uri) {
-        if (_state.value.savedUri == uri) return
-        _state.update { it.copy(savedUri = uri, thumbnail = null, savedMime = "image/jpeg",
-            captureFeedback = it.captureFeedback.mediaSaved()) }
-        viewModelScope.launch {
-            val thumb = loadMediaThumbnail(uri)
-            _state.update { if (it.savedUri == uri) it.copy(thumbnail = thumb) else it }
-        }
-    }
-
     fun startVideo(engine: CameraEngine, audio: Boolean) {
         if (_state.value.busy || _state.value.recording || !_state.value.ready || _state.value.mode != CaptureMode.VIDEO) return
         _state.update { it.copy(recordingStatus = RecordingStatus.STARTING, recordingNs = 0, recordingAudio = audio) }

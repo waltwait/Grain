@@ -497,6 +497,7 @@ class CameraExperienceDeviceTest {
             resolver.update(source, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
             val sourceBytes = requireNotNull(resolver.openInputStream(source)).use { it.readBytes() }
             val sourceCount = ownPhotoCount()
+            val editCount = ownPhotoCount("Pictures/Grain Edits/")
             ui.onNodeWithTag("open-gallery").performClick()
             ui.onNodeWithTag("gallery-edit-tab").performClick()
             ui.runOnIdle { importEditor.open(source) }
@@ -579,7 +580,9 @@ class CameraExperienceDeviceTest {
             ui.waitUntil(30_000) { editor.state.value.savedUri != null && !editor.state.value.saving }
             output = editor.state.value.savedUri
             assertNotEquals(source, output)
-            assertEquals(sourceCount + 1, ownPhotoCount())
+            assertEquals("Edits stay out of the camera folder", sourceCount, ownPhotoCount())
+            assertEquals("An edit is saved with a copy of its original", editCount + 2, ownPhotoCount("Pictures/Grain Edits/"))
+            assertArrayEquals(sourceBytes, requireNotNull(resolver.openInputStream(requireNotNull(siblingOriginal(requireNotNull(output))))).use { it.readBytes() })
             assertArrayEquals(sourceBytes, requireNotNull(resolver.openInputStream(source)).use { it.readBytes() })
             val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             resolver.openInputStream(requireNotNull(output)).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
@@ -630,7 +633,7 @@ class CameraExperienceDeviceTest {
         } finally {
             ui.runOnIdle { editor.discard(); importEditor.discard() }
             bitmap.recycle()
-            output?.let { resolver.delete(it, null, null) }
+            output?.let { deleteWithOriginal(it) }
             resolver.delete(source, null, null)
         }
     }
@@ -658,6 +661,7 @@ class CameraExperienceDeviceTest {
                 originalBytes += requireNotNull(resolver.openInputStream(uri)).use { it.readBytes() }
             }
             val before = ownPhotoCount()
+            val editsBefore = ownPhotoCount("Pictures/Grain Edits/")
             ui.onNodeWithTag("open-gallery").performClick()
             ui.onNodeWithTag("gallery-edit-tab").performClick()
             val missing = android.net.Uri.parse("content://tw.luma.camera.missing/batch-test")
@@ -681,7 +685,8 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("editor-save").performClick()
             ui.waitUntil(30_000) { !editor.state.value.saving && editor.state.value.batch?.savedCount == 2 && editor.state.value.batch?.failedCount == 1 }
             ui.onNodeWithTag("editor-batch-status").assertTextEquals("已儲存 2 張 · 失敗 1 張")
-            assertEquals(before + 2, ownPhotoCount())
+            assertEquals(before, ownPhotoCount())
+            assertEquals("Two saved photos, each with an original", editsBefore + 4, ownPhotoCount("Pictures/Grain Edits/"))
             val outputs = editor.state.value.batch!!.items.mapNotNull { it.output }.toSet()
             assertEquals(2, outputs.size)
             sources.forEachIndexed { index, uri ->
@@ -695,7 +700,7 @@ class CameraExperienceDeviceTest {
             }
             ui.onNodeWithTag("editor-batch-retry").performClick()
             ui.waitUntil(30_000) { !editor.state.value.saving && editor.state.value.batch?.failedCount == 1 }
-            assertEquals(before + 2, ownPhotoCount())
+            assertEquals("A retry rewrites only the failed photo, which still fails", editsBefore + 4, ownPhotoCount("Pictures/Grain Edits/"))
             assertEquals(outputs, editor.state.value.batch!!.items.mapNotNull { it.output }.toSet())
             ui.onNodeWithTag("gallery-photo-tab").performClick()
             ui.onNodeWithTag("gallery-edit-tab").performClick()
@@ -703,7 +708,7 @@ class CameraExperienceDeviceTest {
         } finally {
             val outputs = editor.state.value.batch?.items.orEmpty().mapNotNull { it.output }.map(android.net.Uri::parse)
             ui.runOnIdle { editor.discard() }
-            outputs.forEach { resolver.delete(it, null, null) }
+            outputs.forEach { deleteWithOriginal(it) }
             sources.forEach { resolver.delete(it, null, null) }
             bitmap.recycle()
         }
@@ -746,7 +751,7 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("editor-save").assertIsNotEnabled()
         } finally {
             ui.runOnIdle { editor.discard() }
-            outputs.forEach { resolver.delete(it, null, null) }
+            outputs.forEach { deleteWithOriginal(it) }
             sources.forEach { resolver.delete(it, null, null) }
             bitmap.recycle()
         }
@@ -807,6 +812,23 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("gallery-pager").assertIsDisplayed()
             ui.onNodeWithTag("viewer-original-toggle").assertDoesNotExist()
         } finally { inserted.forEach { ui.activity.contentResolver.delete(it, null, null) } }
+    }
+
+    private fun siblingOriginal(edited: android.net.Uri): android.net.Uri? {
+        val resolver = ui.activity.contentResolver
+        val name = resolver.query(edited, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
+            ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: return null
+        val originalName = tw.luma.camera.storage.PhotoNames.originalOf(name) ?: return null
+        return resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.MediaColumns._ID),
+            "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ?",
+            arrayOf(originalName, "Pictures/Grain Edits/", ui.activity.packageName), null)?.use {
+            if (it.moveToFirst()) android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.getLong(0)) else null
+        }
+    }
+
+    private fun deleteWithOriginal(edited: android.net.Uri) {
+        siblingOriginal(edited)?.let { ui.activity.contentResolver.delete(it, null, null) }
+        ui.activity.contentResolver.delete(edited, null, null)
     }
 
     /** Edited photos only: the edit grid does not list the `_original` copies. */
