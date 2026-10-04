@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.sp
+import tw.luma.camera.camera.FlashControl
 import tw.luma.camera.CaptureMode
 import tw.luma.camera.RecordingStatus
 import tw.luma.camera.camera.ZoomControls
@@ -423,17 +424,22 @@ private fun RecordingClock(model: CameraViewModel, status: RecordingStatus) {
 
 @Composable
 private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, newVersion: String?, modifier: Modifier, panel: (String) -> Unit) {
-    NativeCameraToolbar(state, modifier, panel = panel, updateAvailable = newVersion != null) { RecordingClock(model, state.recordingStatus) }
+    NativeCameraToolbar(state, modifier, panel = panel, updateAvailable = newVersion != null,
+        onFlash = { model.changeCapture { it.copy(flash = !it.flash) } }) { RecordingClock(model, state.recordingStatus) }
 }
 
 @Composable
-internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, clock: @Composable () -> Unit) {
+internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, onFlash: () -> Unit = {}, clock: @Composable () -> Unit) {
     val gradient = remember { Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent)) }
     Row(modifier.fillMaxWidth().background(gradient).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp),
             onClick = { panel("settings") }, enabled = !state.recording) {
             Box(contentAlignment = Alignment.Center) { Text(state.videoQuality, Modifier.cameraControlRotation(), color = Color.White, style = MaterialTheme.typography.labelMedium) }
-        } else GlassIcon("flash", if (state.capture.flash) "閃光燈已開啟" else "閃光燈設定", !state.recording && !state.busy, state.capture.flash) { panel("settings") }
+        } else {
+            val flashUsable = FlashControl.usable(state.hasFlash, state.capture.manual)
+            val flashOn = FlashControl.shownOn(state.capture.flash, flashUsable)
+            GlassIcon("flash", FlashControl.description(flashUsable, flashOn), FlashControl.enabled(flashUsable, state.busy, state.recording), flashOn) { onFlash() }
+        }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -578,7 +584,6 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     }
                     ToggleRow("同時儲存原圖", state.saveOriginal, !state.busy, model::saveOriginal)
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }
-                    if (state.mode == CaptureMode.PHOTO) ToggleRow("拍照閃光燈", state.capture.flash, state.hasFlash && !state.capture.manual && !state.busy) { checked -> model.changeCapture { it.copy(flash = checked) } }
                     OutlinedButton(onClick = importLut, enabled = !state.busy && !state.recording) { Text("匯入 LUT") }
                     OutlinedButton(onClick = updates, enabled = !state.busy && !state.recording, modifier = Modifier.testTag("open-updates")) { Text(tw.luma.camera.update.UpdatePrompt.entryLabel(newVersion)) }
                     Spacer(Modifier.height(16.dp))
@@ -606,8 +611,6 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            FilledTonalButton(onClick = dismiss, modifier = Modifier.fillMaxWidth()) { Text("完成") }
         }
     }
 }

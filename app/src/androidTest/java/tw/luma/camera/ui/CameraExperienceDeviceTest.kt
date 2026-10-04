@@ -757,6 +757,21 @@ class CameraExperienceDeviceTest {
         }
     }
 
+    @Test fun flashIconTogglesWithoutOpeningSettings() {
+        ready()
+        org.junit.Assume.assumeTrue("Needs a camera with a flash unit and automatic exposure",
+            model().state.value.hasFlash && !model().state.value.capture.manual)
+        val start = model().state.value.capture.flash
+        val label = { on: Boolean -> if (on) "閃光燈已開啟" else "閃光燈已關閉" }
+        try {
+            ui.onNodeWithContentDescription(label(start)).performClick()
+            ui.runOnIdle { assertEquals(!start, model().state.value.capture.flash) }
+            ui.onAllNodesWithTag("open-updates").assertCountEquals(0)
+            ui.onNodeWithContentDescription(label(!start)).performClick()
+            ui.runOnIdle { assertEquals(start, model().state.value.capture.flash) }
+        } finally { ui.runOnIdle { model().changeCapture { it.copy(flash = start) } } }
+    }
+
     @Test fun editedPhotosAppearOnTheEditTabHome() {
         ready()
         val inserted = mutableListOf<android.net.Uri>()
