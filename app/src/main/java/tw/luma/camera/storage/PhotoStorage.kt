@@ -64,7 +64,7 @@ object PhotoStorage {
                 setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
                 setAttribute(ExifInterface.TAG_COLOR_SPACE, "1")
                 setAttribute(ExifInterface.TAG_SOFTWARE, "Grain")
-                setAttribute(ExifInterface.TAG_USER_COMMENT, "LUT=${filter.lut?.title ?: "Original"}; strength=${filter.strength}; input=${filter.encoding.name}; imageEV=${filter.brightnessEv}")
+                setAttribute(ExifInterface.TAG_USER_COMMENT, "LUT=${tw.luma.camera.gallery.FilmIndex.encodeTitle(filter.lut?.title ?: "Original")}; strength=${filter.strength}; input=${filter.encoding.name}; imageEV=${filter.brightnessEv}")
                 saveAttributes()
             }
             // Publish the pair only after both files have been written successfully.
@@ -83,6 +83,22 @@ object PhotoStorage {
             if (!decoded.isRecycled) decoded.recycle()
         }
     }
+
+    /** The Uri of an already published photo with exactly this name, so a repeated job can adopt it instead of rendering it twice. */
+    fun findPublished(context: Context, target: SaveTarget, name: String): Uri? = context.contentResolver.query(
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.MediaColumns._ID),
+        "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND " +
+            "${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0",
+        arrayOf(name, target.queryPath, context.packageName), null)?.use {
+        if (it.moveToFirst()) android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.getLong(0)) else null
+    }
+
+    /** Whether the original of the photo with this time part is already saved, whatever its extension. */
+    fun originalExists(context: Context, target: SaveTarget, time: String): Boolean = context.contentResolver.query(
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.MediaColumns._ID),
+        "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND " +
+            "${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0",
+        arrayOf(target.prefix + time + "_original.%", target.queryPath, context.packageName), null)?.use { it.moveToFirst() } ?: false
 
     private fun writePending(context: Context, file: File, name: String, relativePath: String, mimeType: String): Uri {
         val values = ContentValues().apply {

@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import tw.luma.camera.LutEntry
 import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.lut.FilterSwitching
+import tw.luma.camera.storage.PhotoNames
 import tw.luma.camera.storage.PhotoImportIo
 import tw.luma.camera.storage.PhotoStorage
 import tw.luma.camera.storage.SaveTarget
@@ -64,8 +65,9 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
     private val restoredStrength = savedState.get<Float>("strength")?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
     private val restoredChosen = (savedState.get<ArrayList<String>>("chosen")?.distinct()
         ?: listOfNotNull(savedState.get<String>("selectedId"))).take(PhotoBatchProgress.MAX_OUTPUTS)
-    private val stems = savedState.get<ArrayList<String>>("batch-stems").orEmpty()
-        .mapNotNull { line -> line.split('\t', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap().toMutableMap()
+    private val stemBook = StemBook(StemBook.decode(savedState.get<ArrayList<String>>("batch-stems").orEmpty())) {
+        savedState["batch-stems"] = ArrayList(StemBook.encode(it))
+    }
     private val _state = MutableStateFlow(PhotoEditorUiState(selection = PhotoEditSelection(
         selectedId = savedState["selectedId"], chosen = restoredChosen, filter = FilterSettings(strength = restoredStrength)),
         sources = restoredSources, previewIndex = restoredIndex, batch = restoreBatch()))
@@ -265,7 +267,16 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
             try {
                 val result = PhotoBatchProcessor.run(previous, { stopRequested }, { id ->
                     val job = jobs.getValue(id)
-                    withContext(Dispatchers.IO) {
+                    // Saved before the first output is written, on the main thread, so a restored session names the rest the same way.
+                    val time = stemBook.stemFor(job.source, PhotoStorage::timeStamp)
+                    val number = outputNumbers.getValue(job.filterId)
+                    val app = getApplication<Application>()
+                    val published = withContext(Dispatchers.IO) { PhotoStorage.findPublished(app, SaveTarget.EDIT, PhotoNames.edited(SaveTarget.EDIT, time, number)) }
+                    if (published != null) {
+                        // An earlier run already saved this output but the restored state did not know: adopt it, do not render a duplicate.
+                        withOriginal += job.source
+                        published.toString()
+                    } else withContext(Dispatchers.IO) {
                         val file = working?.takeIf { it.first == job.source }?.second ?: run {
                             working?.second?.takeIf { it != cached }?.delete()
                             working = null
@@ -284,10 +295,9 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
                             copy
                         }
                         ensureActive()
-                        val time = stems.getOrPut(job.source) { PhotoStorage.timeStamp().also { persistStems() } }
-                        PhotoStorage.processAndSave(getApplication(), file, filters.getValue(job.filterId), SaveTarget.EDIT,
-                            saveOriginal = job.source !in withOriginal, time = time, index = outputNumbers.getValue(job.filterId))
-                            .toString().also { withOriginal += job.source }
+                        PhotoStorage.processAndSave(app, file, filters.getValue(job.filterId), SaveTarget.EDIT,
+                            saveOriginal = job.source !in withOriginal && !PhotoStorage.originalExists(app, SaveTarget.EDIT, time),
+                            time = time, index = number).toString().also { withOriginal += job.source }
                     }
                 }, { progress ->
                     persistBatch(progress)
@@ -322,10 +332,6 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         savedState["batch-failed"] = ArrayList(progress.items.filter { it.status == PhotoBatchStatus.FAILED }.map { it.id })
     }
 
-    private fun persistStems() {
-        savedState["batch-stems"] = ArrayList(stems.map { (source, time) -> "$source\t$time" })
-    }
-
     private fun restoreBatch(): PhotoBatchProgress? {
         val jobs = runCatching { PhotoBatchProgress.pending(restoredSources, restoredChosen).items }.getOrNull() ?: return null
         if (jobs.size < 2 || savedState.get<Boolean>("batch-started") != true) return null
@@ -344,7 +350,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
 
     private fun clearBatch() {
         listOf("batch-started", "batch-sources", "batch-outputs", "batch-failed", "batch-stems").forEach { savedState.remove<Any>(it) }
-        stems.clear()
+        stemBook.clear()
     }
 
     private fun updateGrants(sources: List<String>) {

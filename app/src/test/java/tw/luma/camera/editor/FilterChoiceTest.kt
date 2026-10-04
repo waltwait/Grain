@@ -36,16 +36,28 @@ class FilterChoiceTest {
         assertNull(FilterChoice.primary(emptyList(), previous = "a", tapped = "a"))
     }
 
+    @Test fun aSingleFilterIsReplacedWhenTheBatchIsTooBigForTwoSoSwitchingStillWorks() {
+        assertEquals(listOf("b"), FilterChoice.toggle(listOf("a"), "b", sources = 11))
+        assertEquals(listOf("b"), FilterChoice.toggle(listOf("a"), "b", sources = 20))
+        assertEquals("With room for two it still adds", listOf("a", "b"), FilterChoice.toggle(listOf("a"), "b", sources = 10))
+    }
+
+    @Test fun twoOrMoreFiltersAreNeverReplacedSilently() {
+        assertEquals(listOf("a", "b"), FilterChoice.toggle(listOf("a", "b"), "c", sources = 7))
+    }
+
+    @Test fun theLimitWarningShowsWhenTheNextTapWouldBeRefused() {
+        assertTrue(FilterChoice.atLimit(chosenCount = 4, sources = 5))
+        assertTrue("7 photos x 3 filters would be 21", FilterChoice.atLimit(chosenCount = 2, sources = 7))
+        assertFalse(FilterChoice.atLimit(chosenCount = 3, sources = 5))
+        assertFalse("A single filter on 20 photos is not a multi-filter limit", FilterChoice.atLimit(chosenCount = 1, sources = 20))
+    }
+
     @Test fun theSummaryNamesTheChoice() {
         assertEquals("無濾鏡", FilterChoice.summary(chosenCount = 0, sources = 1, primaryTitle = null, noFilterLabel = "無濾鏡"))
         assertEquals("Portra 160", FilterChoice.summary(chosenCount = 1, sources = 1, primaryTitle = "Portra 160", noFilterLabel = "無濾鏡"))
         assertEquals("已選 3 個濾鏡 · 將輸出 6 張", FilterChoice.summary(chosenCount = 3, sources = 2, primaryTitle = "x", noFilterLabel = "無濾鏡"))
-        assertEquals("已選 4 個濾鏡 · 已達上限 20 張", FilterChoice.summary(chosenCount = 4, sources = 5, primaryTitle = "x", noFilterLabel = "無濾鏡"))
-    }
-
-    @Test fun theLimitWarningOnlyShowsOnceSeveralFiltersFillTheOutputs() {
-        assertTrue(FilterChoice.atLimit(chosenCount = 4, sources = 5))
-        assertFalse(FilterChoice.atLimit(chosenCount = 3, sources = 5))
-        assertFalse("A single filter on 20 photos is not a multi-filter limit", FilterChoice.atLimit(chosenCount = 1, sources = 20))
+        assertEquals("已選 4 個濾鏡 · 將輸出 20 張 · 已達上限", FilterChoice.summary(chosenCount = 4, sources = 5, primaryTitle = "x", noFilterLabel = "無濾鏡"))
+        assertEquals("已選 2 個濾鏡 · 將輸出 14 張 · 已達上限", FilterChoice.summary(chosenCount = 2, sources = 7, primaryTitle = "x", noFilterLabel = "無濾鏡"))
     }
 }

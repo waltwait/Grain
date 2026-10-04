@@ -282,8 +282,10 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
     BackHandler(onBack = goBack)
     Box(Modifier.fillMaxSize()) {
         if (editing) savedTabs.SaveableStateProvider("editor") {
-            PhotoEditorBody(editState, editor, entries, null, { editor.openForViewer(current.uri) }, onSaved,
-                Modifier.fillMaxSize().safeDrawingPadding().padding(top = 56.dp, bottom = 64.dp).testTag("photo-editor"))
+            Column(Modifier.fillMaxSize().safeDrawingPadding().padding(top = 56.dp, bottom = 64.dp).testTag("photo-editor")) {
+                if (editState.isBatch) PhotoBatchControls(editState, editor, onSaved)
+                PhotoEditorBody(editState, editor, entries, null, { editor.openForViewer(current.uri) }, onSaved, Modifier.weight(1f).fillMaxWidth())
+            }
         } else savedTabs.SaveableStateProvider("photo") {
             HorizontalPager(state = pager, userScrollEnabled = !zoomed && !editState.saving,
                 key = { items[it].uri.toString() }, beyondViewportPageCount = 0,

@@ -49,4 +49,27 @@ class FilmIndexTest {
         val films = mapOf(1L to "Portra 160", 2L to "Velvia", 3L to "Portra 160", 4L to "", 5L to "Velvia", 6L to "Acros", 7L to "Portra 160")
         assertEquals(listOf("Portra 160", "Velvia", "Acros"), FilmIndex.usedFilms(films))
     }
+
+    @Test fun aTitleIsWrittenAsPlainAsciiBecauseExifCannotStoreAnythingElse() {
+        val encoded = FilmIndex.encodeTitle("富士 PROVIA")
+        assertEquals("\\u5bcc\\u58eb PROVIA", encoded)
+        assertTrue(encoded.all { it.code < 128 })
+        assertEquals("富士 PROVIA", FilmIndex.decodeTitle(encoded))
+    }
+
+    @Test fun titlesWithBackslashesAndSymbolsSurviveAsWell() {
+        for (title in listOf("a\\b", "暖日", "Tri-X 400", "柔霧 \\u0041", "emoji 😀")) {
+            assertEquals(title, FilmIndex.decodeTitle(FilmIndex.encodeTitle(title)))
+        }
+    }
+
+    @Test fun theFilmIsReadBackFromAnEscapedComment() {
+        assertEquals("富士 PROVIA", FilmIndex.filmOf("LUT=" + FilmIndex.encodeTitle("富士 PROVIA") + "; strength=1.0", none))
+        assertEquals("暖日", FilmIndex.filmOf("LUT=\\u6696\\u65e5; strength=0.5", none))
+    }
+
+    @Test fun aTitleThatOlderVersionsGarbledIntoQuestionMarksIsNotAFilm() {
+        assertNull(FilmIndex.filmOf("LUT=?? PROVIA; strength=1.0", none))
+        assertNull(FilmIndex.filmOf("LUT=??; strength=1.0", none))
+    }
 }

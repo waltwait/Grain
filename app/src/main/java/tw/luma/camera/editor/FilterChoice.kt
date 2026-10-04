@@ -9,9 +9,12 @@ object FilterChoice {
     /** The list after tapping [id]; adding is refused (the list stays the same) once photos × filters would pass the limit. */
     fun toggle(chosen: List<String>, id: String, sources: Int): List<String> = when {
         id in chosen -> chosen - id
-        outputs(sources, chosen.size + 1) > PhotoBatchProgress.MAX_OUTPUTS -> chosen
-        else -> chosen + id
+        canAddMore(chosen.size, sources) -> chosen + id
+        chosen.size == 1 -> listOf(id) // Too many photos for a second filter: tapping another one switches, as it always did.
+        else -> chosen
     }
+
+    fun canAddMore(chosenCount: Int, sources: Int): Boolean = outputs(sources, chosenCount + 1) <= PhotoBatchProgress.MAX_OUTPUTS
 
     /** The filter shown in the preview: the one just checked, else the previous one while it is still checked, else the latest left. */
     fun primary(chosen: List<String>, previous: String?, tapped: String): String? = when {
@@ -20,12 +23,13 @@ object FilterChoice {
         else -> chosen.lastOrNull()
     }
 
-    fun atLimit(chosenCount: Int, sources: Int): Boolean = chosenCount >= 2 && outputs(sources, chosenCount) >= PhotoBatchProgress.MAX_OUTPUTS
+    /** True when several filters are checked and the next tap on another one would be refused. */
+    fun atLimit(chosenCount: Int, sources: Int): Boolean = chosenCount >= 2 && !canAddMore(chosenCount, sources)
 
     fun summary(chosenCount: Int, sources: Int, primaryTitle: String?, noFilterLabel: String): String = when {
         chosenCount <= 0 -> noFilterLabel
         chosenCount == 1 -> primaryTitle ?: noFilterLabel
-        atLimit(chosenCount, sources) -> "已選 $chosenCount 個濾鏡 · 已達上限 ${PhotoBatchProgress.MAX_OUTPUTS} 張"
+        atLimit(chosenCount, sources) -> "已選 $chosenCount 個濾鏡 · 將輸出 ${outputs(sources, chosenCount)} 張 · 已達上限"
         else -> "已選 $chosenCount 個濾鏡 · 將輸出 ${outputs(sources, chosenCount)} 張"
     }
 }
