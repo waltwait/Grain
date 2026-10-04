@@ -39,6 +39,10 @@ data class PhotoEditorUiState(
     val canSave get() = canEdit && !selection.comparing && selection.renderedRevision == selection.revision &&
         (if (isBatch) batch == null || batch.remainingCount > 0 else selection.canSave) &&
         (selection.selectedId == null || selection.filter.lut != null)
+    /** Every chosen photo is exported with the current settings, so there is no draft left to keep. */
+    val finished get() = !saving &&
+        if (isBatch) batch != null && batch.remainingCount == 0
+        else selection.savedFilter != null && selection.savedFilter == selection.filter
 }
 
 class PhotoEditorViewModel(application: Application, private val savedState: SavedStateHandle) : AndroidViewModel(application) {

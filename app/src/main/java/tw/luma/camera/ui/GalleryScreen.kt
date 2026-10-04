@@ -96,6 +96,10 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     }
     val choosePhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     LaunchedEffect(entries) { importEditor.setLuts(entries) }
+    // Unfinished drafts survive tab switches, but a fully exported import starts fresh once the editor tab is left.
+    LaunchedEffect(tabPager.settledPage) {
+        if (tabPager.settledPage == 0 && importEditor.state.value.finished) importEditor.discard()
+    }
     val lifecycle = LocalLifecycleOwner.current
     DisposableEffect(model, lifecycle) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) model.refresh() }

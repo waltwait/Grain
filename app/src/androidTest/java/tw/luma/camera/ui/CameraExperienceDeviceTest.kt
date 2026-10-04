@@ -709,6 +709,49 @@ class CameraExperienceDeviceTest {
         }
     }
 
+    @Test fun finishedImportStartsFreshAfterLeavingTheEditorTab() {
+        ready()
+        val resolver = ui.activity.contentResolver
+        val editor = ViewModelProvider(ui.activity).get("gallery-import-editor", tw.luma.camera.editor.PhotoEditorViewModel::class.java)
+        val sources = mutableListOf<android.net.Uri>()
+        val outputs = mutableListOf<android.net.Uri>()
+        val bitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
+        try {
+            repeat(2) { index ->
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, "GRAIN_FRESH_TEST_${System.nanoTime()}_$index.jpg")
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+                val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+                sources += uri
+                bitmap.eraseColor(Color.rgb(90 + index * 30, 110, 160))
+                requireNotNull(resolver.openOutputStream(uri)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+                resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            }
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.runOnIdle { editor.openBatch(sources) }
+            ui.waitUntil(10_000) { editor.state.value.canSave }
+            ui.onNodeWithTag("editor-save").performClick()
+            ui.waitUntil(30_000) { !editor.state.value.saving && editor.state.value.batch?.savedCount == 2 }
+            outputs += editor.state.value.batch!!.items.mapNotNull { it.output }.map(android.net.Uri::parse)
+            ui.runOnIdle { assertTrue(editor.state.value.finished) }
+            ui.onNodeWithTag("editor-batch-status").assertTextEquals("已儲存 2 張")
+            ui.onNodeWithTag("gallery-photo-tab").performClick()
+            ui.waitUntil(10_000) { editor.state.value.sources.isEmpty() }
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.onNodeWithTag("editor-choose").assertIsDisplayed()
+            ui.onNodeWithTag("editor-save").assertIsNotEnabled()
+        } finally {
+            ui.runOnIdle { editor.discard() }
+            outputs.forEach { resolver.delete(it, null, null) }
+            sources.forEach { resolver.delete(it, null, null) }
+            bitmap.recycle()
+        }
+    }
+
     private fun ownPhotoCount(): Int = ui.activity.contentResolver.query(
         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID),
         "${MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${MediaStore.Images.Media.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.Images.Media.IS_PENDING} = 0",
