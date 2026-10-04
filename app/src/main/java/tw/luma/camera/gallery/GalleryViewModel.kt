@@ -21,9 +21,12 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import tw.luma.camera.performance.grainTrace
+import tw.luma.camera.storage.SaveTarget
 
-data class GalleryItem(val uri: Uri, val name: String, val video: Boolean, val addedSeconds: Long, val durationMs: Long, val id: Long)
-data class GalleryState(val items: List<GalleryItem> = emptyList(), val loading: Boolean = true, val error: String? = null)
+data class GalleryItem(val uri: Uri, val name: String, val video: Boolean, val addedSeconds: Long, val durationMs: Long, val id: Long,
+    val original: Uri? = null)
+data class GalleryState(val items: List<GalleryItem> = emptyList(), val loading: Boolean = true, val error: String? = null,
+    val edits: List<GalleryItem> = emptyList())
 
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
     private val resolver = application.contentResolver
@@ -40,10 +43,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         refreshJob = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
             try {
-                val items = withContext(Dispatchers.IO) {
-                    grainTrace("Grain.gallery.query") { (query(false) + query(true)).sortedWith(compareByDescending<GalleryItem> { it.addedSeconds }.thenByDescending { it.id }) }
+                val (items, edits) = withContext(Dispatchers.IO) {
+                    grainTrace("Grain.gallery.query") {
+                        (query(false) + query(true)).sortedWith(compareByDescending<GalleryItem> { it.addedSeconds }.thenByDescending { it.id }) to queryEdits()
+                    }
                 }
-                _state.value = GalleryState(items, loading = false)
+                _state.value = GalleryState(items, loading = false, edits = edits)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { _state.value = _state.value.copy(loading = false, error = "無法讀取相簿，請重試") }
         }
@@ -64,6 +69,23 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
             result
         }.orEmpty()
+    }
+
+    /** Edited photos live in their own folder; each one carries the Uri of its original copy when that still exists. */
+    private fun queryEdits(): List<GalleryItem> {
+        val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0"
+        val rows = resolver.query(collection, arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.DATE_ADDED),
+            selection, arrayOf(SaveTarget.EDIT.queryPath, getApplication<Application>().packageName),
+            "${MediaStore.MediaColumns.DATE_ADDED} DESC, ${MediaStore.MediaColumns._ID} DESC")?.use { cursor ->
+            val result = ArrayList<EditRow>()
+            while (cursor.moveToNext()) result += EditRow(cursor.getLong(0), cursor.getString(1) ?: "Grain", cursor.getLong(2))
+            result
+        }.orEmpty()
+        return EditPairing.pair(rows).map { pair ->
+            GalleryItem(ContentUris.withAppendedId(collection, pair.edited.id), pair.edited.name, false, pair.edited.addedSeconds, 0, pair.edited.id,
+                pair.original?.let { ContentUris.withAppendedId(collection, it.id) })
+        }
     }
 
     /** Never recycle evicted bitmaps: a visible composable can still hold a reference. */
