@@ -397,6 +397,8 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("gallery-title").assertTextEquals("Grain").assertIsDisplayed()
         ui.onAllNodesWithContentDescription("重新整理相簿").assertCountEquals(0)
         ui.onNodeWithTag("gallery-import-photo").assertDoesNotExist()
+        ui.onNodeWithTag("gallery-filter-bar").assertDoesNotExist()
+        ui.onNodeWithTag("gallery-search-toggle").performClick()
         ui.onNodeWithTag("gallery-filter-2").performClick().assertIsSelected()
         ui.onNodeWithTag("gallery-filter-1").performClick().assertIsSelected()
         ui.onNodeWithTag("gallery-edit-tab").performClick().assertIsSelected()
@@ -435,6 +437,7 @@ class CameraExperienceDeviceTest {
                 resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
             }
             ui.onNodeWithTag("open-gallery").performClick()
+            ui.onNodeWithTag("gallery-search-toggle").performClick()
             ui.onNodeWithTag("gallery-filter-1").performClick()
             ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 ${names.last()}").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithContentDescription("照片 ${names.last()}").performClick()
@@ -791,6 +794,42 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("gallery-photo-tab").performClick()
         ui.waitForIdle()
         assertEquals(photosTop, titleTop(), 0.5f)
+    }
+
+    @Test fun emptyVideoFilterOffersNoEditButton() {
+        ready()
+        ui.onNodeWithTag("open-gallery").performClick()
+        ui.onNodeWithTag("gallery-search-toggle").performClick()
+        ui.onNodeWithTag("gallery-filter-2").performClick()
+        ui.waitForIdle()
+        ui.onAllNodesWithText("編輯照片").assertCountEquals(0)
+    }
+
+    @Test fun searchNarrowsTheGalleryAndMarksTheIcon() {
+        ready()
+        val resolver = ui.activity.contentResolver
+        val name = "GRAIN_SEARCH_${System.nanoTime()}.jpg"
+        val bitmap = Bitmap.createBitmap(160, 120, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(90, 130, 170)) }
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, name)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+        try {
+            requireNotNull(resolver.openOutputStream(uri)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+            resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $name").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithTag("gallery-filter-badge").assertDoesNotExist()
+            ui.onNodeWithTag("gallery-search-toggle").performClick()
+            ui.onNodeWithTag("gallery-search").performTextInput(name)
+            ui.waitUntil(10_000) { ui.onAllNodesWithTag("gallery-item").fetchSemanticsNodes().size == 1 }
+            ui.onNodeWithTag("gallery-filter-badge").assertIsDisplayed()
+            ui.onNodeWithTag("gallery-search").performTextClearance()
+            ui.waitUntil(10_000) { ui.onAllNodesWithTag("gallery-filter-badge").fetchSemanticsNodes().isEmpty() }
+        } finally { resolver.delete(uri, null, null); bitmap.recycle() }
     }
 
     @Test fun editedPhotosAppearOnTheEditTabHome() {

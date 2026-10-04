@@ -68,6 +68,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tw.luma.camera.LutEntry
 import tw.luma.camera.camera.ZoomControls
+import java.time.LocalDate
+import java.time.ZoneId
+import tw.luma.camera.gallery.FilmIndex
+import tw.luma.camera.gallery.GallerySearch
+import tw.luma.camera.gallery.SearchKey
+import androidx.compose.foundation.shape.CircleShape
 import tw.luma.camera.editor.PhotoEditorViewModel
 import tw.luma.camera.editor.PhotoBatchProgress
 import tw.luma.camera.gallery.GalleryItem
@@ -89,6 +95,10 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
         if (!importState.saving) tabScope.launch { tabPager.animateScrollToPage(if (next) 1 else 0) }
     }
     var filter by rememberSaveable { mutableIntStateOf(0) }
+    var filterOpen by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var film by rememberSaveable { mutableStateOf<String?>(null) }
+    val films by model.films.collectAsStateWithLifecycle()
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedEdit by rememberSaveable { mutableStateOf(false) }
     val grid = rememberLazyGridState()
@@ -107,7 +117,14 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer); model.releasePhotos() }
     }
-    val items = remember(state.items, filter) { state.items.filter { filter == 0 || it.video == (filter == 2) } }
+    val items = remember(state.items, filter, query, film, films) {
+        val today = LocalDate.now(); val zone = ZoneId.systemDefault()
+        state.items.filter { item ->
+            (filter == 0 || item.video == (filter == 2)) && (film == null || films[item.id] == film) &&
+                GallerySearch.matches(query, SearchKey(item.name, item.video, item.addedSeconds, films[item.id]?.takeIf { it.isNotEmpty() }), today, zone)
+        }
+    }
+    val filtering = filter != 0 || query.isNotBlank() || film != null
     val viewerItems = if (selectedEdit) state.edits else items
     val selectedIndex = viewerItems.indexOfFirst { it.uri.toString() == selected }
     val goBack: () -> Unit = {
@@ -130,7 +147,8 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                         fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB))
                     // Every tab has a second line, so the title never shifts when switching between them.
                     val subtitle = GalleryHeader.subtitle(editing, state.items.size, state.edits.size,
-                        if (importState.isBatch) importState.previewIndex + 1 to importState.sources.size else null)
+                        if (importState.isBatch) importState.previewIndex + 1 to importState.sources.size else null,
+                        filteredCount = items.size.takeIf { filtering })
                     Text(subtitle, maxLines = 1, style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                 }
@@ -139,6 +157,14 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                         .semantics { contentDescription = if (importState.isBatch) "批次儲存照片" else "儲存新照片" }) {
                     if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
+                } else IconButton(onClick = { filterOpen = !filterOpen },
+                    modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("gallery-search-toggle")
+                        .semantics { contentDescription = "搜尋與篩選"; stateDescription = if (filtering) "已篩選" else if (filterOpen) "已展開" else "已收起" }) {
+                    Box(contentAlignment = Alignment.Center) {
+                        CameraGlyph("search", Modifier.size(24.dp), if (filterOpen) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                        if (filtering) Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(8.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape).testTag("gallery-filter-badge"))
+                    }
                 }
             }
             HorizontalPager(state = tabPager, userScrollEnabled = !importState.saving,
@@ -154,15 +180,16 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     }
                 } else tabs.SaveableStateProvider("photos") {
                     Column(Modifier.fillMaxSize()) {
-                        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("全部", "照片", "影片").forEachIndexed { index, text ->
-                                FilterChip(selected = filter == index, onClick = { filter = index }, label = { Text(text) }, colors = grainChipColors(), modifier = Modifier.testTag("gallery-filter-$index"))
-                            }
-                        }
+                        if (filterOpen) GalleryFilterBar(query, { query = it }, filter, { filter = it }, FilmIndex.usedFilms(films), film, { film = it })
                         when {
                             state.error != null -> GalleryEmpty(state.error!!, "重試", model::refresh)
                             state.loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                            items.isEmpty() -> GalleryEmpty(if (filter == 2) "還沒有影片" else if (filter == 1) "還沒有照片" else "把下一個片刻留在 Grain", "編輯照片", { changeTab(true) })
+                            items.isEmpty() -> GalleryEmpty(when {
+                                filtering && state.items.isNotEmpty() -> "找不到符合的項目"
+                                filter == 2 -> "還沒有影片"
+                                filter == 1 -> "還沒有照片"
+                                else -> "把下一個片刻留在 Grain"
+                            })
                             else -> LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), state = grid,
                                 contentPadding = PaddingValues(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 items(items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
@@ -186,11 +213,13 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
 }
 
 @Composable
-private fun GalleryEmpty(message: String, action: String, click: () -> Unit) {
+private fun GalleryEmpty(message: String, action: String? = null, click: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(message, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = click) { Text(action) }
+        if (action != null) {
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = click) { Text(action) }
+        }
     }
 }
 

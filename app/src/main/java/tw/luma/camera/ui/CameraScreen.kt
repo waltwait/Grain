@@ -518,6 +518,7 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
         fun line(x: Float, y: Float, x2: Float, y2: Float) = drawLine(tint, Offset(w*x,h*y), Offset(w*x2,h*y2), stroke.width)
         when (name) {
             "add" -> { line(.5f,.15f,.5f,.85f); line(.15f,.5f,.85f,.5f) }
+            "search" -> { drawCircle(tint, w*.28f, Offset(w*.43f,h*.43f), style = stroke); line(.65f,.65f,.88f,.88f) }
             "close" -> { line(.23f,.23f,.77f,.77f); line(.77f,.23f,.23f,.77f) }
             "play" -> drawPath(Path().apply { moveTo(w*.3f,h*.18f); lineTo(w*.8f,h*.5f); lineTo(w*.3f,h*.82f); close() }, tint)
             "pause" -> {

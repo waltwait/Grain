@@ -24,4 +24,16 @@ class GalleryHeaderTest {
     @Test fun theBatchPositionOnlyAppliesToTheEditTab() {
         assertEquals("12", GalleryHeader.subtitle(editing = false, photoCount = 12, editCount = 3, batchPosition = 2 to 5))
     }
+
+    @Test fun aFilteredPhotosTabShowsHowManyOfTheTotal() {
+        assertEquals("3 / 12", GalleryHeader.subtitle(editing = false, photoCount = 12, editCount = 5, batchPosition = null, filteredCount = 3))
+    }
+
+    @Test fun nothingFilteredOutStillShowsTheTotal() {
+        assertEquals("12", GalleryHeader.subtitle(editing = false, photoCount = 12, editCount = 5, batchPosition = null, filteredCount = 12))
+    }
+
+    @Test fun theFilteredCountOnlyAppliesToThePhotosTab() {
+        assertEquals("5", GalleryHeader.subtitle(editing = true, photoCount = 12, editCount = 5, batchPosition = null, filteredCount = 3))
+    }
 }

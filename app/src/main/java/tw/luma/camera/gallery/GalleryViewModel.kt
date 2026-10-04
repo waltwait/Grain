@@ -22,6 +22,9 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import tw.luma.camera.performance.grainTrace
 import tw.luma.camera.storage.SaveTarget
+import tw.luma.camera.ui.NO_FILTER_LABEL
+import androidx.exifinterface.media.ExifInterface
+import java.io.File
 
 data class GalleryItem(val uri: Uri, val name: String, val video: Boolean, val addedSeconds: Long, val durationMs: Long, val id: Long,
     val original: Uri? = null)
@@ -37,6 +40,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val photos = bitmapCache(32 * 1024 * 1024)
     private val thumbnailSlots = Semaphore(2)
     private val photoSlots = Semaphore(1)
+    private val filmFile = File(application.filesDir, "film-index.txt")
+    private var filmsLoaded = false
+    private var filmJob: Job? = null
+    private val _films = MutableStateFlow<Map<Long, String>>(emptyMap())
+    /** Photo id to the film it was made with; an empty title means no film is known. Fills in while the gallery is open. */
+    val films = _films.asStateFlow()
 
     fun refresh() {
         refreshJob?.cancel()
@@ -49,6 +58,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
                 _state.value = GalleryState(items, loading = false, edits = edits)
+                indexFilms(items)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { _state.value = _state.value.copy(loading = false, error = "無法讀取相簿，請重試") }
         }
@@ -70,6 +80,37 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             result
         }.orEmpty()
     }
+
+    /** Reads the film of every photo not indexed yet from its EXIF comment, in the background, and remembers it on disk. */
+    private fun indexFilms(items: List<GalleryItem>) {
+        filmJob?.cancel()
+        filmJob = viewModelScope.launch(Dispatchers.IO) {
+            if (!filmsLoaded) {
+                _films.value = runCatching { FilmIndex.decode(filmFile.readText()) }.getOrDefault(emptyMap())
+                filmsLoaded = true
+            }
+            val missing = items.filter { !it.video && it.id !in _films.value }
+            if (missing.isEmpty()) return@launch
+            val updated = LinkedHashMap(_films.value)
+            for ((count, item) in missing.withIndex()) {
+                ensureActive()
+                updated[item.id] = readFilm(item.uri).orEmpty()
+                if ((count + 1) % 40 == 0) _films.value = LinkedHashMap(updated)
+            }
+            _films.value = updated
+            runCatching {
+                val temporary = File(filmFile.path + ".tmp")
+                temporary.writeText(FilmIndex.encode(updated))
+                check(temporary.renameTo(filmFile))
+            }
+        }
+    }
+
+    private fun readFilm(uri: Uri): String? = try {
+        resolver.openInputStream(uri)?.use { ExifInterface(it).getAttribute(ExifInterface.TAG_USER_COMMENT) }
+            ?.let { FilmIndex.filmOf(it, NO_FILTER_LABEL) }
+    } catch (e: CancellationException) { throw e }
+    catch (_: Exception) { null }
 
     /** Edited photos live in their own folder; each one carries the Uri of its original copy when that still exists. */
     private fun queryEdits(): List<GalleryItem> {
