@@ -15,9 +15,9 @@ fun releaseSigningValue(name: String): String = releaseSigning.getProperty(name)
     ?: throw GradleException("Missing $name in .signing/release.properties")
 
 val configuredUpdateUrl = providers.gradleProperty("grainUpdateUrl").orNull
-fun updateFeedField(): String {
-    // Private releases open in the user's browser; an optional hosted feed enables native updates.
-    val url = configuredUpdateUrl.orEmpty()
+fun updateFeedField(channel: String): String {
+    // Each channel reads its own metadata from the public repository; -PgrainUpdateUrl overrides it and an empty value disables native updates.
+    val url = configuredUpdateUrl ?: "https://raw.githubusercontent.com/waltwait/Grain/main/updates/$channel/latest.json"
     if (url.isNotBlank()) {
         val uri = URI(url)
         require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) {
@@ -34,9 +34,9 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 32
-        versionName = "0.6.9"
-        buildConfigField("String", "UPDATE_FEED_URL", updateFeedField())
+        versionCode = 33
+        versionName = "0.7.0"
+        buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("release"))
         buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -58,6 +58,7 @@ android {
     }
     buildTypes {
         getByName("debug") {
+            buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("personal-fuji"))
             buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"")
         }
         release {
@@ -68,6 +69,7 @@ android {
         create("personal") {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
+            buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("personal-fuji"))
             buildConfigField("String", "UPDATE_CHANNEL", "\"personal-fuji\"")
         }
     }

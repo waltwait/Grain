@@ -1,5 +1,7 @@
 # Grain 0.6.3：私人個人版更新
 
+> 後續：2026-10-04 儲存庫改為 public，0.7.0 起預設更新網址恢復，不再留空；見 [0.7.0 發布紀錄](release-v070.md)。以下保留 0.6.3 當時的 private 流程。
+
 使用者於 2026-10-03 改選 private 儲存庫與原個人 APK 發布方式。已確認 `waltwait/Grain` 的 `private: true`、`visibility: private`、`has_pages: false`。原 Grain Pages 已關閉，自動部署 workflow 移除；0.6.2 留作草稿，不修改既有 tag 或歷史附件。
 
 ## 預設流程

@@ -1,5 +1,7 @@
 # Grain 下載頁與 App 更新方案
 
+> 後續：2026-10-04 使用者將 `waltwait/Grain` 改為 public，App 預設改讀公開 raw `latest.json`；最新狀態與發布順序見 [0.7.0 發布紀錄](release-v070.md)。以下為較早的研究與當時決定。
+
 2026-10-03 研究。最新決定為 private 儲存庫與原個人 APK 發布方式；原 Grain Pages 已關閉，公開網頁改由獨立 Grain-pages 連到私人 Release。0.6.3 的「檢查更新」開啟 GitHub 最新 Release，使用者登入後下載及安裝。原生 HTTPS 更新模組保留供日後配置服務；私人 GitHub 不能直接作為匿名 App 更新來源。見 [私人更新紀錄](private-updates-v063.md)。
 
 ## 建議架構
