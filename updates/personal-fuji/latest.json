@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.4",
-  "versionCode": 37,
+  "versionName": "0.7.5",
+  "versionCode": 38,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.4/Grain-0.7.4-personal-fuji.apk",
-  "apkSize": 16092338,
-  "apkSha256": "f2922c1fbd93f610a7ab6a1afd1742ab6dc842308cffe5f1a49f458a2ee93e73",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.5/Grain-0.7.5-personal-fuji.apk",
+  "apkSize": 16452786,
+  "apkSha256": "9cf03979d320e8c367e4e30ed962e9faaa763c61c7fabda69a436592f4ae80b5",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "閃光燈新增自動模式，編輯顯示張數。"
+  "notes": "相簿搜尋、一張照片多個濾鏡。"
 }
