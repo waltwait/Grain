@@ -126,7 +126,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     modifier = Modifier.align(Alignment.CenterStart).testTag("gallery-close"),
                     description = if (editing) "返回照片" else "返回相機")
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Grain", modifier = Modifier.testTag("gallery-title"), style = MaterialTheme.typography.titleLarge,
+                    Text("Grain", modifier = Modifier.testTag("gallery-title"), fontFamily = NewsreaderBrand, style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB))
                     if (!editing) Text("${state.items.size}", style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))

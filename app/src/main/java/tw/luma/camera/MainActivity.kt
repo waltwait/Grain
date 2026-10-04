@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
+import tw.luma.camera.ui.GrainTypography
 import tw.luma.camera.ui.CameraScreen
 import tw.luma.camera.ui.LocalCameraControlRotation
 import tw.luma.camera.camera.CameraOrientation
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
                 primary = Color(0xFFFFD45B), onPrimary = Color(0xFF231C08),
                 secondary = Color(0xFFE0E0E5), background = Color.Black,
                 surface = Color(0xFF18191C), surfaceVariant = Color(0xFF2D2E33),
-            )) {
+            ), typography = GrainTypography) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground) {
                     CompositionLocalProvider(LocalCameraControlRotation provides orientation.controlDegrees(displayRotation())) {

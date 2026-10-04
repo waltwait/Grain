@@ -66,7 +66,7 @@ fun AppUpdateScreen(model: AppUpdateViewModel, back: () -> Unit) {
             Text("版本與更新", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Text("Grain", style = MaterialTheme.typography.headlineLarge)
+            Text("Grain", fontFamily = NewsreaderBrand, style = MaterialTheme.typography.headlineLarge)
             Text("目前版本 " + BuildConfig.VERSION_NAME, color = MaterialTheme.colorScheme.onSurfaceVariant)
             state.info?.let { info ->
                 Text(if (state.available) "新版 " + info.versionName else "已是最新版", style = MaterialTheme.typography.titleLarge,

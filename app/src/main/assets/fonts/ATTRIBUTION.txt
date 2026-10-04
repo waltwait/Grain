@@ -1,0 +1,20 @@
+Fonts bundled with Grain
+
+Noto Sans TC (interface text)
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+Source: https://github.com/google/fonts/tree/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosanstc
+
+Newsreader (the "Grain" brand title)
+Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+Source: https://github.com/google/fonts/tree/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/newsreader
+
+License: SIL Open Font License, Version 1.1 (full texts: OFL-NotoSansTC.txt, OFL-Newsreader.txt)
+https://openfontlicense.org
+Retain these notices when sharing the fonts.
+
+Modifications by the Grain project, 2026-10-04 (scripts/prepare_fonts.py):
+Both fonts are subsets. Noto Sans TC keeps Latin, punctuation, Zhuyin, the Big5 level-1 common
+Traditional Chinese characters and every character used by the app's own text; the weight axis is
+limited to 400-700. Newsreader keeps Latin and punctuation, with the optical size fixed at 24 and
+the weight axis limited to 400-700. TrueType hinting was removed. Characters outside a subset fall
+back to the system font. No glyph outlines were redrawn.
