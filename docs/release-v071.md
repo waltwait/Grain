@@ -16,7 +16,7 @@
 
 APK 確認 versionCode 34、versionName 0.7.1、非 debuggable，正式簽章憑證 SHA-256 `e6c756c9…c1217c8`（v2 簽章），16 KB ZIP 對齊與十款富士 LUT 原始 bytes 通過校驗；dex 內確認含 `Pictures/Grain Edits`、`GRAIN_EDIT_` 與新的畫面標記。
 
-成品 `output/Grain-0.7.1-personal-fuji.apk`：14,049,498 bytes，SHA-256 `b416ca19790fbd2f3b2ef513c38b06490bf633c447673c25e9e415b3d5214c8e`。尚未推送、尚未建立 Release，`updates/personal-fuji/latest.json` 仍是 0.7.0。
+成品 `output/Grain-0.7.1-personal-fuji.apk`：14,049,498 bytes，SHA-256 `b416ca19790fbd2f3b2ef513c38b06490bf633c447673c25e9e415b3d5214c8e`。2026-10-04 已推送 main 與 v0.7.1，標籤對應 `8fc3561163581f0af39cfe55511ed0d9715a0906`。已發布 [公開 Release](https://github.com/waltwait/Grain/releases/tag/v0.7.1)，Release ID 403054168；草稿 APK 的大小與 SHA-256 核對後才公開。GitHub 最新版為 v0.7.1、非草稿、非預發布，只有一個 `Grain-0.7.1-personal-fuji.apk`，匿名下載連結回 200。`updates/personal-fuji/latest.json`（提交 `4301804`）在附件確認後才更新為 0.7.1／34，更新說明縮短為一句話；repo 內的檔案與本機產生的完全相同。手機上 0.7.0 的 App 內更新、下載與安裝尚未實測。
 
 ## 已知限制
 
