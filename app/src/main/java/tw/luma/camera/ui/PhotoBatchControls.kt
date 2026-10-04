@@ -42,7 +42,7 @@ internal fun PhotoBatchControls(state: PhotoEditorUiState, model: PhotoEditorVie
             itemsIndexed(state.sources, key = { _, uri -> uri }) { index, uri ->
                 val chosen = index == state.previewIndex
                 Surface(onClick = { model.preview(index) }, enabled = !state.saving,
-                    shape = MaterialTheme.shapes.small, color = Color(0xFF242529),
+                    shape = MaterialTheme.shapes.small, color = GrainSurfaces.raised,
                     border = BorderStroke(if (chosen) 2.dp else 1.dp, if (chosen) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .15f)),
                     modifier = Modifier.size(56.dp).testTag("editor-source-$index").semantics {
                         selected = chosen
@@ -94,7 +94,7 @@ private fun BatchThumbnail(source: String, modifier: Modifier) {
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { /* Unsupported providers still show the numbered selection. */ }
     }
-    Box(modifier.background(Color(0xFF242529))) {
+    Box(modifier.background(GrainSurfaces.raised)) {
         bitmap?.let { Image(remember(it) { it.asImageBitmap() }, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
     }
 }

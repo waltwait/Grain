@@ -143,7 +143,7 @@ internal fun SavedMediaButton(thumbnail: Bitmap?, revision: Long, saving: Boolea
     }
     val showProgress = delayedProgress(saving)
     val gold = MaterialTheme.colorScheme.primary
-    Surface(onClick, enabled = enabled, shape = RoundedCornerShape(12.dp), color = Color(0xFF202124),
+    Surface(onClick, enabled = enabled, shape = RoundedCornerShape(12.dp), color = GrainSurfaces.control,
         modifier = Modifier.size(48.dp).testTag("open-gallery").semantics {
             contentDescription = "開啟 Grain 相簿"
             stateDescription = if (saving) "存檔中" else if (revision > 0) "已儲存" else "相簿"

@@ -304,10 +304,10 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.width(164.dp).fillMaxHeight(), true)
+                CameraDock(state, model, shutter, openGallery, Modifier.width(164.dp).fillMaxHeight(), true)
             } else Column(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openGallery, { panel = "settings" }, Modifier.fillMaxWidth(), false)
+                CameraDock(state, model, shutter, openGallery, Modifier.fillMaxWidth(), false)
             }
         }
     }
@@ -448,11 +448,11 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
                 }
             } else Surface(onClick = { panel("filters") }, color = Color.Transparent, enabled = !state.busy,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("filter-picker").semantics {
-                    contentDescription = "選擇底片 ${state.filter.lut?.title ?: "原色"}"
+                    contentDescription = "選擇底片 ${state.filter.lut?.title ?: NO_FILTER_LABEL}"
                 }) {
                 Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     CameraGlyph("lut", Modifier.size(16.dp).cameraControlRotation()); Spacer(Modifier.width(6.dp))
-                    Text(state.filter.lut?.title?.removePrefix("富士 ") ?: "原色", color = Color.White, maxLines = 1,
+                    Text(state.filter.lut?.title?.removePrefix("富士 ") ?: NO_FILTER_LABEL, color = Color.White, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                 }
             }
@@ -462,7 +462,7 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
 }
 
 @Composable
-private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, tools: () -> Unit, modifier: Modifier, landscape: Boolean) {
+private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, modifier: Modifier, landscape: Boolean) {
     val enabled = !state.busy && !state.recording
     val modes: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
@@ -486,7 +486,6 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 gallery(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, click = model::toggleFront)
             }
-            TextButton(onClick = tools, enabled = enabled) { Text("設定", color = Color.White.copy(alpha = .7f)) }
         } else {
             Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 gallery(); capture(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, click = model::toggleFront)

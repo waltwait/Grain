@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -76,7 +78,7 @@ fun AppUpdateScreen(model: AppUpdateViewModel, back: () -> Unit) {
                 }
             }
             if (state.downloading) {
-                LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth().testTag("update-progress"))
+                LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth().testTag("update-progress").semantics { contentDescription = "下載進度" })
                 Text((state.progress * 100).roundToInt().toString() + "%", style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = model::cancel) { Text("取消下載") }
             }
@@ -102,7 +104,7 @@ fun AppUpdateScreen(model: AppUpdateViewModel, back: () -> Unit) {
                         else -> model.check()
                     }
                 }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("update-primary")) {
-                    if (state.busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    if (state.busy) CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = if (state.verifying) "正在驗證更新檔" else "正在檢查更新" }, strokeWidth = 2.dp)
                     else Text(when { state.download != null && state.available -> "安裝"; state.available -> "下載新版"; else -> "檢查更新" })
                 }
                 if (state.info != null && state.available) TextButton(onClick = model::check, enabled = !state.busy) { Text("重新檢查") }

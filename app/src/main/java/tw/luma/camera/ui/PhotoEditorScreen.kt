@@ -67,7 +67,7 @@ private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel
         val bitmap = state.bitmap
         if (bitmap != null) {
             key(retry) { PhotoPreview(state, model, Modifier.fillMaxSize()) }
-            Row(Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = .4f), RoundedCornerShape(12.dp))) {
+            Row(Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = PHOTO_OVERLAY_SCRIM_ALPHA), RoundedCornerShape(12.dp))) {
                 TextButton(onClick = model::compare, enabled = state.canEdit,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("editor-compare").semantics { selected = state.selection.comparing }) {
                     Text(if (state.selection.comparing) "濾鏡" else "原圖")
@@ -124,17 +124,17 @@ private fun EditorFilters(state: PhotoEditorUiState, entries: List<LutEntry>, mo
     LaunchedEffect(selection.selectedId) { active?.let { group = FilterGroup.of(it) } }
     val visible = remember(entries, group) { group.entries(entries) }
     // Keep horizontal filter gestures inside this panel, even at the carousel's ends.
-    Surface(modifier.nestedScroll(EditorHorizontalScroll), color = Color(0xFF18191C)) {
+    Surface(modifier.nestedScroll(EditorHorizontalScroll), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(active?.let(FilterGroup::title) ?: "原色", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(active?.let(FilterGroup::title) ?: NO_FILTER_LABEL, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleSmall)
                 TextButton(onClick = { model.selectLut(null) }, enabled = state.canEdit,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-original").semantics { selected = selection.selectedId == null }) { Text("原色") }
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-original").semantics { selected = selection.selectedId == null }) { Text(NO_FILTER_LABEL) }
             }
             LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(FilterGroup.entries) { item ->
-                    FilterChip(item == group, { group = item }, { Text(item.label) }, enabled = state.canEdit,
+                    FilterChip(item == group, { group = item }, { Text(item.label) }, enabled = state.canEdit, colors = grainChipColors(),
                         modifier = Modifier.heightIn(min = 48.dp).testTag("editor-group-${item.name}"))
                 }
             }

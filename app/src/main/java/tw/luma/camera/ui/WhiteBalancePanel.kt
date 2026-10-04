@@ -35,9 +35,9 @@ internal fun WhiteBalancePanel(
     var cameraTemperature by remember(caps.id, range) { mutableStateOf(range != null) }
     if (range != null) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(cameraTemperature, { cameraTemperature = true }, { Text("色溫 K") }, enabled = enabled,
+            FilterChip(cameraTemperature, { cameraTemperature = true }, { Text("色溫 K") }, enabled = enabled, colors = grainChipColors(),
                 modifier = Modifier.testTag("wb-mode-camera"))
-            FilterChip(!cameraTemperature, { cameraTemperature = false }, { Text("冷暖調色") }, enabled = enabled,
+            FilterChip(!cameraTemperature, { cameraTemperature = false }, { Text("冷暖調色") }, enabled = enabled, colors = grainChipColors(),
                 modifier = Modifier.testTag("wb-mode-grading"))
         }
     }

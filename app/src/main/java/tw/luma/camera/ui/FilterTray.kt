@@ -53,15 +53,15 @@ internal fun FilterTray(
     val visible = remember(entries, group) { group.entries(entries) }
     Surface(modifier.fillMaxWidth().heightIn(max = maxHeight).testTag("filter-tray")
         .pointerInput(Unit) { detectTapGestures(onTap = {}) },
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = Color(0xF0161719)) {
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = GrainSurfaces.tray) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(active?.let(FilterGroup::title) ?: "原色", Modifier.weight(1f).testTag("filter-active-name"),
+                Text(active?.let(FilterGroup::title) ?: NO_FILTER_LABEL, Modifier.weight(1f).testTag("filter-active-name"),
                     style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 TextButton(onClick = { onSelect(null) }, enabled = enabled, contentPadding = PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).testTag("filter-original")
-                        .semantics { selected = selectedId == null; contentDescription = "使用原色" }) {
-                    Text("原色", color = if (selectedId == null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .65f))
+                        .semantics { selected = selectedId == null; contentDescription = "不使用濾鏡" }) {
+                    Text(NO_FILTER_LABEL, color = if (selectedId == null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .65f))
                 }
                 TrayIcon("add", "匯入 LUT", enabled, "filter-import", onImport)
                 TrayIcon("tune", "調色與濾鏡資訊", enabled, "filter-more", onMore)
@@ -70,7 +70,7 @@ internal fun FilterTray(
             LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth().testTag("filter-groups")) {
                 items(FilterGroup.entries, key = { it.name }) { item ->
-                    FilterChip(selected = item == group, onClick = { group = item }, enabled = enabled,
+                    FilterChip(selected = item == group, onClick = { group = item }, enabled = enabled, colors = grainChipColors(),
                         label = { Text(item.label) }, modifier = Modifier.heightIn(min = 48.dp).testTag("filter-group-${item.name}"))
                 }
             }
@@ -144,7 +144,7 @@ private fun FilmCard(entry: LutEntry, chosen: Boolean, enabled: Boolean, compact
         FilterGroup.FUJI -> Color(0xFF8CAA8D)
         FilterGroup.GRAIN -> Color(0xFFC29C85)
     }
-    Surface(onClick, enabled = enabled, shape = RoundedCornerShape(10.dp), color = Color(0xFF242529),
+    Surface(onClick, enabled = enabled, shape = RoundedCornerShape(10.dp), color = GrainSurfaces.raised,
         border = BorderStroke(if (chosen) 2.dp else 1.dp, if (chosen) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .16f)),
         modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 68.dp else 88.dp).testTag("filter-${entry.id}")
             .semantics { selected = chosen; role = Role.RadioButton; contentDescription = "${group.label} $title" }) {

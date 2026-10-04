@@ -45,7 +45,7 @@ internal fun EditedHome(edits: List<GalleryItem>, model: GalleryViewModel, choos
                 horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.fillMaxSize().testTag("edited-grid")) {
                 items(edits, key = { it.uri.toString() }, contentType = { "media" }) { item ->
-                    Surface(onClick = { open(item) }, shape = RoundedCornerShape(2.dp), color = Color(0xFF18191C),
+                    Surface(onClick = { open(item) }, shape = RoundedCornerShape(2.dp), color = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.aspectRatio(1f).testTag("edited-item").semantics { contentDescription = "照片 ${item.name}" }) {
                         GalleryThumbnail(item, model, Modifier.fillMaxSize())
                     }

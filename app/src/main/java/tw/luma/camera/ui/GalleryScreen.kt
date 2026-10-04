@@ -156,7 +156,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     Column(Modifier.fillMaxSize()) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("全部", "照片", "影片").forEachIndexed { index, text ->
-                                FilterChip(selected = filter == index, onClick = { filter = index }, label = { Text(text) }, modifier = Modifier.testTag("gallery-filter-$index"))
+                                FilterChip(selected = filter == index, onClick = { filter = index }, label = { Text(text) }, colors = grainChipColors(), modifier = Modifier.testTag("gallery-filter-$index"))
                             }
                         }
                         when {
@@ -166,7 +166,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                             else -> LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), state = grid,
                                 contentPadding = PaddingValues(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 items(items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
-                                    Surface(onClick = { selected = item.uri.toString(); selectedEdit = false }, shape = RoundedCornerShape(2.dp), color = Color(0xFF18191C),
+                                    Surface(onClick = { selected = item.uri.toString(); selectedEdit = false }, shape = RoundedCornerShape(2.dp), color = MaterialTheme.colorScheme.surface,
                                         modifier = Modifier.aspectRatio(1f).testTag("gallery-item").semantics { contentDescription = "${if (item.video) "影片" else "照片"} ${item.name}" }) {
                                         Box {
                                             GalleryThumbnail(item, model, Modifier.fillMaxSize())
@@ -203,7 +203,7 @@ internal fun GalleryThumbnail(item: GalleryItem, model: GalleryViewModel, modifi
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { failed = true }
     }
-    Box(modifier.background(Color(0xFF18191C)), contentAlignment = Alignment.Center) {
+    Box(modifier.background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
         bitmap?.let { Image(remember(it) { it.asImageBitmap() }, null, Modifier.fillMaxSize(), contentScale = contentScale) }
         if (failed) Text("無法讀取", color = Color.White.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall)
     }
