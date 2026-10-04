@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.1",
-  "versionCode": 34,
+  "versionName": "0.7.2",
+  "versionCode": 35,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.1/Grain-0.7.1-personal-fuji.apk",
-  "apkSize": 14049498,
-  "apkSha256": "b416ca19790fbd2f3b2ef513c38b06490bf633c447673c25e9e415b3d5214c8e",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.2/Grain-0.7.2-personal-fuji.apk",
+  "apkSize": 16092338,
+  "apkSha256": "412d46cfe1f2a3c3820ccd7b84a32b6b9664f62c483bbea5893d575840b0e37d",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "編輯成品另存到獨立資料夾，可切換看原圖。"
+  "notes": "開 App 安靜檢查更新，字體改為 Grain 經典。"
 }
