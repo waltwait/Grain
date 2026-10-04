@@ -218,6 +218,7 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
     var editing by rememberSaveable { mutableStateOf(false) }
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
+    var showOriginal by rememberSaveable { mutableStateOf(false) }
     var currentUri by rememberSaveable { mutableStateOf(items[initialPage].uri.toString()) }
     val latestItems by rememberUpdatedState(items)
     // Keep the same source photo selected when saving inserts a new item at the start of the album.
@@ -234,6 +235,7 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
         }
     }
     val current = items.firstOrNull { it.uri.toString() == currentUri } ?: items[pager.settledPage.coerceIn(items.indices)]
+    LaunchedEffect(currentUri) { showOriginal = false }
     LaunchedEffect(entries) { editor.setLuts(entries) }
     LaunchedEffect(editing, current.uri) {
         if (current.video) editing = false
@@ -253,8 +255,8 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
             HorizontalPager(state = pager, userScrollEnabled = !zoomed && !editState.saving,
                 key = { items[it].uri.toString() }, beyondViewportPageCount = 0,
                 modifier = Modifier.fillMaxSize().testTag("gallery-pager")) { page ->
-                val item = items[page]
                 val active = page == pager.settledPage
+                val item = items[page].let { if (showOriginal && active && it.original != null) it.copy(uri = it.original, original = null) else it }
                 key(item.uri) {
                     if (item.video && active) GalleryVideo(item, positions[item.uri.toString()] ?: 0) { positions[item.uri.toString()] = it }
                     else if (item.video) GalleryThumbnail(item, model, Modifier.fillMaxSize())
@@ -276,6 +278,9 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
                         .semantics { contentDescription = if (editState.savedUri != null && editState.selection.savedFilter == editState.selection.filter) "已儲存" else "儲存新照片" }) {
                     if (editState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
+                } else if (current.original != null) TextButton(onClick = { showOriginal = !showOriginal },
+                    modifier = Modifier.align(Alignment.CenterEnd).heightIn(min = 48.dp).testTag("viewer-original-toggle")) {
+                    Text(if (showOriginal) "看改完" else "看原圖")
                 }
             }
         }

@@ -782,6 +782,33 @@ class CameraExperienceDeviceTest {
         } finally { inserted.forEach { ui.activity.contentResolver.delete(it, null, null) } }
     }
 
+    @Test fun viewerTogglesBetweenEditedAndOriginal() {
+        ready()
+        val inserted = mutableListOf<android.net.Uri>()
+        try {
+            val base = "GRAIN_EDIT_TEST_${System.nanoTime()}"
+            val lone = "GRAIN_EDIT_TEST_LONE_${System.nanoTime()}"
+            inserted += insertEditedPhoto("$base.jpg", Color.rgb(200, 120, 60))
+            inserted += insertEditedPhoto("${base}_original.jpg", Color.rgb(60, 120, 200))
+            inserted += insertEditedPhoto("$lone.jpg", Color.rgb(120, 200, 60))
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("照片 $base.jpg").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithContentDescription("照片 $base.jpg").performClick()
+            ui.onNodeWithTag("viewer-original-toggle").assertIsDisplayed().assertTextEquals("看原圖")
+            ui.onNodeWithTag("viewer-original-toggle").performClick().assertTextEquals("看改完")
+            ui.onNodeWithTag("viewer-original-toggle").performClick().assertTextEquals("看原圖")
+            ui.onNodeWithTag("viewer-original-toggle").performClick().assertTextEquals("看改完")
+            ui.onNodeWithTag("viewer-back").performClick()
+            ui.onNodeWithContentDescription("照片 $base.jpg").performClick()
+            ui.onNodeWithTag("viewer-original-toggle").assertTextEquals("看原圖")
+            ui.onNodeWithTag("viewer-back").performClick()
+            ui.onNodeWithContentDescription("照片 $lone.jpg").performClick()
+            ui.onNodeWithTag("gallery-pager").assertIsDisplayed()
+            ui.onNodeWithTag("viewer-original-toggle").assertDoesNotExist()
+        } finally { inserted.forEach { ui.activity.contentResolver.delete(it, null, null) } }
+    }
+
     /** Edited photos only: the edit grid does not list the `_original` copies. */
     private fun editedPhotoCount(): Int = ui.activity.contentResolver.query(
         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media.DISPLAY_NAME),
