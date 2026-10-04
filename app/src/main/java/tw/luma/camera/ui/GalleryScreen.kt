@@ -128,10 +128,14 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Grain", modifier = Modifier.testTag("gallery-title"), fontFamily = NewsreaderBrand, style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB))
-                    if (!editing) Text("${state.items.size}", style = MaterialTheme.typography.labelMedium,
+                    // The second line is always laid out (a blank one when there is nothing to say) so the title never shifts between tabs.
+                    val subtitle = when {
+                        !editing -> "${state.items.size}"
+                        importState.isBatch -> "${importState.previewIndex + 1} / ${importState.sources.size}"
+                        else -> " "
+                    }
+                    Text(subtitle, maxLines = 1, style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
-                    else if (importState.isBatch) Text("${importState.previewIndex + 1} / ${importState.sources.size}",
-                        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                 }
                 if (editing) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
                     modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("editor-save")

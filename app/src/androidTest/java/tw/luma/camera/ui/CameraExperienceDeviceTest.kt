@@ -772,6 +772,20 @@ class CameraExperienceDeviceTest {
         } finally { ui.runOnIdle { model().changeCapture { it.copy(flash = start) } } }
     }
 
+    @Test fun galleryTitleStaysPutWhenSwitchingTabs() {
+        ready()
+        ui.onNodeWithTag("open-gallery").performClick()
+        ui.onNodeWithTag("gallery-title").assertIsDisplayed()
+        val titleTop = { ui.onNodeWithTag("gallery-title").fetchSemanticsNode().boundsInRoot.top }
+        val photosTop = titleTop()
+        ui.onNodeWithTag("gallery-edit-tab").performClick()
+        ui.waitForIdle()
+        assertEquals("The title must not move when the second line appears or disappears", photosTop, titleTop(), 0.5f)
+        ui.onNodeWithTag("gallery-photo-tab").performClick()
+        ui.waitForIdle()
+        assertEquals(photosTop, titleTop(), 0.5f)
+    }
+
     @Test fun editedPhotosAppearOnTheEditTabHome() {
         ready()
         val inserted = mutableListOf<android.net.Uri>()
