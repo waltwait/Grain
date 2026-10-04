@@ -9,12 +9,15 @@ import android.view.OrientationEventListener
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tw.luma.camera.ui.CameraScreen
@@ -46,8 +49,11 @@ class MainActivity : ComponentActivity() {
                 secondary = Color(0xFFE0E0E5), background = Color.Black,
                 surface = Color(0xFF18191C), surfaceVariant = Color(0xFF2D2E33),
             )) {
-                CompositionLocalProvider(LocalCameraControlRotation provides orientation.controlDegrees(displayRotation())) {
-                    CameraScreen(viewModel(), orientation, ::setCameraActive)
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground) {
+                    CompositionLocalProvider(LocalCameraControlRotation provides orientation.controlDegrees(displayRotation())) {
+                        CameraScreen(viewModel(), orientation, ::setCameraActive)
+                    }
                 }
             }
         }

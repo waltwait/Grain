@@ -2,7 +2,7 @@
 
 原生 Android LUT 拍照 App 第一版。Kotlin、Jetpack Compose、CameraX 與 OpenGL ES 3；支援 Android 10（API 29）以上。
 
-目前版本 **0.6.8**、versionCode **31**，依使用者最新選擇恢復私人儲存庫與原有個人 APK 發布方式。設定內「檢查更新」開啟 GitHub 最新 Release，登入後下載單一 APK 並覆蓋安裝；原 Grain Pages 已關閉，改由 [公開下載頁](https://waltwait.github.io/Grain-pages/) 連到私人 Release；App 不再嘗試匿名讀取私人版本資訊，見 [私人更新紀錄](docs/private-updates-v063.md)。個人版保留十款富士 LUT，沿用 0.6.0／0.6.1 正式簽章；見 [富士濾鏡恢復紀錄](docs/personal-fuji-v061.md)。保留照片濾鏡預覽、觀景窗左右滑動變焦與半透明參數面板。簽章備份與舊 debug 測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
+目前版本 **0.6.9**、versionCode **32**，依使用者最新選擇恢復私人儲存庫與原有個人 APK 發布方式。設定內「檢查更新」開啟 GitHub 最新 Release，登入後下載單一 APK 並覆蓋安裝；原 Grain Pages 已關閉，改由 [公開下載頁](https://waltwait.github.io/Grain-pages/) 連到私人 Release；App 不再嘗試匿名讀取私人版本資訊，見 [私人更新紀錄](docs/private-updates-v063.md)。個人版保留十款富士 LUT，沿用 0.6.0／0.6.1 正式簽章；見 [富士濾鏡恢復紀錄](docs/personal-fuji-v061.md)。保留照片濾鏡預覽、觀景窗左右滑動變焦與半透明參數面板。簽章備份與舊 debug 測試版移轉差異見 [Release 準備紀錄](docs/release-publishing-v050.md)。手機全螢幕拍攝時固定相機介面，橫拿／倒拿只轉動圖示與縮圖；成品方向另由手機方向判斷，影片在開始錄製時固定該段方向。相簿、大螢幕與多視窗保留一般旋轉，見 [相機方向處理紀錄](docs/camera-orientation-v0410.md)。沿用拍照／存檔動畫，成功不跳出提示，見 [拍照與存檔回饋紀錄](docs/capture-feedback-v049.md)。濾鏡沿用 **FUJIFILM／KODAK／GRAIN** 三個英文品牌，各款分別記憶強度，見 [三個品牌分類紀錄](docs/filter-picker-v048.md)。Camera2 手動白平衡見 [色溫相容修正](docs/white-balance-v046.md)。本次未連接手機，方向、動畫體驗、S24 手動色溫與實機色彩仍待驗證。
 
 **0.2.1** 更新使用者確認的黑金底片 icon，支援 Android 自適應遮罩與單色主題圖示；沿用 0.2.0 功能，UI／錄影的待驗證狀態不變。
 
@@ -59,6 +59,8 @@
 
 **0.6.8** 編輯 tab 可一次選取最多 20 張照片，用縮圖切換預覽，再套用同一組濾鏡與強度逐張另存。提供頁內進度、停止及未完成照片重試；已儲存照片不重複輸出，原圖不變，成功不跳通知。單張照片編輯沿用原有流程，見 [0.6.8 發布紀錄](docs/release-v068.md)。
 
+**0.6.9** 移除相簿主頁重新整理按鈕，回到 App 和儲存照片後仍自動更新。修正深色主題的預設內容顏色，頂部 Grain 標題改為 22sp 粗體暖白，張數提高對比；見 [0.6.9 發布紀錄](docs/release-v069.md)。
+
 觀景窗支援單指右滑放大、左滑縮小，拍照及錄影時皆可使用；保留點擊對焦、對焦後上下滑調曝光與雙指變焦，同一次滑動會鎖定方向。浮動參數面板改為半透明，按住或拖動 ISO、快門、曝光、白平衡、光圈及變焦滑桿時底色會再淡化，放開後平順恢復，控制位置與取景範圍保持固定。
 
 外部照片匯入整合至相簿主頁的「編輯」tab；已拍攝照片在檢視頁以「照片／編輯」tab 切換。選圖後先預覽，使用同一組英文品牌選濾鏡、調強度及比較原圖，再按儲存輸出新照片；不改相機濾鏡、不覆蓋原圖、不跳出儲存通知。GPU 預覽與完整來源輸出分開，細節與限制見 [照片編輯紀錄](docs/photo-editor-v050.md)。
@@ -103,7 +105,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。這是開發測試版，使�
 
 已建置的第一版另存於 `output/LumaCamera-0.1.0-debug.apk`；測試結果與驗證限制見 [建置紀錄](docs/build-validation.md)。
 
-目前個人富士版另存於 `output/Grain-0.6.8-personal-fuji.apk`，使用正式簽章，非 debuggable。APK 與官方富士 LUT 素材不提交 Git；個人 APK 另提供私人 GitHub Release 下載。舊 debug 個人包仍使用不同簽章。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
+目前個人富士版另存於 `output/Grain-0.6.9-personal-fuji.apk`，使用正式簽章，非 debuggable。APK 與官方富士 LUT 素材不提交 Git；個人 APK 另提供私人 GitHub Release 下載。舊 debug 個人包仍使用不同簽章。0.1.1 的 19 項 JVM 與 7 項真機裝置測試紀錄見 [個人富士測試版紀錄](docs/personal-fuji-build.md)。
 
 本機已準備十款素材與正式簽章設定時，個人更新包使用：
 

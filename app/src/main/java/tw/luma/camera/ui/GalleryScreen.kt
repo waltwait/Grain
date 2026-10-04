@@ -120,19 +120,18 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     modifier = Modifier.align(Alignment.CenterStart).testTag("gallery-close"),
                     description = if (editing) "返回照片" else "返回相機")
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Grain", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    if (!editing) Text("${state.items.size}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
+                    Text("Grain", modifier = Modifier.testTag("gallery-title"), style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB))
+                    if (!editing) Text("${state.items.size}", style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                     else if (importState.isBatch) Text("${importState.previewIndex + 1} / ${importState.sources.size}",
-                        style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
+                        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                 }
                 if (editing) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
                     modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("editor-save")
                         .semantics { contentDescription = if (importState.isBatch) "批次儲存照片" else "儲存新照片" }) {
                     if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
-                } else IconButton(onClick = model::refresh, enabled = !state.loading,
-                    modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).semantics { contentDescription = "重新整理相簿" }) {
-                    Text("↻", style = MaterialTheme.typography.titleLarge)
                 }
             }
             HorizontalPager(state = tabPager, userScrollEnabled = !importState.saving,

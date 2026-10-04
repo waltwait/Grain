@@ -20,6 +20,7 @@ output/*.zip
 output/luts/
 output/update-site/
 output/private-download-page/
+output/font-preview/
 output/private-v063-metadata/
 scripts/__pycache__/
 app/src/debug/assets/luts/fujifilm/

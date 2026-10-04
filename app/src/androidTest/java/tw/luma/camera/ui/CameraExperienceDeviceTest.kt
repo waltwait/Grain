@@ -394,6 +394,8 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("grain-gallery").assertIsDisplayed()
         ui.runOnIdle { assertFalse("Camera must be suspended in the gallery", model().state.value.ready) }
         ui.onNodeWithTag("gallery-photo-tab").assertIsSelected()
+        ui.onNodeWithTag("gallery-title").assertTextEquals("Grain").assertIsDisplayed()
+        ui.onAllNodesWithContentDescription("重新整理相簿").assertCountEquals(0)
         ui.onNodeWithTag("gallery-import-photo").assertDoesNotExist()
         ui.onNodeWithTag("gallery-filter-2").performClick().assertIsSelected()
         ui.onNodeWithTag("gallery-filter-1").performClick().assertIsSelected()

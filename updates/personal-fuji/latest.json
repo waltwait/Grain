@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.6.8",
-  "versionCode": 31,
+  "versionName": "0.6.9",
+  "versionCode": 32,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.8/Grain-0.6.8-personal-fuji.apk",
-  "apkSize": 14033114,
-  "apkSha256": "76ecafb751a5c090154f50668fbc79d9ca1cf42511b892d7ef47add1fd514528",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.6.9/Grain-0.6.9-personal-fuji.apk",
+  "apkSize": 14049494,
+  "apkSha256": "b49b2b82a9509fc068af40a1dbaa7acfddeca535dcc3640234ee4069ac2c802e",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "獨立編輯 tab 可一次選最多 20 張照片，縮圖切換預覽，共用濾鏡與強度逐張另存。頁內顯示進度，可停止及重試未完成照片；原圖不變、成功不跳通知。保留十款富士 LUT 與原正式簽章。"
+  "notes": "移除相簿重新整理按鈕，回到 App 和儲存照片後自動更新。頂部 Grain 標題放大、加粗並提高文字與圖示對比。保留照片／編輯 tab、批次處理、十款富士 LUT 與原正式簽章。"
 }
