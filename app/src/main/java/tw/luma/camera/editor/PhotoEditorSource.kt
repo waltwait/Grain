@@ -9,6 +9,12 @@ import java.io.File
 import tw.luma.camera.storage.PhotoImportIo
 
 internal object PhotoEditorSource {
+    fun validate(file: File) {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        PhotoImportIo.previewSampleSize(bounds.outWidth, bounds.outHeight)
+    }
+
     /** Decode once, with the same sRGB and EXIF treatment as the full-size photo exporter. */
     fun preview(file: File): Bitmap {
         val options = BitmapFactory.Options().apply {

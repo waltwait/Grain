@@ -69,6 +69,7 @@ import kotlinx.coroutines.launch
 import tw.luma.camera.LutEntry
 import tw.luma.camera.camera.ZoomControls
 import tw.luma.camera.editor.PhotoEditorViewModel
+import tw.luma.camera.editor.PhotoBatchProgress
 import tw.luma.camera.gallery.GalleryItem
 import tw.luma.camera.gallery.GalleryViewModel
 import tw.luma.camera.gallery.PhotoViewport
@@ -90,8 +91,8 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val grid = rememberLazyGridState()
-    val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let(importEditor::open)
+    val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoBatchProgress.MAX_PHOTOS)) { uris ->
+        importEditor.openBatch(uris)
     }
     val choosePhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     LaunchedEffect(entries) { importEditor.setLuts(entries) }
@@ -121,10 +122,12 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Grain", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     if (!editing) Text("${state.items.size}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
+                    else if (importState.isBatch) Text("${importState.previewIndex + 1} / ${importState.sources.size}",
+                        style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
                 }
                 if (editing) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
                     modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("editor-save")
-                        .semantics { contentDescription = "儲存新照片" }) {
+                        .semantics { contentDescription = if (importState.isBatch) "批次儲存照片" else "儲存新照片" }) {
                     if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
                 } else IconButton(onClick = model::refresh, enabled = !state.loading,
@@ -141,11 +144,14 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                             FilledTonalButton(onClick = choosePhoto, modifier = Modifier.heightIn(min = 48.dp).testTag("editor-choose")) {
                                 CameraGlyph("add", Modifier.size(20.dp), LocalContentColor.current)
                                 Spacer(Modifier.width(8.dp))
-                                Text("匯入照片")
+                                Text("選擇照片")
                             }
                         }
-                    } else PhotoEditorBody(importState, importEditor, entries, choosePhoto, choosePhoto, onSaved,
-                        Modifier.fillMaxSize().testTag("photo-editor"))
+                    } else Column(Modifier.fillMaxSize().testTag("photo-editor")) {
+                        if (importState.isBatch) PhotoBatchControls(importState, importEditor, onSaved)
+                        PhotoEditorBody(importState, importEditor, entries, choosePhoto,
+                            { importEditor.preview(importState.previewIndex) }, onSaved, Modifier.weight(1f).fillMaxWidth())
+                    }
                 } else tabs.SaveableStateProvider("photos") {
                     Column(Modifier.fillMaxSize()) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

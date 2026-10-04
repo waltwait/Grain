@@ -37,6 +37,11 @@ import tw.luma.camera.editor.PhotoPreviewView
 import tw.luma.camera.lut.FilterGroup
 import kotlin.math.roundToInt
 
+internal object EditorHorizontalScroll : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = Offset(available.x, 0f)
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity) = Velocity(available.x, 0f)
+}
+
 @Composable
 internal fun PhotoEditorBody(state: PhotoEditorUiState, model: PhotoEditorViewModel, entries: List<LutEntry>,
     choosePhoto: (() -> Unit)?, retryPhoto: () -> Unit, onSaved: (Uri) -> Unit, modifier: Modifier) {
@@ -68,7 +73,7 @@ private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel
                     Text(if (state.selection.comparing) "濾鏡" else "原圖")
                 }
                 if (choosePhoto != null) TextButton(onClick = choosePhoto, enabled = !state.saving,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-replace")) { Text("換照片") }
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-replace")) { Text(if (state.isBatch) "重選照片" else "換照片") }
             }
             state.error?.let { message ->
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .7f)).padding(horizontal = 12.dp),
@@ -119,13 +124,7 @@ private fun EditorFilters(state: PhotoEditorUiState, entries: List<LutEntry>, mo
     LaunchedEffect(selection.selectedId) { active?.let { group = FilterGroup.of(it) } }
     val visible = remember(entries, group) { group.entries(entries) }
     // Keep horizontal filter gestures inside this panel, even at the carousel's ends.
-    val filterScroll = remember {
-        object : NestedScrollConnection {
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = Offset(available.x, 0f)
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity) = Velocity(available.x, 0f)
-        }
-    }
-    Surface(modifier.nestedScroll(filterScroll), color = Color(0xFF18191C)) {
+    Surface(modifier.nestedScroll(EditorHorizontalScroll), color = Color(0xFF18191C)) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(active?.let(FilterGroup::title) ?: "原色", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
