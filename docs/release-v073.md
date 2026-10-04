@@ -15,7 +15,7 @@
 
 APK 確認 versionCode 36、versionName 0.7.3、非 debuggable，正式簽章憑證 SHA-256 `e6c756c9…c1217c8`（v2 簽章），16 KB ZIP 對齊與十款富士 LUT 原始 bytes 通過校驗；dex 內確認有新的閃光燈文字，且「拍照閃光燈」與「完成」兩個舊字串已消失。
 
-成品 `output/Grain-0.7.3-personal-fuji.apk`：16,092,338 bytes，SHA-256 `df13e5c56c43cbac83552fdfe59e750ae952c4ac42f4e8932941b23f35a98b52`。尚未推送、尚未建立 Release，`updates/personal-fuji/latest.json` 仍是 0.7.2。
+成品 `output/Grain-0.7.3-personal-fuji.apk`：16,092,338 bytes，SHA-256 `df13e5c56c43cbac83552fdfe59e750ae952c4ac42f4e8932941b23f35a98b52`。2026-10-04 已推送 main 與 v0.7.3，標籤對應 `d761e33c7915da42bcc468e69dd2667f024d5b02`。已發布 [公開 Release](https://github.com/waltwait/Grain/releases/tag/v0.7.3)，Release ID 403064821；草稿 APK 的大小與 SHA-256 核對後才公開。GitHub 最新版為 v0.7.3、非草稿、非預發布，只有一個 `Grain-0.7.3-personal-fuji.apk`，匿名下載連結回 200。`updates/personal-fuji/latest.json`（提交 `2c31a51`）在附件確認後、Release 公開約 4 秒後更新為 0.7.3／36；repo 內的檔案與本機產生的完全相同。App 讀的 raw 網址有最多 5 分鐘快取，發布後要稍等才查得到。
 
 沒有手機連線：**閃光燈實際閃不閃、縮圖載入、面板外觀與標題位置都沒有實機驗證。**
 
