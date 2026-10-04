@@ -16,4 +16,6 @@ APK DEX 已確認批次進度、停止、重試 UI 標記與既有 gallery tab �
 
 成品 `output/Grain-0.6.8-personal-fuji.apk`：14,033,114 bytes，SHA-256 `76ecafb751a5c090154f50668fbc79d9ca1cf42511b892d7ef47add1fd514528`。
 
-發布進度待補。
+2026-10-04 已推送 main 與 v0.6.8，標籤對應 `db76d19e988de5cd931e3968779e7430c29c6ade`。已發布 [私人 Release](https://github.com/waltwait/Grain/releases/tag/v0.6.8)，Release ID 402891473；先核對草稿單一 APK 的大小與 SHA-256，再發布。GitHub 最新版為 v0.6.8、非草稿、非預發布，只有一個 `Grain-0.6.8-personal-fuji.apk`；大小、SHA-256 與發布後下載網址均和本機 metadata 相同。App 儲存庫維持 private=true、has_pages=false。
+
+公開下載頁 metadata 提交 `e7815b69f79684ba774e5d63047639b17764147f`，[部署 37184863490](https://github.com/waltwait/Grain-pages/actions/runs/37184863490) 成功。匿名線上 `latest.json` 與本機公開 metadata 完全相同，版本 0.6.8／31、access=github-login，下載按鈕沿用私人最新 Release。公開儲存庫仍只有六個既有網頁／說明／metadata 檔案，沒有 APK 或 LUT。
