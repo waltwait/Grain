@@ -23,7 +23,9 @@ object PhotoStorage {
         ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, ExifInterface.TAG_FOCAL_LENGTH, ExifInterface.TAG_WHITE_BALANCE,
         ExifInterface.TAG_EXPOSURE_BIAS_VALUE, ExifInterface.TAG_FLASH, ExifInterface.TAG_EXPOSURE_PROGRAM, ExifInterface.TAG_EXPOSURE_MODE)
 
-    fun processAndSave(context: Context, source: File, filter: FilterSettings, saveOriginal: Boolean): Uri {
+    /** Returns the edited photo's Uri; an edit target also publishes a byte copy of [source] next to it. */
+    fun processAndSave(context: Context, source: File, filter: FilterSettings, target: SaveTarget,
+        saveOriginal: Boolean = target.alwaysSaveOriginal): Uri {
         val exif = ExifInterface(source)
         val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -61,8 +63,8 @@ object PhotoStorage {
             // Publish the pair only after both files have been written successfully.
             val pending = mutableListOf<Uri>()
             try {
-                val finalUri = writePending(context, encoded, "GRAIN_${time}.jpg").also { pending += it }
-                if (saveOriginal) pending += writePending(context, source, "GRAIN_${time}_original.jpg")
+                val finalUri = writePending(context, encoded, PhotoNames.edited(target, time), target.relativePath).also { pending += it }
+                if (saveOriginal) pending += writePending(context, source, PhotoNames.original(target, time), target.relativePath)
                 for (uri in pending) context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
                 return finalUri
             } catch (e: Throwable) { pending.forEach { runCatching { context.contentResolver.delete(it, null, null) } }; throw e }
@@ -74,11 +76,11 @@ object PhotoStorage {
         }
     }
 
-    private fun writePending(context: Context, file: File, name: String): Uri {
+    private fun writePending(context: Context, file: File, name: String, relativePath: String): Uri {
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain")
+            put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
         val resolver = context.contentResolver

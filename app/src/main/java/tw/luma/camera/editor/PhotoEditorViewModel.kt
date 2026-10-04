@@ -22,6 +22,7 @@ import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.lut.FilterSwitching
 import tw.luma.camera.storage.PhotoImportIo
 import tw.luma.camera.storage.PhotoStorage
+import tw.luma.camera.storage.SaveTarget
 
 data class PhotoEditorUiState(
     val bitmap: Bitmap? = null,
@@ -208,7 +209,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
         _state.update { it.copy(saving = true, error = null) }
         savingJob = viewModelScope.launch {
             try {
-                val uri = withContext(Dispatchers.IO) { PhotoStorage.processAndSave(getApplication(), file, filter, false) }
+                val uri = withContext(Dispatchers.IO) { PhotoStorage.processAndSave(getApplication(), file, filter, SaveTarget.EDIT) }
                 _state.update { it.copy(savedUri = uri, selection = it.selection.copy(savedFilter = filter)) }
                 onSaved(uri)
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -239,7 +240,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
                                 PhotoEditorSource.validate(file)
                             }
                             ensureActive()
-                            PhotoStorage.processAndSave(getApplication(), file, filter, false).toString()
+                            PhotoStorage.processAndSave(getApplication(), file, filter, SaveTarget.EDIT).toString()
                         } finally { if (!reused) file.delete() }
                     }
                 }, { progress ->

@@ -30,6 +30,7 @@ import tw.luma.camera.lut.OriginalLutLibrary
 import tw.luma.camera.lut.KodakLutLibrary
 import tw.luma.camera.lut.FilterSwitching
 import tw.luma.camera.storage.PhotoStorage
+import tw.luma.camera.storage.SaveTarget
 import androidx.camera.video.VideoRecordEvent
 import java.io.File
 import tw.luma.camera.storage.LutImportIo
@@ -230,7 +231,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
                 _state.update { it.copy(captureFeedback = it.captureFeedback.capturedPhoto(requestId)) }
-                val uri = withContext(Dispatchers.IO) { PhotoStorage.processAndSave(getApplication(), file, snapshot.filter, snapshot.saveOriginal) }
+                val uri = withContext(Dispatchers.IO) { PhotoStorage.processAndSave(getApplication(), file, snapshot.filter, SaveTarget.CAMERA, snapshot.saveOriginal) }
                 val thumb = loadMediaThumbnail(uri)
                 _state.update { it.copy(savedUri = uri, thumbnail = thumb, savedMime = "image/jpeg",
                     captureFeedback = it.captureFeedback.savedPhoto(requestId)) }
