@@ -90,6 +90,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     }
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedEdit by rememberSaveable { mutableStateOf(false) }
     val grid = rememberLazyGridState()
     val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoBatchProgress.MAX_PHOTOS)) { uris ->
         importEditor.openBatch(uris)
@@ -107,7 +108,8 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
         onDispose { lifecycle.lifecycle.removeObserver(observer); model.releasePhotos() }
     }
     val items = remember(state.items, filter) { state.items.filter { filter == 0 || it.video == (filter == 2) } }
-    val selectedIndex = items.indexOfFirst { it.uri.toString() == selected }
+    val viewerItems = if (selectedEdit) state.edits else items
+    val selectedIndex = viewerItems.indexOfFirst { it.uri.toString() == selected }
     val goBack: () -> Unit = {
         if (!importState.saving) {
             if (editing || tabPager.targetPage == 1) changeTab(false)
@@ -117,7 +119,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     BackHandler(enabled = selectedIndex < 0, onBack = goBack)
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("grain-gallery")) {
         if (selectedIndex >= 0) {
-            GalleryViewer(items, selectedIndex, model, editor, entries, { selected = null }, onSaved)
+            GalleryViewer(viewerItems, selectedIndex, model, editor, entries, { selected = null }, onSaved)
         } else Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
                 BackIconButton(onClick = goBack, enabled = !importState.saving,
@@ -143,13 +145,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("gallery-tabs-pager")) { page ->
                 if (page == 1) tabs.SaveableStateProvider("editor") {
                     if (importState.bitmap == null && !importState.loading && importState.error == null) {
-                        Box(Modifier.fillMaxSize().testTag("photo-editor"), contentAlignment = Alignment.Center) {
-                            FilledTonalButton(onClick = choosePhoto, modifier = Modifier.heightIn(min = 48.dp).testTag("editor-choose")) {
-                                CameraGlyph("add", Modifier.size(20.dp), LocalContentColor.current)
-                                Spacer(Modifier.width(8.dp))
-                                Text("選擇照片")
-                            }
-                        }
+                        EditedHome(state.edits, model, choosePhoto) { item -> selected = item.uri.toString(); selectedEdit = true }
                     } else Column(Modifier.fillMaxSize().testTag("photo-editor")) {
                         if (importState.isBatch) PhotoBatchControls(importState, importEditor, onSaved)
                         PhotoEditorBody(importState, importEditor, entries, choosePhoto,
@@ -169,7 +165,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                             else -> LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), state = grid,
                                 contentPadding = PaddingValues(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 items(items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
-                                    Surface(onClick = { selected = item.uri.toString() }, shape = RoundedCornerShape(2.dp), color = Color(0xFF18191C),
+                                    Surface(onClick = { selected = item.uri.toString(); selectedEdit = false }, shape = RoundedCornerShape(2.dp), color = Color(0xFF18191C),
                                         modifier = Modifier.aspectRatio(1f).testTag("gallery-item").semantics { contentDescription = "${if (item.video) "影片" else "照片"} ${item.name}" }) {
                                         Box {
                                             GalleryThumbnail(item, model, Modifier.fillMaxSize())
@@ -198,7 +194,7 @@ private fun GalleryEmpty(message: String, action: String, click: () -> Unit) {
 }
 
 @Composable
-private fun GalleryThumbnail(item: GalleryItem, model: GalleryViewModel, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
+internal fun GalleryThumbnail(item: GalleryItem, model: GalleryViewModel, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
     var bitmap by remember(item.uri) { mutableStateOf<Bitmap?>(null) }
     var failed by remember(item.uri) { mutableStateOf(false) }
     LaunchedEffect(item.uri) {

@@ -752,10 +752,67 @@ class CameraExperienceDeviceTest {
         }
     }
 
-    private fun ownPhotoCount(): Int = ui.activity.contentResolver.query(
+    @Test fun editedPhotosAppearOnTheEditTabHome() {
+        ready()
+        val inserted = mutableListOf<android.net.Uri>()
+        try {
+            val existing = editedPhotoCount()
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.onNodeWithTag("editor-choose").assertIsDisplayed()
+            if (existing == 0) ui.onNodeWithTag("edited-grid").assertDoesNotExist()
+            ui.onNodeWithTag("gallery-photo-tab").performClick()
+            ui.onNodeWithTag("gallery-close").performClick()
+            ready()
+
+            val base = "GRAIN_EDIT_TEST_${System.nanoTime()}"
+            inserted += insertEditedPhoto("$base.jpg", Color.rgb(200, 120, 60))
+            inserted += insertEditedPhoto("${base}_original.jpg", Color.rgb(60, 120, 200))
+            ui.onNodeWithTag("open-gallery").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithTag("edited-item").fetchSemanticsNodes().size == existing + 1 }
+            ui.onNodeWithTag("edited-grid").assertIsDisplayed()
+            ui.onAllNodesWithContentDescription("照片 ${base}_original.jpg").assertCountEquals(0)
+            ui.onNodeWithContentDescription("照片 $base.jpg").performClick()
+            ui.onNodeWithTag("gallery-pager").assertIsDisplayed()
+            ui.onNodeWithTag("viewer-back").performClick()
+            ui.onNodeWithTag("gallery-edit-tab").assertIsSelected()
+            ui.onNodeWithTag("gallery-photo-tab").performClick()
+            ui.onAllNodesWithContentDescription("照片 $base.jpg").assertCountEquals(0)
+        } finally { inserted.forEach { ui.activity.contentResolver.delete(it, null, null) } }
+    }
+
+    /** Edited photos only: the edit grid does not list the `_original` copies. */
+    private fun editedPhotoCount(): Int = ui.activity.contentResolver.query(
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media.DISPLAY_NAME),
+        "${MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${MediaStore.Images.Media.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.Images.Media.IS_PENDING} = 0",
+        arrayOf("Pictures/Grain Edits/", ui.activity.packageName), null,
+    )?.use { cursor ->
+        var count = 0
+        while (cursor.moveToNext()) if (!cursor.getString(0).endsWith("_original.jpg")) count++
+        count
+    } ?: 0
+
+    private fun insertEditedPhoto(name: String, color: Int): android.net.Uri {
+        val resolver = ui.activity.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, name)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Grain Edits")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+        val bitmap = Bitmap.createBitmap(160, 120, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+        try { requireNotNull(resolver.openOutputStream(uri)).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) } }
+        finally { bitmap.recycle() }
+        resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+        return uri
+    }
+
+    private fun ownPhotoCount(path: String = "Pictures/Grain/"): Int = ui.activity.contentResolver.query(
         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID),
         "${MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${MediaStore.Images.Media.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.Images.Media.IS_PENDING} = 0",
-        arrayOf("Pictures/Grain/", ui.activity.packageName), null,
+        arrayOf(path, ui.activity.packageName), null,
     )?.use { it.count } ?: 0
 
     private fun swipeViewfinder(right: Boolean) {
