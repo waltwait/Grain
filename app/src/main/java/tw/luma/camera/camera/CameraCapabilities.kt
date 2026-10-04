@@ -95,7 +95,7 @@ data class CaptureSettings(
     val kelvin: Int? = null,
     val tint: Int = 0,
     val zoom: Float = 1f,
-    val flash: Boolean = false,
+    val flash: FlashMode = FlashMode.OFF,
 )
 
 data class ActualCapture(val iso: Int? = null, val shutterNs: Long? = null, val aperture: Float? = null, val kelvin: Int? = null,

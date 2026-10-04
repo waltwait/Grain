@@ -757,18 +757,25 @@ class CameraExperienceDeviceTest {
         }
     }
 
-    @Test fun flashIconTogglesWithoutOpeningSettings() {
+    @Test fun flashIconCyclesOffAutoOnWithoutOpeningSettings() {
         ready()
         org.junit.Assume.assumeTrue("Needs a camera with a flash unit and automatic exposure",
             model().state.value.hasFlash && !model().state.value.capture.manual)
         val start = model().state.value.capture.flash
-        val label = { on: Boolean -> if (on) "閃光燈已開啟" else "閃光燈已關閉" }
+        val label = { mode: tw.luma.camera.camera.FlashMode -> when (mode) {
+            tw.luma.camera.camera.FlashMode.AUTO -> "閃光燈自動"
+            tw.luma.camera.camera.FlashMode.ON -> "閃光燈已開啟"
+            tw.luma.camera.camera.FlashMode.OFF -> "閃光燈已關閉"
+        } }
         try {
-            ui.onNodeWithContentDescription(label(start)).performClick()
-            ui.runOnIdle { assertEquals(!start, model().state.value.capture.flash) }
-            ui.onAllNodesWithTag("open-updates").assertCountEquals(0)
-            ui.onNodeWithContentDescription(label(!start)).performClick()
-            ui.runOnIdle { assertEquals(start, model().state.value.capture.flash) }
+            var mode = start
+            repeat(3) {
+                ui.onNodeWithContentDescription(label(mode)).performClick()
+                mode = mode.next()
+                ui.runOnIdle { assertEquals(mode, model().state.value.capture.flash) }
+                ui.onAllNodesWithTag("open-updates").assertCountEquals(0)
+            }
+            assertEquals("Three taps return to where it started", start, mode)
         } finally { ui.runOnIdle { model().changeCapture { it.copy(flash = start) } } }
     }
 

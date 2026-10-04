@@ -242,7 +242,7 @@ class CameraEngine(
         if (!isManual && caps.hasEv) futures += control.setExposureCompensationIndex(caps.exposureRange.clamp(requested.evIndex))
         val zoom = current.cameraInfo.zoomState.value
         if (previous.zoom != requested.zoom) futures += control.setZoomRatio(requested.zoom.coerceIn(zoom?.minZoomRatio ?: 1f, zoom?.maxZoomRatio ?: 1f))
-        imageCapture?.flashMode = if (requested.flash && !isManual && current.cameraInfo.hasFlashUnit()) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+        imageCapture?.flashMode = FlashControl.imageCaptureMode(requested.flash, FlashControl.usable(current.cameraInfo.hasFlashUnit(), isManual))
         val token = ++applySequence
         var remaining = futures.size
         applying = true

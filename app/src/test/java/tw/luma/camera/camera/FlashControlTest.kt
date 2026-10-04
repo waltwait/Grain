@@ -1,5 +1,6 @@
 package tw.luma.camera.camera
 
+import androidx.camera.core.ImageCapture
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -17,15 +18,31 @@ class FlashControlTest {
         assertFalse("Recording", FlashControl.enabled(usable = true, busy = false, recording = true))
     }
 
-    @Test fun anUnusableFlashIsNeverShownAsOn() {
-        assertTrue(FlashControl.shownOn(requested = true, usable = true))
-        assertFalse("Requested but the front camera has none", FlashControl.shownOn(requested = true, usable = false))
-        assertFalse(FlashControl.shownOn(requested = false, usable = true))
+    @Test fun tappingCyclesOffAutoOnAndBackToOff() {
+        assertEquals(FlashMode.AUTO, FlashMode.OFF.next())
+        assertEquals(FlashMode.ON, FlashMode.AUTO.next())
+        assertEquals(FlashMode.OFF, FlashMode.ON.next())
+    }
+
+    @Test fun anUnusableFlashIsShownAsOffWhateverWasRequested() {
+        assertEquals(FlashMode.AUTO, FlashControl.shown(requested = FlashMode.AUTO, usable = true))
+        assertEquals(FlashMode.ON, FlashControl.shown(requested = FlashMode.ON, usable = true))
+        assertEquals("Requested but the front camera has none", FlashMode.OFF, FlashControl.shown(requested = FlashMode.ON, usable = false))
+        assertEquals(FlashMode.OFF, FlashControl.shown(requested = FlashMode.AUTO, usable = false))
     }
 
     @Test fun descriptionsNameTheState() {
-        assertEquals("閃光燈已開啟", FlashControl.description(usable = true, on = true))
-        assertEquals("閃光燈已關閉", FlashControl.description(usable = true, on = false))
-        assertEquals("閃光燈無法使用", FlashControl.description(usable = false, on = false))
+        assertEquals("閃光燈已關閉", FlashControl.description(usable = true, mode = FlashMode.OFF))
+        assertEquals("閃光燈自動", FlashControl.description(usable = true, mode = FlashMode.AUTO))
+        assertEquals("閃光燈已開啟", FlashControl.description(usable = true, mode = FlashMode.ON))
+        assertEquals("閃光燈無法使用", FlashControl.description(usable = false, mode = FlashMode.OFF))
+    }
+
+    @Test fun theCameraGetsTheMatchingFlashMode() {
+        assertEquals(ImageCapture.FLASH_MODE_OFF, FlashControl.imageCaptureMode(FlashMode.OFF, usable = true))
+        assertEquals(ImageCapture.FLASH_MODE_AUTO, FlashControl.imageCaptureMode(FlashMode.AUTO, usable = true))
+        assertEquals(ImageCapture.FLASH_MODE_ON, FlashControl.imageCaptureMode(FlashMode.ON, usable = true))
+        assertEquals("Never fire when it cannot", ImageCapture.FLASH_MODE_OFF, FlashControl.imageCaptureMode(FlashMode.ON, usable = false))
+        assertEquals(ImageCapture.FLASH_MODE_OFF, FlashControl.imageCaptureMode(FlashMode.AUTO, usable = false))
     }
 }

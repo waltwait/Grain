@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
+import tw.luma.camera.camera.FlashMode
 import tw.luma.camera.camera.ZoomControls
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -158,7 +159,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         it.copy(capture = WhiteBalanceControls.reset(it.capture), filter = WhiteBalanceControls.reset(it.filter))
     } }
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
-    fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = false)) } }
+    fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = FlashMode.OFF)) } }
     fun zoom(value: Float) { _state.update {
         val zoom = value.coerceIn(it.minZoom, it.maxZoom)
         if (it.liveControlsEnabled && zoom != it.capture.zoom) it.copy(capture = it.capture.copy(zoom = zoom)) else it

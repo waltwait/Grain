@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.sp
 import tw.luma.camera.camera.FlashControl
+import tw.luma.camera.camera.FlashMode
 import tw.luma.camera.CaptureMode
 import tw.luma.camera.RecordingStatus
 import tw.luma.camera.camera.ZoomControls
@@ -425,7 +426,7 @@ private fun RecordingClock(model: CameraViewModel, status: RecordingStatus) {
 @Composable
 private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, newVersion: String?, modifier: Modifier, panel: (String) -> Unit) {
     NativeCameraToolbar(state, modifier, panel = panel, updateAvailable = newVersion != null,
-        onFlash = { model.changeCapture { it.copy(flash = !it.flash) } }) { RecordingClock(model, state.recordingStatus) }
+        onFlash = { model.changeCapture { it.copy(flash = it.flash.next()) } }) { RecordingClock(model, state.recordingStatus) }
 }
 
 @Composable
@@ -437,8 +438,9 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
             Box(contentAlignment = Alignment.Center) { Text(state.videoQuality, Modifier.cameraControlRotation(), color = Color.White, style = MaterialTheme.typography.labelMedium) }
         } else {
             val flashUsable = FlashControl.usable(state.hasFlash, state.capture.manual)
-            val flashOn = FlashControl.shownOn(state.capture.flash, flashUsable)
-            GlassIcon("flash", FlashControl.description(flashUsable, flashOn), FlashControl.enabled(flashUsable, state.busy, state.recording), flashOn) { onFlash() }
+            val flashMode = FlashControl.shown(state.capture.flash, flashUsable)
+            GlassIcon("flash", FlashControl.description(flashUsable, flashMode), FlashControl.enabled(flashUsable, state.busy, state.recording),
+                selected = flashMode == FlashMode.ON, mark = if (flashMode == FlashMode.AUTO) "A" else null) { onFlash() }
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
@@ -496,13 +498,15 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
 }
 
 @Composable
-private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, badge: Boolean = false, click: () -> Unit) {
+private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, badge: Boolean = false, mark: String? = null, click: () -> Unit) {
     Surface(onClick = click, enabled = enabled, shape = CircleShape, color = if (selected) Color.Black.copy(alpha = .22f) else Color.Transparent,
         modifier = Modifier.size(48.dp).semantics { contentDescription = description; if (badge) stateDescription = "有新版" }) {
         Box(contentAlignment = Alignment.Center) {
             CameraGlyph(icon, Modifier.size(25.dp).cameraControlRotation(), if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .35f))
             if (badge) Box(Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 9.dp).size(8.dp)
                 .background(MaterialTheme.colorScheme.primary, CircleShape).testTag("update-badge"))
+            if (mark != null) Text(mark, Modifier.align(Alignment.BottomEnd).padding(bottom = 7.dp, end = 8.dp),
+                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
