@@ -13,6 +13,6 @@ App 圖示換成下載主頁上的標誌：圓角機身、鏡頭圈和右上角�
 
 2026-10-05 建置 `testDebugUnitTest`、`lintPersonal`、`assembleDebugAndroidTest`、`assemblePersonal` 成功，耗時 4 分 17 秒。257 項 JVM 測試通過，0 失敗／錯誤／跳過；lint 0 錯誤、25 項警告（與 0.7.6 相同）。APK 確認 versionCode 40、versionName 0.7.7、非 debuggable，啟動圖示解析為 adaptive icon，正式簽章憑證 SHA-256 `e6c756c9…c1217c8`（v2 簽章），16 KB ZIP 對齊與十款富士 LUT 原始 bytes 通過校驗，APK 內沒有大於 200 KB 的 PNG。
 
-成品 `output/Grain-0.7.7-personal-fuji.apk`：15,038,022 bytes，SHA-256 `8a9ba0eb6e528540cffea4ec56cb743abab0a727f77ff3514734e42ff8ce1423`。尚未推送標籤、尚未建立 Release，`updates/personal-fuji/latest.json` 仍是 0.7.6。
+成品 `output/Grain-0.7.7-personal-fuji.apk`：15,038,022 bytes，SHA-256 `8a9ba0eb6e528540cffea4ec56cb743abab0a727f77ff3514734e42ff8ce1423`。2026-10-05 已推送 main 與 v0.7.7，標籤對應 `9286681a3095a9443fa2024bb06d338661d94c6e`。已發布 [公開 Release](https://github.com/waltwait/Grain/releases/tag/v0.7.7)，Release ID 403824410；草稿 APK 的大小與 SHA-256 核對後才公開。GitHub 最新版為 v0.7.7、非草稿、非預發布，只有一個 `Grain-0.7.7-personal-fuji.apk`，匿名下載連結回 200。`updates/personal-fuji/latest.json`（提交 `6fcd40a`）在附件確認後、Release 公開約 5 秒後更新為 0.7.7／40；repo 內的檔案與本機產生的完全相同。
 
 沒有手機連線：**圖示在實機桌面（各家廠商的遮罩形狀、主題圖示的著色）上的樣子沒有看過**，只有用圓形與圓角方形遮罩算出來的預覽。
