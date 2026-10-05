@@ -18,3 +18,4 @@
 
 - 主頁提供的是個人富士版 APK（內含十款官方富士 LUT），與 Release 頁上的相同；若日後要公開不含富士素材的版本，需要另外發布一般版並讓頁面指向 `updates/release/latest.json`。
 - 舊的 `scripts/prepare_private_download_page.py` 是為舊的獨立 repo 準備的，已不再使用。
+- 網站圖示（favicon、apple-touch、連結預覽圖）與 App 圖示由 `scripts/render_icon.py` 從同一個標誌產生，改圖示時重新執行即可。
