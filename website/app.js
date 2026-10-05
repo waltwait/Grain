@@ -6,6 +6,10 @@ const download = document.getElementById("download");
 const status = document.getElementById("status");
 const retry = document.getElementById("retry");
 
+// The version info lives in the repository, so this page shows the latest release without being redeployed.
+const FEED = "https://raw.githubusercontent.com/waltwait/Grain/main/updates/personal-fuji/latest.json";
+const RELEASE_PATH = "/waltwait/Grain/releases/download/";
+
 async function loadRelease() {
   download.hidden = true;
   download.removeAttribute("href");
@@ -16,7 +20,7 @@ async function loadRelease() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch("latest.json", { cache: "no-store", signal: controller.signal });
+    const response = await fetch(FEED, { cache: "no-store", signal: controller.signal });
     if (!response.ok) throw new Error("release unavailable");
     const info = await response.json();
     const url = new URL(info.apkUrl);
@@ -28,19 +32,17 @@ async function loadRelease() {
         !Number.isInteger(info.bundledFujiCount) || info.bundledFujiCount < 0 || info.bundledFujiCount > 10 ||
         !["release", "personal-fuji"].includes(info.channel) ||
         (info.channel === "personal-fuji" && info.bundledFujiCount !== 10) ||
-        (info.access !== undefined && info.access !== "github-login") ||
         !/^[a-f0-9]{64}$/i.test(info.apkSha256) || !/^[a-f0-9]{64}$/i.test(info.signingCertificateSha256) ||
         (info.notes !== undefined && (typeof info.notes !== "string" || info.notes.length > 4000)) ||
-        url.protocol !== "https:" || url.username || url.password || url.hash) {
+        url.origin !== "https://github.com" || !url.pathname.startsWith(RELEASE_PATH) || url.pathname.includes("..") ||
+        url.username || url.password || url.hash) {
       throw new Error("invalid release");
     }
     version.textContent = "Grain " + info.versionName;
     notes.textContent = info.notes || "";
-    download.href = info.access === "github-login"
-      ? "https://github.com/waltwait/Grain/releases/latest" : url.href;
+    download.href = url.href;
     download.hidden = false;
     status.textContent = "Android " + (info.minSdk === 29 ? "10" : "API " + info.minSdk) + "+ · " + (info.apkSize / 1024 / 1024).toFixed(1) + " MB";
-    if (info.access === "github-login") status.textContent += " · 登入 GitHub 下載";
   } catch (_) {
     version.textContent = "Grain";
     status.textContent = "暫時無法取得最新版，請稍後再試。";
