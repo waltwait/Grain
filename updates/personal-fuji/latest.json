@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.5",
-  "versionCode": 38,
+  "versionName": "0.7.6",
+  "versionCode": 39,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.5/Grain-0.7.5-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.6/Grain-0.7.6-personal-fuji.apk",
   "apkSize": 16452786,
-  "apkSha256": "9cf03979d320e8c367e4e30ed962e9faaa763c61c7fabda69a436592f4ae80b5",
+  "apkSha256": "3b3dc1c4557758fc5277cd3a6fa74b4292136be7c6c42fcca92e0d5ae98925a6",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "相簿搜尋、一張照片多個濾鏡。"
+  "notes": "搜尋與編輯的小修。"
 }
