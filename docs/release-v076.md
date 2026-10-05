@@ -28,7 +28,7 @@
 
 APK 確認 versionCode 39、versionName 0.7.6、非 debuggable，正式簽章憑證 SHA-256 `e6c756c9…c1217c8`（v2 簽章），16 KB ZIP 對齊與十款富士 LUT 原始 bytes 通過校驗。這版沒有再派獨立 reviewer，變更都是 0.7.5 審查指出的小項，皆有單元測試。
 
-成品 `output/Grain-0.7.6-personal-fuji.apk`：16,452,786 bytes，SHA-256 `3b3dc1c4557758fc5277cd3a6fa74b4292136be7c6c42fcca92e0d5ae98925a6`。尚未推送標籤、尚未建立 Release，`updates/personal-fuji/latest.json` 仍是 0.7.5。
+成品 `output/Grain-0.7.6-personal-fuji.apk`：16,452,786 bytes，SHA-256 `3b3dc1c4557758fc5277cd3a6fa74b4292136be7c6c42fcca92e0d5ae98925a6`。2026-10-05 已推送 main 與 v0.7.6，標籤對應 `010e579c58ea72b4b161318722714c7192b465e4`。已發布 [公開 Release](https://github.com/waltwait/Grain/releases/tag/v0.7.6)，Release ID 403809051；草稿 APK 的大小與 SHA-256 核對後才公開。GitHub 最新版為 v0.7.6、非草稿、非預發布，只有一個 `Grain-0.7.6-personal-fuji.apk`，匿名下載連結回 200。`updates/personal-fuji/latest.json`（提交 `fc1ad6b`）在附件確認後、Release 公開約 5 秒後更新為 0.7.6／39；repo 內的檔案與本機產生的完全相同。下載主頁讀同一份 `latest.json`，不需要另外更新。
 
 沒有手機連線：搜尋的全形輸入、取消勾選時的分組、編輯 tab 的錯誤顯示都沒有實機驗證。
 
