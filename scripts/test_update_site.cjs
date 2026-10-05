@@ -80,3 +80,14 @@ test("downloads are public: the button is the APK itself and an old login flag c
   assert.doesNotMatch(elements.status.textContent, /登入/);
   assert.match(elements.status.textContent, /Android 10\+ · 15\.7 MB/);
 });
+
+test("the page declares its icons and the files exist", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../website/index.html"), "utf8");
+  const declared = [...html.matchAll(/<link[^>]+rel="(?:icon|apple-touch-icon)"[^>]*href="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(declared.length >= 2, "an icon and an apple-touch-icon are expected");
+  assert.ok(declared.some(href => /^favicon-32\.png$/.test(href)));
+  assert.ok(declared.some(href => /^apple-touch-icon\.png$/.test(href)));
+  for (const href of declared) assert.ok(fs.existsSync(path.join(__dirname, "../website", href)), href + " is missing");
+  assert.match(html, /<meta property="og:image" content="https:\/\/waltwait\.github\.io\/Grain\/[^"]+\.png">/);
+});
+
