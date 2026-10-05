@@ -60,4 +60,13 @@ class FilterChoiceTest {
         assertEquals("已選 4 個濾鏡 · 將輸出 20 張 · 已達上限", FilterChoice.summary(chosenCount = 4, sources = 5, primaryTitle = "x", noFilterLabel = "無濾鏡"))
         assertEquals("已選 2 個濾鏡 · 將輸出 14 張 · 已達上限", FilterChoice.summary(chosenCount = 2, sources = 7, primaryTitle = "x", noFilterLabel = "無濾鏡"))
     }
+
+    @Test fun noOrOneCheckedFilterIsJustOneJobPerPhotoIdentifiedBySourceAlone() {
+        assertEquals(listOf<String?>(null), FilterChoice.jobFilterIds(emptyList()))
+        assertEquals(listOf<String?>(null), FilterChoice.jobFilterIds(listOf("a")))
+    }
+
+    @Test fun severalCheckedFiltersAreOneJobEach() {
+        assertEquals(listOf<String?>("a", "b"), FilterChoice.jobFilterIds(listOf("a", "b")))
+    }
 }

@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.text.Normalizer
 
 /** What the gallery search looks at for one photo or video. [film] is null while it is not known yet. */
 data class SearchKey(val name: String, val video: Boolean, val addedSeconds: Long, val film: String? = null)
@@ -13,16 +14,23 @@ data class SearchKey(val name: String, val video: Boolean, val addedSeconds: Lon
  * 今天 or 昨天, 照片 or 影片, or otherwise a piece of the file name or of the film name.
  */
 object GallerySearch {
-    private val fullDate = Regex("""(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?""")
+    private val fullDate = Regex("""(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})[日號]?""")
     private val yearMonth = Regex("""(\d{4})[-/.年](\d{1,2})月?""")
-    private val monthDay = Regex("""(\d{1,2})[-/.月](\d{1,2})日?""")
+    private val monthDay = Regex("""(\d{1,2})[-/.月](\d{1,2})[日號]?""")
     private val monthOnly = Regex("""(\d{1,2})月""")
     private val yearOnly = Regex("""(\d{4})年?""")
     private val videoWords = setOf("影片", "video", "videos")
     private val photoWords = setOf("照片", "photo", "photos")
 
-    fun matches(query: String, key: SearchKey, today: LocalDate, zone: ZoneId): Boolean {
-        val tokens = query.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    private val whitespace = Regex("\\s+")
+
+    /** Splits a query into words once, so a long gallery does not redo it for every photo. Full-width digits and spaces are normalized. */
+    fun tokens(query: String): List<String> =
+        Normalizer.normalize(query, Normalizer.Form.NFKC).trim().split(whitespace).filter { it.isNotEmpty() }
+
+    fun matches(query: String, key: SearchKey, today: LocalDate, zone: ZoneId): Boolean = matches(tokens(query), key, today, zone)
+
+    fun matches(tokens: List<String>, key: SearchKey, today: LocalDate, zone: ZoneId): Boolean {
         if (tokens.isEmpty()) return true
         val date = Instant.ofEpochSecond(key.addedSeconds).atZone(zone).toLocalDate()
         return tokens.all { matchesToken(it, key, date, today) }
@@ -35,7 +43,11 @@ object GallerySearch {
             word in photoWords -> !key.video
             word == "今天" || word == "today" -> date == today
             word == "昨天" || word == "yesterday" -> date == today.minusDays(1)
-            else -> dateMatch(word, date) ?: (key.name.contains(token, ignoreCase = true) || key.film?.contains(token, ignoreCase = true) == true)
+            else -> {
+                val text = key.name.contains(token, ignoreCase = true) || key.film?.contains(token, ignoreCase = true) == true
+                // A word that looks like a date is a date or, failing that, text: "1.5" may be a film as well as January 5th.
+                dateMatch(word, date)?.let { it || text } ?: text
+            }
         }
     }
 

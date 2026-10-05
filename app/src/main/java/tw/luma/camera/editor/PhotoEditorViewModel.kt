@@ -249,7 +249,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
     private fun saveBatch(current: PhotoEditorUiState, cached: File, onSaved: (Uri) -> Unit) {
         val base = current.selection.filter
         val chosen = current.selection.chosen
-        val filterIds: List<String?> = chosen.ifEmpty { listOf(null) }
+        val filterIds = FilterChoice.jobFilterIds(chosen)
         val filters: Map<String?, FilterSettings> = filterIds.associateWith { id ->
             entries.find { it.id == id }?.let { base.copy(lut = it.lut, encoding = it.lut.suggestedEncoding) } ?: base
         }
@@ -306,7 +306,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
                 val saved = result.items.lastOrNull { it.status == PhotoBatchStatus.SAVED && it.id !in alreadySaved }?.output?.let(Uri::parse)
                 _state.update { it.copy(savedUri = saved ?: it.savedUri,
                     selection = if (result.remainingCount == 0) it.selection.copy(savedFilter = base) else it.selection) }
-                // Refresh the gallery and camera thumbnail once, rather than for every exported photo.
+                // Refresh the gallery once, rather than for every exported photo.
                 saved?.let(onSaved)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { _state.update { it.copy(error = error.message ?: "照片未儲存") } }
@@ -333,7 +333,7 @@ class PhotoEditorViewModel(application: Application, private val savedState: Sav
     }
 
     private fun restoreBatch(): PhotoBatchProgress? {
-        val jobs = runCatching { PhotoBatchProgress.pending(restoredSources, restoredChosen).items }.getOrNull() ?: return null
+        val jobs = runCatching { PhotoBatchProgress.pending(restoredSources, FilterChoice.jobFilterIds(restoredChosen)).items }.getOrNull() ?: return null
         if (jobs.size < 2 || savedState.get<Boolean>("batch-started") != true) return null
         val saved = savedState.get<ArrayList<String>>("batch-sources").orEmpty()
             .zip(savedState.get<ArrayList<String>>("batch-outputs").orEmpty()).toMap()

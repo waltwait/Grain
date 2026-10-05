@@ -129,7 +129,7 @@ internal fun FilmPicker(
             contentPadding = PaddingValues(horizontal = ((maxWidth - cardWidth) / 2).coerceAtLeast(0.dp), vertical = 4.dp),
             userScrollEnabled = enabled, key = { ids[it] }, modifier = Modifier.fillMaxWidth().testTag("filter-pager")) { page ->
             val film = entries[page]
-            FilmCard(film, if (chosen != null) film.id in chosen else film.id == selectedId, enabled, compact) {
+            FilmCard(film, if (chosen != null) film.id in chosen else film.id == selectedId, enabled, compact, multi) {
                 pick(film.id)
                 scope.launch { pager.animateScrollToPage(page) }
             }
@@ -138,7 +138,7 @@ internal fun FilmPicker(
 }
 
 @Composable
-private fun FilmCard(entry: LutEntry, chosen: Boolean, enabled: Boolean, compact: Boolean, onClick: () -> Unit) {
+private fun FilmCard(entry: LutEntry, chosen: Boolean, enabled: Boolean, compact: Boolean, multi: Boolean, onClick: () -> Unit) {
     val group = FilterGroup.of(entry)
     val title = FilterGroup.title(entry)
     val accent = when (group) {
@@ -149,7 +149,7 @@ private fun FilmCard(entry: LutEntry, chosen: Boolean, enabled: Boolean, compact
     Surface(onClick, enabled = enabled, shape = RoundedCornerShape(10.dp), color = GrainSurfaces.raised,
         border = BorderStroke(if (chosen) 2.dp else 1.dp, if (chosen) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .16f)),
         modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 68.dp else 88.dp).testTag("filter-${entry.id}")
-            .semantics { selected = chosen; role = Role.RadioButton; contentDescription = "${group.label} $title" }) {
+            .semantics { selected = chosen; role = if (multi) Role.Checkbox else Role.RadioButton; contentDescription = "${group.label} $title" }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             // Film packaging, not a thumbnail: the actual look is shown by the viewfinder.
             Canvas(Modifier.width(3.dp).height(if (compact) 36.dp else 48.dp)) { drawRect(accent) }

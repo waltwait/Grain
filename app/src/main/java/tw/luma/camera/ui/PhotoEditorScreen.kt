@@ -122,7 +122,8 @@ private fun EditorFilters(state: PhotoEditorUiState, entries: List<LutEntry>, mo
     val selection = state.selection
     val active = remember(entries, selection.selectedId) { entries.find { it.id == selection.selectedId } }
     var group by rememberSaveable { mutableStateOf(FilterGroup.initial(entries, selection.selectedId)) }
-    LaunchedEffect(selection.selectedId) { if (selection.chosen.size <= 1) active?.let { group = FilterGroup.of(it) } }
+    // Only when the picker opens: following every change would pull the group away while the user browses another one.
+    LaunchedEffect(selection.chosen.isEmpty()) { active?.let { group = FilterGroup.of(it) } }
     val visible = remember(entries, group) { group.entries(entries) }
     // Keep horizontal filter gestures inside this panel, even at the carousel's ends.
     Surface(modifier.nestedScroll(EditorHorizontalScroll), color = MaterialTheme.colorScheme.surface) {

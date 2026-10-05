@@ -14,6 +14,9 @@ object FilterChoice {
         else -> chosen
     }
 
+    /** One job per photo for none or one checked filter (identified by the source alone), one per checked filter beyond that. */
+    fun jobFilterIds(chosen: List<String>): List<String?> = if (chosen.size >= 2) chosen else listOf(null)
+
     fun canAddMore(chosenCount: Int, sources: Int): Boolean = outputs(sources, chosenCount + 1) <= PhotoBatchProgress.MAX_OUTPUTS
 
     /** The filter shown in the preview: the one just checked, else the previous one while it is still checked, else the latest left. */

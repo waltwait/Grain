@@ -117,11 +117,13 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer); model.releasePhotos() }
     }
-    val items = remember(state.items, filter, query, film, films) {
-        val today = LocalDate.now(); val zone = ZoneId.systemDefault()
+    val today = LocalDate.now()
+    val items = remember(state.items, filter, query, film, films, today) {
+        val zone = ZoneId.systemDefault()
+        val words = GallerySearch.tokens(query)
         state.items.filter { item ->
             (filter == 0 || item.video == (filter == 2)) && (film == null || films[item.id] == film) &&
-                GallerySearch.matches(query, SearchKey(item.name, item.video, item.addedSeconds, films[item.id]?.takeIf { it.isNotEmpty() }), today, zone)
+                GallerySearch.matches(words, SearchKey(item.name, item.video, item.addedSeconds, films[item.id]?.takeIf { it.isNotEmpty() }), today, zone)
         }
     }
     val filtering = filter != 0 || query.isNotBlank() || film != null
@@ -172,7 +174,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("gallery-tabs-pager")) { page ->
                 if (page == 1) tabs.SaveableStateProvider("editor") {
                     if (importState.bitmap == null && !importState.loading && importState.error == null) {
-                        EditedHome(state.edits, model, choosePhoto) { item -> selected = item.uri.toString(); selectedEdit = true }
+                        EditedHome(state.edits, model, choosePhoto, { item -> selected = item.uri.toString(); selectedEdit = true }, state.error, model::refresh)
                     } else Column(Modifier.fillMaxSize().testTag("photo-editor")) {
                         if (importState.isBatch) PhotoBatchControls(importState, importEditor, onSaved)
                         PhotoEditorBody(importState, importEditor, entries, choosePhoto,
@@ -180,7 +182,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     }
                 } else tabs.SaveableStateProvider("photos") {
                     Column(Modifier.fillMaxSize()) {
-                        if (filterOpen) GalleryFilterBar(query, { query = it }, filter, { filter = it }, FilmIndex.usedFilms(films), film, { film = it })
+                        if (filterOpen) GalleryFilterBar(query, { query = it }, filter, { filter = it }, FilmIndex.usedFilms(films.filterKeys { id -> state.items.any { it.id == id } }), film, { film = it })
                         when {
                             state.error != null -> GalleryEmpty(state.error!!, "重試", model::refresh)
                             state.loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }

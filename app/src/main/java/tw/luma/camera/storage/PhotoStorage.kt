@@ -23,13 +23,14 @@ object PhotoStorage {
         ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, ExifInterface.TAG_FOCAL_LENGTH, ExifInterface.TAG_WHITE_BALANCE,
         ExifInterface.TAG_EXPOSURE_BIAS_VALUE, ExifInterface.TAG_FLASH, ExifInterface.TAG_EXPOSURE_PROGRAM, ExifInterface.TAG_EXPOSURE_MODE)
 
-    /** Returns the edited photo's Uri; an edit target also publishes a byte copy of [source] next to it. */
     /** The time part of a saved photo's name; the outputs of one photo share it. */
     fun timeStamp(): String = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
 
     /**
      * [time] and [index] name the output: the first output of a photo is GRAIN_EDIT_<time>.jpg, later ones get -2, -3, …
-     * and share the one original, which only the first call for a photo writes ([saveOriginal]).
+     * and share the one original, which only the first call for a photo writes ([saveOriginal]). Returns the edited photo's Uri.
+     * An edit target is never saved without its original unless an earlier call for the same photo already wrote it, which the
+     * caller says by passing [saveOriginal] = false together with a [time] it has used before.
      */
     fun processAndSave(context: Context, source: File, filter: FilterSettings, target: SaveTarget,
         saveOriginal: Boolean = target.alwaysSaveOriginal, time: String = timeStamp(), index: Int = 1): Uri {

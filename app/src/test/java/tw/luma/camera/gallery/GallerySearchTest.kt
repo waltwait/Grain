@@ -96,4 +96,30 @@ class GallerySearchTest {
     @Test fun photosWithoutAFilterAreFoundByTheNoFilterLabel() {
         assertTrue(hit("無濾鏡", photo(2026, 10, 4).copy(film = "無濾鏡")))
     }
+
+    @Test fun fullWidthCharactersFromAChineseKeyboardAreUnderstood() {
+        assertTrue(hit("１０／４", photo(2026, 10, 4)))
+        assertTrue("An ideographic space separates words", hit("10/4\u3000影片", photo(2026, 10, 4, video = true)))
+        assertFalse(hit("10/4\u3000影片", photo(2026, 10, 4)))
+    }
+
+    @Test fun aDayMayEndWith號() {
+        assertTrue(hit("10月4號", photo(2026, 10, 4)))
+        assertFalse(hit("10月5號", photo(2026, 10, 4)))
+    }
+
+    @Test fun aWordThatLooksLikeADateIsAlsoSearchedAsText() {
+        val film = photo(2026, 10, 4).copy(film = "Ektar 1.5")
+        assertTrue("1.5 is a film number here, not January 5th", hit("1.5", film))
+        assertTrue("and still January 5th for a photo of that day", hit("1.5", photo(2026, 1, 5)))
+        assertFalse(hit("1.5", photo(2026, 10, 4)))
+    }
+
+    @Test fun theQueryCanBeSplitOnceAndUsedForEveryPhoto() {
+        val tokens = GallerySearch.tokens("  10/4\u3000影片  portra ")
+        assertEquals(listOf("10/4", "影片", "portra"), tokens)
+        val key = photo(2026, 10, 4, video = true).copy(film = "Portra 160")
+        assertTrue(GallerySearch.matches(tokens, key, today, zone))
+        assertTrue(GallerySearch.matches(emptyList(), key, today, zone))
+    }
 }

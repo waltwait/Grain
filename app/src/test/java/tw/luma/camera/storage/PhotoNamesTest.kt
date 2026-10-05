@@ -35,7 +35,10 @@ class PhotoNamesTest {
     @Test fun isOriginalRecognizesTheSuffixOnly() {
         assertTrue(PhotoNames.isOriginal("GRAIN_EDIT_x_original.jpg"))
         assertFalse(PhotoNames.isOriginal("GRAIN_EDIT_x.jpg"))
-        assertFalse("A renamed duplicate is not a recognized original", PhotoNames.isOriginal("GRAIN_EDIT_x_original (1).jpg"))
+        assertTrue("A renamed duplicate original is still an original, so it never shows up as an edit", PhotoNames.isOriginal("GRAIN_EDIT_x_original (1).jpg"))
+        assertTrue(PhotoNames.isOriginal("GRAIN_EDIT_x_original (12).png"))
+        assertFalse("An edit that was renamed is still an edit", PhotoNames.isOriginal("GRAIN_EDIT_x (1).jpg"))
+        assertNull(PhotoNames.originalBase("GRAIN_EDIT_x_original (1).jpg"))
     }
 
     @Test fun isOriginalIgnoresTheExtension() {

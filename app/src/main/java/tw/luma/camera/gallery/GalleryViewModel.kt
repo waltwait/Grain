@@ -94,21 +94,23 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val updated = LinkedHashMap(_films.value)
             for ((count, item) in missing.withIndex()) {
                 ensureActive()
-                updated[item.id] = readFilm(item.uri).orEmpty()
+                // A failed read is skipped, not remembered, so it is tried again next time; an empty title means "read, no film".
+                readFilm(item.uri)?.let { updated[item.id] = it }
                 if ((count + 1) % 40 == 0) _films.value = LinkedHashMap(updated)
             }
             _films.value = updated
             runCatching {
-                val temporary = File(filmFile.path + ".tmp")
+                val temporary = File(filmFile.path + "." + System.nanoTime() + ".tmp")
                 temporary.writeText(FilmIndex.encode(updated))
                 check(temporary.renameTo(filmFile))
             }
         }
     }
 
+    /** The film's title, an empty string when the photo has no film information, or null when it could not be read. */
     private fun readFilm(uri: Uri): String? = try {
-        resolver.openInputStream(uri)?.use { ExifInterface(it).getAttribute(ExifInterface.TAG_USER_COMMENT) }
-            ?.let { FilmIndex.filmOf(it, NO_FILTER_LABEL) }
+        val comment = resolver.openInputStream(uri)?.use { ExifInterface(it).getAttribute(ExifInterface.TAG_USER_COMMENT) }
+        if (comment == null) "" else FilmIndex.filmOf(comment, NO_FILTER_LABEL).orEmpty()
     } catch (e: CancellationException) { throw e }
     catch (_: Exception) { null }
 

@@ -21,7 +21,10 @@ object PhotoNames {
     fun original(target: SaveTarget, time: String, extension: String = "jpg"): String =
         target.prefix + time + ORIGINAL_SUFFIX + "." + extension
 
-    fun isOriginal(name: String): Boolean = name.substringBeforeLast('.').endsWith(ORIGINAL_SUFFIX)
+    private val originalName = Regex("""${ORIGINAL_SUFFIX}( \(\d+\))?$""")
+
+    /** Also true for an original MediaStore renamed to "…_original (1)", so a stray duplicate never shows up as an edit. */
+    fun isOriginal(name: String): Boolean = originalName.containsMatchIn(name.substringBeforeLast('.'))
 
     private val outputNumber = Regex("-\\d+$")
 
