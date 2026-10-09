@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.7",
-  "versionCode": 40,
+  "versionName": "0.7.8",
+  "versionCode": 41,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.7/Grain-0.7.7-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.8/Grain-0.7.8-personal-fuji.apk",
   "apkSize": 15038022,
-  "apkSha256": "8a9ba0eb6e528540cffea4ec56cb743abab0a727f77ff3514734e42ff8ce1423",
+  "apkSha256": "bf20c3cc63dc1cf4606b1b8136013f84fbeaceebf66bddde044e7c8ba6b0d35c",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "換新 App 圖示。"
+  "notes": "編輯頁的選擇照片移到右上角加號；選好照片後儲存勾號顯示在旁邊。"
 }

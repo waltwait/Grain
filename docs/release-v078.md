@@ -11,3 +11,7 @@
 APK 版本、非 debuggable、原正式簽章與 16 KB ZIP 對齊通過。十款富士 LUT 校驗通過，41 個 LUT／字體／字體授權／native 檔案與 0.7.7 原始 bytes 相同。變更中的中文字均已存在於原有 UI 字元集合，未增加字體涵蓋需求。APK 含有新標題列選圖與儲存、預覽重試標記，舊預覽重選按鈕標記已移除。
 
 成品 `output/Grain-0.7.8-personal-fuji.apk`：15,038,022 bytes，SHA-256 `bf20c3cc63dc1cf4606b1b8136013f84fbeaceebf66bddde044e7c8ba6b0d35c`。
+
+2026-10-09 已推送 main 與 v0.7.8，標籤對應 `d6a352a9b4537874c8c27d60ad9ef9ae7cb2e638`。已發布 [公開 Release](https://github.com/waltwait/Grain/releases/tag/v0.7.8)，Release ID 407601479；草稿 APK 的大小與 SHA-256 核對後才發布。GitHub 最新版為 v0.7.8、非草稿、非預發布，只有一個 `Grain-0.7.8-personal-fuji.apk`；發布後附件大小、SHA-256 與下載網址均和本機 metadata 相同，匿名 APK 下載連結回 HTTP 200。另以匿名下載的 0.7.7 完整 APK 確認新舊十款富士 LUT 原始 bytes 相同。
+
+發布並確認附件後更新 `updates/personal-fuji/latest.json` 至 0.7.8／41。App 與 [下載主頁](https://waltwait.github.io/Grain/) 共用這份版本資訊，主頁不需重新部署；GitHub raw 快取可能使新版資訊稍後才出現。
