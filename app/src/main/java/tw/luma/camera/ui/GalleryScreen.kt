@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -91,6 +92,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     val tabPager = rememberPagerState { 2 }
     val tabScope = rememberCoroutineScope()
     val editing = tabPager.currentPage == 1
+    val hasImport = importState.sources.isNotEmpty()
     val changeTab: (Boolean) -> Unit = { next ->
         if (!importState.saving) tabScope.launch { tabPager.animateScrollToPage(if (next) 1 else 0) }
     }
@@ -144,9 +146,10 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 BackIconButton(onClick = goBack, enabled = !importState.saving,
                     modifier = Modifier.align(Alignment.CenterStart).testTag("gallery-close"),
                     description = if (editing) "返回照片" else "返回相機")
-                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.align(Alignment.Center).padding(horizontal = if (editing && hasImport) 96.dp else 48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Grain", modifier = Modifier.testTag("gallery-title"), fontFamily = NewsreaderBrand, style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB))
+                        fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Every tab has a second line, so the title never shifts when switching between them.
                     val subtitle = GalleryHeader.subtitle(editing, state.items.size, state.edits.size,
                         if (importState.sources.size > 1) importState.previewIndex + 1 to importState.sources.size else null,
@@ -154,11 +157,18 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     Text(subtitle, maxLines = 1, style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                 }
-                if (editing) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
-                    modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("editor-save")
-                        .semantics { contentDescription = if (importState.isBatch) "批次儲存照片" else "儲存新照片" }) {
-                    if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                    else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
+                if (editing) Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = choosePhoto, enabled = !importState.saving && !tabPager.isScrollInProgress,
+                        modifier = Modifier.size(48.dp).testTag("editor-choose")
+                            .semantics { contentDescription = if (hasImport) "重新選擇照片" else "選擇照片" }) {
+                        CameraGlyph("add", Modifier.size(24.dp), LocalContentColor.current)
+                    }
+                    if (hasImport) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
+                        modifier = Modifier.size(48.dp).testTag("editor-save")
+                            .semantics { contentDescription = if (importState.isBatch) "批次儲存照片" else "儲存新照片" }) {
+                        if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                        else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
+                    }
                 } else IconButton(onClick = { filterOpen = !filterOpen },
                     modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("gallery-search-toggle")
                         .semantics { contentDescription = "搜尋與篩選"; stateDescription = if (filtering) "已篩選" else if (filterOpen) "已展開" else "已收起" }) {
@@ -174,10 +184,10 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("gallery-tabs-pager")) { page ->
                 if (page == 1) tabs.SaveableStateProvider("editor") {
                     if (importState.bitmap == null && !importState.loading && importState.error == null) {
-                        EditedHome(state.edits, model, choosePhoto, { item -> selected = item.uri.toString(); selectedEdit = true }, state.error, model::refresh)
+                        EditedHome(state.edits, model, { item -> selected = item.uri.toString(); selectedEdit = true }, state.error, model::refresh)
                     } else Column(Modifier.fillMaxSize().testTag("photo-editor")) {
                         if (importState.isBatch) PhotoBatchControls(importState, importEditor, onSaved)
-                        PhotoEditorBody(importState, importEditor, entries, choosePhoto,
+                        PhotoEditorBody(importState, importEditor, entries,
                             { importEditor.preview(importState.previewIndex) }, onSaved, Modifier.weight(1f).fillMaxWidth())
                     }
                 } else tabs.SaveableStateProvider("photos") {
@@ -286,7 +296,7 @@ private fun GalleryViewer(items: List<GalleryItem>, initialPage: Int, model: Gal
         if (editing) savedTabs.SaveableStateProvider("editor") {
             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(top = 56.dp, bottom = 64.dp).testTag("photo-editor")) {
                 if (editState.isBatch) PhotoBatchControls(editState, editor, onSaved)
-                PhotoEditorBody(editState, editor, entries, null, { editor.openForViewer(current.uri) }, onSaved, Modifier.weight(1f).fillMaxWidth())
+                PhotoEditorBody(editState, editor, entries, { editor.openForViewer(current.uri) }, onSaved, Modifier.weight(1f).fillMaxWidth())
             }
         } else savedTabs.SaveableStateProvider("photo") {
             HorizontalPager(state = pager, userScrollEnabled = !zoomed && !editState.saving,

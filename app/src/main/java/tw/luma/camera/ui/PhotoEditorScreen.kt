@@ -45,23 +45,23 @@ internal object EditorHorizontalScroll : NestedScrollConnection {
 
 @Composable
 internal fun PhotoEditorBody(state: PhotoEditorUiState, model: PhotoEditorViewModel, entries: List<LutEntry>,
-    choosePhoto: (() -> Unit)?, retryPhoto: () -> Unit, onSaved: (Uri) -> Unit, modifier: Modifier) {
+    retryPhoto: () -> Unit, onSaved: (Uri) -> Unit, modifier: Modifier) {
     BoxWithConstraints(modifier) {
         val panelHeight = minOf(280.dp, maxHeight * .42f)
         if (maxWidth >= 700.dp && maxWidth > maxHeight) {
             Row(Modifier.fillMaxSize()) {
-                EditorPreview(state, model, choosePhoto, retryPhoto, onSaved, Modifier.weight(1f).fillMaxHeight())
+                EditorPreview(state, model, retryPhoto, onSaved, Modifier.weight(1f).fillMaxHeight())
                 EditorFilters(state, entries, model, Modifier.width(320.dp).fillMaxHeight())
             }
         } else Column(Modifier.fillMaxSize()) {
-            EditorPreview(state, model, choosePhoto, retryPhoto, onSaved, Modifier.weight(1f).fillMaxWidth())
+            EditorPreview(state, model, retryPhoto, onSaved, Modifier.weight(1f).fillMaxWidth())
             EditorFilters(state, entries, model, Modifier.fillMaxWidth().heightIn(max = panelHeight))
         }
     }
 }
 
 @Composable
-private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel, choosePhoto: (() -> Unit)?,
+private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel,
     retryPhoto: () -> Unit, onSaved: (Uri) -> Unit, modifier: Modifier) {
     var retry by rememberSaveable { mutableIntStateOf(0) }
     Box(modifier, contentAlignment = Alignment.Center) {
@@ -73,8 +73,6 @@ private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel
                     modifier = Modifier.heightIn(min = 48.dp).testTag("editor-compare").semantics { selected = state.selection.comparing }) {
                     Text(if (state.selection.comparing) "濾鏡" else "原圖")
                 }
-                if (choosePhoto != null) TextButton(onClick = choosePhoto, enabled = !state.saving,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("editor-replace")) { Text(if (state.sources.size > 1) "重選照片" else "換照片") }
             }
             state.error?.let { message ->
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .7f)).padding(horizontal = 12.dp),
@@ -86,8 +84,8 @@ private fun EditorPreview(state: PhotoEditorUiState, model: PhotoEditorViewModel
         } else if (state.loading) CircularProgressIndicator(Modifier.size(28.dp))
         else Column(horizontalAlignment = Alignment.CenterHorizontally) {
             state.error?.let { Text(it, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
-            FilledTonalButton(onClick = choosePhoto ?: retryPhoto, modifier = Modifier.testTag("editor-choose")) {
-                Text(if (choosePhoto != null) "選擇照片" else "重試")
+            FilledTonalButton(onClick = retryPhoto, modifier = Modifier.testTag("editor-preview-retry")) {
+                Text("重試")
             }
         }
     }

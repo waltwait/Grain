@@ -403,7 +403,7 @@ class CameraExperienceDeviceTest {
         ui.onNodeWithTag("gallery-filter-1").performClick().assertIsSelected()
         ui.onNodeWithTag("gallery-edit-tab").performClick().assertIsSelected()
         ui.onNodeWithTag("editor-choose").assertIsDisplayed()
-        ui.onNodeWithTag("editor-save").assertIsNotEnabled()
+        ui.onNodeWithTag("editor-save").assertDoesNotExist()
         ui.onNodeWithTag("gallery-photo-tab").performClick().assertIsSelected()
         ui.onNodeWithTag("gallery-filter-1").assertIsSelected()
         ui.onNodeWithTag("gallery-tabs-pager").performTouchInput { swipeLeft() }
@@ -752,7 +752,7 @@ class CameraExperienceDeviceTest {
             ui.waitUntil(10_000) { editor.state.value.sources.isEmpty() }
             ui.onNodeWithTag("gallery-edit-tab").performClick()
             ui.onNodeWithTag("editor-choose").assertIsDisplayed()
-            ui.onNodeWithTag("editor-save").assertIsNotEnabled()
+            ui.onNodeWithTag("editor-save").assertDoesNotExist()
         } finally {
             ui.runOnIdle { editor.discard() }
             outputs.forEach { deleteWithOriginal(it) }
