@@ -93,8 +93,12 @@ gh run watch <run-id> --repo waltwait/Grain
 
 已發布且 feed 完成的版本直接略過；發布中斷時會重新下載已上傳 APK 並驗證，再完成發布／feed。已有 draft 必須來自本次來源 commit；不會覆蓋另一個 commit 的附件。未完成上傳或多個附件要先人工檢查該 draft。更新 feed 採 main 最新內容並限制 versionCode 單調增加，不覆蓋其他已推進的新版。
 
-rollout 先只允許手動 dry run；確認 GitHub runner 實際簽章與素材檢查成功後，再啟用 main 自動觸發。配置及驗證紀錄後續補在本文件。
+rollout 先只允許手動 dry run；確認 GitHub runner 實際簽章與素材檢查成功後，再啟用 main 自動觸發。
 
 SDK 安裝使用 `platforms;android-37.0`，與本機已安裝的 `android-37.0` 對應；API 37 的新版命名不能寫成 `platforms;android-37`。第一輪 dry run 停在 SDK 查找，未執行簽章或發布，已按實際 SDK package ID 修正。
 
 2026-10-10 本機驗證：新工具指令完成 debug／personal Kotlin 與裝置測試 Kotlin 編譯、257 項 JVM 測試與 debug lint，建置 52 秒。10 項發布腳本測試通過，涵蓋雜湊不符、缺 LUT、拒絕覆蓋本機素材、附件數量／大小／SHA-256／網址、禁止降版、發布順序與中斷後復原；模擬發布測試沒有真正上傳附件。兩份 Actions YAML 通過 actionlint 1.7.12，Bash 語法及 hook JSON 檢查通過。本機正式憑證核對成功，五個簽章 secrets 已存至只允許 main 的 release 環境。
+
+GitHub Ubuntu 24.04 驗證：[Android CI](https://github.com/waltwait/Grain/actions/runs/38055430014) 成功，耗時 5 分 18 秒，下載報告確認 257 項 JVM 測試、0 失敗／錯誤／跳過，debug lint 0 錯誤、30 警告；[正式 dry run](https://github.com/waltwait/Grain/actions/runs/38055456862) 成功，耗時 6 分 55 秒，完成原正式簽章、十款富士、版本、非 debuggable 與 ZIP 對齊驗證。確認後啟用 main 自動觸發；dry run 沒有發布 Release 或修改 feed。兩輪有舊 Actions Node.js 20 的停用提示，runner 轉用 Node.js 24 後均執行成功。
+
+Mac 畫面鎖定，未代操作 Claude 帳號的環境對話框，Claude cloud VM 的啟動 hook 也尚未在實際 Claude session 執行；本機確認 local session 會略過 hook。Claude 的一次設定依上方步驟完成後即可使用。
