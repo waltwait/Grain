@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.8",
-  "versionCode": 41,
+  "versionName": "0.7.9",
+  "versionCode": 42,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.8/Grain-0.7.8-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.9/Grain-0.7.9-personal-fuji.apk",
   "apkSize": 15038022,
-  "apkSha256": "bf20c3cc63dc1cf4606b1b8136013f84fbeaceebf66bddde044e7c8ba6b0d35c",
+  "apkSha256": "84c2d23b5ed1381cb5aa493d5767d6d7228d99e6e54be070b13f03e1336367df",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "編輯頁的選擇照片移到右上角加號；選好照片後儲存勾號顯示在旁邊。"
+  "notes": "- 相機畫面的變焦倍率圓鈕縮小約 25%，文字同步縮小，保留容易點擊的範圍。\n- 新版由 GitHub Actions 正式簽章打包，完整保留十款富士 LUT，App 的檢查更新與下載頁同步取得新版。"
 }
