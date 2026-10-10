@@ -6,13 +6,21 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Signing secrets stay local. Without this file, release builds remain unsigned.
+// Local signing remains unchanged; Actions supplies secrets only to the signing step.
 val releaseSigningFile = rootProject.file(".signing/release.properties")
 val releaseSigning = Properties().apply {
     if (releaseSigningFile.isFile) releaseSigningFile.inputStream().use(::load)
 }
-fun releaseSigningValue(name: String): String = releaseSigning.getProperty(name)?.takeIf { it.isNotBlank() }
-    ?: throw GradleException("Missing $name in .signing/release.properties")
+val releaseSigningEnvironment = mapOf(
+    "storeFile" to "GRAIN_RELEASE_STORE_FILE", "storeType" to "GRAIN_RELEASE_STORE_TYPE",
+    "storePassword" to "GRAIN_RELEASE_STORE_PASSWORD", "keyAlias" to "GRAIN_RELEASE_KEY_ALIAS",
+    "keyPassword" to "GRAIN_RELEASE_KEY_PASSWORD",
+)
+fun releaseSigningSetting(name: String): String? = providers.environmentVariable(releaseSigningEnvironment.getValue(name))
+    .orNull?.takeIf { it.isNotBlank() } ?: releaseSigning.getProperty(name)?.takeIf { it.isNotBlank() }
+val releaseSigningConfigured = releaseSigningSetting("storeFile") != null
+fun releaseSigningValue(name: String): String = releaseSigningSetting(name)
+    ?: throw GradleException("Missing release signing setting: $name")
 
 val configuredUpdateUrl = providers.gradleProperty("grainUpdateUrl").orNull
 fun updateFeedField(channel: String): String {
@@ -34,8 +42,8 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 41
-        versionName = "0.7.8"
+        versionCode = 42
+        versionName = "0.7.9"
         buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("release"))
         buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -45,11 +53,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    if (releaseSigningFile.isFile) {
+    if (releaseSigningConfigured) {
         signingConfigs {
             create("grainRelease") {
                 storeFile = rootProject.file(releaseSigningValue("storeFile"))
-                storeType = releaseSigning.getProperty("storeType", "PKCS12")
+                storeType = releaseSigningSetting("storeType") ?: "PKCS12"
                 storePassword = releaseSigningValue("storePassword")
                 keyAlias = releaseSigningValue("keyAlias")
                 keyPassword = releaseSigningValue("keyPassword")
@@ -63,7 +71,7 @@ android {
         }
         release {
             isMinifyEnabled = true
-            if (releaseSigningFile.isFile) signingConfig = signingConfigs.getByName("grainRelease")
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("grainRelease")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         create("personal") {
@@ -82,7 +90,7 @@ val verifyPersonalFujiAssets = tasks.register("verifyPersonalFujiAssets") {
     val directory = file("src/debug/assets/luts/fujifilm")
     inputs.files(fileTree(directory) { include("*.cube", "sources.json") })
     doLast {
-        check(releaseSigningFile.isFile) { "Personal updates require the existing release signing configuration." }
+        check(releaseSigningConfigured) { "Personal updates require the existing release signing configuration." }
         val styles = listOf("CLASSIC-CHROME", "CLASSIC-Neg.", "REALA-ACE", "PROVIA", "Velvia",
             "ASTIA", "PRO-Neg.Std", "ETERNA", "ETERNA-BB", "ACROS")
         val missing = styles.map { "FLog2_to_${it}_33grid_V.1.00.cube" }

@@ -121,14 +121,21 @@ internal fun NativeCameraControls(
                 val enabled = state.liveControlsEnabled && LiveControl.ZOOM.supported(state)
                 val value = LiveControl.ZOOM.value(state)
                 Surface(onClick = { select(if (selected) null else LiveControl.ZOOM) }, enabled = enabled,
-                    shape = CircleShape, color = Color.Black.copy(alpha = .28f),
-                    border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .24f)),
+                    shape = CircleShape, color = Color.Transparent,
                     modifier = Modifier.size(48.dp).testTag("control-zoom").semantics {
                         contentDescription = "變焦 $value"
                     }) {
+                    // Keep the touch target and slider anchor fixed while shrinking the visible badge.
                     Box(contentAlignment = Alignment.Center) {
-                        Text(value, Modifier.cameraControlRotation(), style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .55f))
+                        Surface(modifier = Modifier.size(36.dp), shape = CircleShape,
+                            color = Color.Black.copy(alpha = .28f),
+                            border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .24f))) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(value, Modifier.cameraControlRotation(), style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1, softWrap = false,
+                                    fontWeight = FontWeight.SemiBold, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .55f))
+                            }
+                        }
                     }
                 }
             }

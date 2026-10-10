@@ -1,0 +1,86 @@
+name: Release APK
+# Enable the main trigger after the first production signer dry run.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and verify the production APK without publishing
+        type: boolean
+        default: true
+permissions:
+  contents: write
+concurrency:
+  group: grain-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'waltwait/Grain' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GRAIN_DRY_RUN: ${{ inputs.dry_run || false }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Decide whether to build, resume or skip
+        id: version
+        run: python3 scripts/ci_release.py status >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        if: steps.version.outputs.mode != 'skip'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        if: steps.version.outputs.mode == 'build'
+        with:
+          # Reuse dependencies but do not save a cache from the signing job.
+          cache-read-only: true
+      - name: Install Grain SDK packages
+        if: steps.version.outputs.mode != 'skip'
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;36.0.0"'
+      - name: Verify release scripts
+        if: steps.version.outputs.mode != 'skip'
+        run: python3 -m unittest discover -s scripts -p 'test_ci_*.py'
+      - name: Restore verified public Fuji assets
+        if: steps.version.outputs.mode == 'build'
+        run: python3 scripts/restore_fuji_assets.py
+      - name: Restore temporary signing file
+        if: steps.version.outputs.mode == 'build'
+        env:
+          GRAIN_KEYSTORE_BASE64: ${{ secrets.GRAIN_KEYSTORE_BASE64 }}
+          GRAIN_RELEASE_STORE_PASSWORD: ${{ secrets.GRAIN_RELEASE_STORE_PASSWORD }}
+          GRAIN_RELEASE_KEY_ALIAS: ${{ secrets.GRAIN_RELEASE_KEY_ALIAS }}
+          GRAIN_RELEASE_KEY_PASSWORD: ${{ secrets.GRAIN_RELEASE_KEY_PASSWORD }}
+          GRAIN_RELEASE_STORE_TYPE: ${{ secrets.GRAIN_RELEASE_STORE_TYPE }}
+        run: python3 scripts/ci_signing.py
+      - name: Tests, personal lint and production-signed APK
+        if: steps.version.outputs.mode == 'build'
+        env:
+          GRAIN_RELEASE_STORE_PASSWORD: ${{ secrets.GRAIN_RELEASE_STORE_PASSWORD }}
+          GRAIN_RELEASE_KEY_ALIAS: ${{ secrets.GRAIN_RELEASE_KEY_ALIAS }}
+          GRAIN_RELEASE_KEY_PASSWORD: ${{ secrets.GRAIN_RELEASE_KEY_PASSWORD }}
+          GRAIN_RELEASE_STORE_TYPE: ${{ secrets.GRAIN_RELEASE_STORE_TYPE }}
+        run: bash tools/gradle.sh --no-daemon :app:testDebugUnitTest :app:lintPersonal :app:assembleDebugAndroidTest :app:assemblePersonal
+      - name: Verify signer, version, Fuji pack and APK alignment
+        if: steps.version.outputs.mode != 'skip'
+        run: python3 scripts/ci_release.py verify
+      - name: Dry run APK
+        if: inputs.dry_run == true && steps.version.outputs.mode != 'skip'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: grain-production-dry-run
+          path: |
+            .tools/release/*.apk
+            .tools/release/latest.json
+          retention-days: 1
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Publish one APK, verify its digest, then update the feed
+        if: inputs.dry_run != true && steps.version.outputs.mode != 'skip'
+        run: python3 scripts/ci_release.py publish
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/grain-signing"
