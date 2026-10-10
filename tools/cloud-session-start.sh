@@ -4,7 +4,7 @@ set -euo pipefail
 grain_root=$(cd "$(dirname "$0")/.." && pwd)
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
-if [ ! -x "$JAVA_HOME/bin/java" ] || [ ! -d "$ANDROID_HOME/platforms/android-37" ] || [ ! -x "$ANDROID_HOME/build-tools/36.0.0/aapt2" ]; then
+if [ ! -x "$JAVA_HOME/bin/java" ] || [ ! -d "$ANDROID_HOME/platforms/android-37.0" ] || [ ! -x "$ANDROID_HOME/build-tools/36.0.0/aapt2" ]; then
   bash "$grain_root/tools/cloud-env-setup.sh"
 fi
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then

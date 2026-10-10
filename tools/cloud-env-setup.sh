@@ -29,5 +29,5 @@ yes | "$grain_sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
 grain_licenses_status=${PIPESTATUS[1]}
 set -o pipefail
 [ "$grain_licenses_status" -eq 0 ]
-"$grain_sdkmanager" --sdk_root="$ANDROID_HOME" 'platform-tools' 'platforms;android-37' 'build-tools;36.0.0'
+"$grain_sdkmanager" --sdk_root="$ANDROID_HOME" 'platform-tools' 'platforms;android-37.0' 'build-tools;36.0.0'
 echo 'Grain cloud toolchain ready: JDK 17, Android 37, Build Tools 36.0.0.'
