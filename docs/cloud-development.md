@@ -93,7 +93,7 @@ gh run watch <run-id> --repo waltwait/Grain
 
 已發布且 feed 完成的版本直接略過；發布中斷時會重新下載已上傳 APK 並驗證，再完成發布／feed。已有 draft 必須來自本次來源 commit；不會覆蓋另一個 commit 的附件。未完成上傳或多個附件要先人工檢查該 draft。更新 feed 採 main 最新內容並限制 versionCode 單調增加，不覆蓋其他已推進的新版。
 
-rollout 先只允許手動 dry run；確認 GitHub runner 實際簽章與素材檢查成功後，再啟用 main 自動觸發。
+rollout 先以手動 dry run 確認 GitHub runner 的簽章與素材檢查，再啟用 main 自動觸發；兩階段已於 2026-10-10 完成。
 
 SDK 安裝使用 `platforms;android-37.0`，與本機已安裝的 `android-37.0` 對應；API 37 的新版命名不能寫成 `platforms;android-37`。第一輪 dry run 停在 SDK 查找，未執行簽章或發布，已按實際 SDK package ID 修正。
 
@@ -101,4 +101,6 @@ SDK 安裝使用 `platforms;android-37.0`，與本機已安裝的 `android-37.0`
 
 GitHub Ubuntu 24.04 驗證：[Android CI](https://github.com/waltwait/Grain/actions/runs/38055430014) 成功，耗時 5 分 18 秒，下載報告確認 257 項 JVM 測試、0 失敗／錯誤／跳過，debug lint 0 錯誤、30 警告；[正式 dry run](https://github.com/waltwait/Grain/actions/runs/38055456862) 成功，耗時 6 分 55 秒，完成原正式簽章、十款富士、版本、非 debuggable 與 ZIP 對齊驗證。確認後啟用 main 自動觸發；dry run 沒有發布 Release 或修改 feed。兩輪有舊 Actions Node.js 20 的停用提示，runner 轉用 Node.js 24 後均執行成功。
 
-Mac 畫面鎖定，未代操作 Claude 帳號的環境對話框，Claude cloud VM 的啟動 hook 也尚未在實際 Claude session 執行；本機確認 local session 會略過 hook。Claude 的一次設定依上方步驟完成後即可使用。
+[0.7.9 正式自動發布](https://github.com/waltwait/Grain/actions/runs/38056091852) 成功，耗時 2 分 58 秒。main 的 `99a8194` 觸發建置，建立同一來源的 `v0.7.9` tag 與 [Latest Release](https://github.com/waltwait/Grain/releases/tag/v0.7.9)，只有一個原正式簽章、十款富士 LUT 的 personal APK；大小 15,038,022 bytes、SHA-256 `84c2d23b5ed1381cb5aa493d5767d6d7228d99e6e54be070b13f03e1336367df`。bot 的 `308f70d` 隨後更新共用 feed 到 0.7.9／42，App 與 Pages 使用同一個附件及校驗值。
+
+使用者選擇稍後自行照本文件設定 Claude 網頁環境，尚未代操作帳號的環境對話框；Claude cloud VM 的啟動 hook 也尚未在實際 Claude session 執行。本機確認 local session 會略過 hook。GitHub Actions 的正式發布已實際驗證，Claude 的一次設定依上方步驟完成後即可使用。
