@@ -23,6 +23,7 @@ import tw.luma.camera.camera.CaptureFeedback
 import tw.luma.camera.camera.CameraCapabilities
 import tw.luma.camera.camera.CameraEngine
 import tw.luma.camera.camera.CaptureSettings
+import tw.luma.camera.camera.FrameAspect
 import tw.luma.camera.camera.WhiteBalanceControls
 import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.lut.CubeLut
@@ -78,8 +79,11 @@ data class CameraUiState(
     val recordWithAudio: Boolean = true,
     val videoQuality: String = "HD",
     val savedMime: String = "image/jpeg",
+    val photoAspect: FrameAspect = FrameAspect.PHOTO_DEFAULT,
+    val videoAspect: FrameAspect = FrameAspect.VIDEO_DEFAULT,
 ) {
     val recording get() = recordingStatus != RecordingStatus.IDLE
+    val frameAspect get() = if (mode == CaptureMode.VIDEO) videoAspect else photoAspect
     val liveControlsEnabled get() = ready && !busy && recordingStatus != RecordingStatus.STARTING && recordingStatus != RecordingStatus.STOPPING
 }
 
@@ -103,7 +107,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private var libraryReady = false
 
     init {
-        _state.update { it.copy(saveOriginal = prefs.getBoolean("saveOriginal", false), grid = prefs.getBoolean("grid", true), recordWithAudio = prefs.getBoolean("recordWithAudio", true)) }
+        _state.update { it.copy(saveOriginal = prefs.getBoolean("saveOriginal", false), grid = prefs.getBoolean("grid", true), recordWithAudio = prefs.getBoolean("recordWithAudio", true),
+            photoAspect = FrameAspect.parse(prefs.getString("photoAspect", null), FrameAspect.PHOTO_DEFAULT),
+            videoAspect = FrameAspect.parse(prefs.getString("videoAspect", null), FrameAspect.VIDEO_DEFAULT)) }
         loadLatestMedia()
         viewModelScope.launch {
             val entries = withContext(Dispatchers.IO) {
@@ -160,6 +166,16 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     } }
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = FlashMode.OFF)) } }
+    /** Each mode keeps its own ratio; the camera rebinds so the crop follows the frame. */
+    fun nextAspect() {
+        val current = _state.value
+        if (current.busy || current.recording) return
+        val next = current.frameAspect.next()
+        _state.update { it.copy(ready = false, actual = ActualCapture(), cameraError = null,
+            photoAspect = if (it.mode == CaptureMode.PHOTO) next else it.photoAspect,
+            videoAspect = if (it.mode == CaptureMode.VIDEO) next else it.videoAspect) }
+        prefs.edit().putString(if (current.mode == CaptureMode.VIDEO) "videoAspect" else "photoAspect", next.name).apply()
+    }
     fun zoom(value: Float) { _state.update {
         val zoom = value.coerceIn(it.minZoom, it.maxZoom)
         if (it.liveControlsEnabled && zoom != it.capture.zoom) it.copy(capture = it.capture.copy(zoom = zoom)) else it

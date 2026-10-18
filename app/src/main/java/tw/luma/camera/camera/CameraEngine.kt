@@ -13,6 +13,7 @@ import android.hardware.camera2.params.ColorSpaceTransform
 import android.hardware.camera2.params.RggbChannelVector
 import android.os.Build
 import android.os.SystemClock
+import android.util.Rational
 import android.view.Surface
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2Interop
@@ -24,6 +25,7 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.ViewPort
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -82,7 +84,8 @@ class CameraEngine(
     var applying: Boolean = false
         private set
 
-    fun bind(front: Boolean, video: Boolean = false) {
+    /** [landscape] is the viewfinder's on-screen shape; the frame and every output are cropped to [aspect] in it. */
+    fun bind(front: Boolean, video: Boolean = false, aspect: FrameAspect = FrameAspect.PHOTO_DEFAULT, landscape: Boolean = false) {
         focusSequence++
         val token = ++generation
         camera = null
@@ -112,7 +115,7 @@ class CameraEngine(
                     val preview = builder.build().also { it.setSurfaceProvider(view.surfaceProvider) }
                     val group = UseCaseGroup.Builder().addUseCase(preview).addEffect(processor.effect)
                     if (video) {
-                        val recorder = Recorder.Builder().setQualitySelector(QualitySelector.fromOrderedList(
+                        val recorder = Recorder.Builder().setAspectRatio(aspect.videoStream).setQualitySelector(QualitySelector.fromOrderedList(
                             listOf(Quality.FHD, Quality.HD, Quality.SD), FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build()
                         val capture = VideoCapture.withOutput(recorder).also { it.targetRotation = captureRotation }
                         videoCapture = capture; imageCapture = null; group.addUseCase(capture)
@@ -123,12 +126,17 @@ class CameraEngine(
                         .setTargetRotation(captureRotation).build()
                         imageCapture = capture; videoCapture = null; group.addUseCase(capture)
                     }
-                    view.viewPort?.let { group.setViewPort(it) }
+                    val (width, height) = aspect.screenShape(landscape)
+                    group.setViewPort(ViewPort.Builder(Rational(width, height), view.display?.rotation ?: Surface.ROTATION_0).build())
                     camera = p.bindToLifecycle(lifecycle, selector, group.build())
                     caps = CameraCapabilities.read(camera!!.cameraInfo, context)
                     val zoom = camera!!.cameraInfo.zoomState.value
                     onReady(caps, camera!!.cameraInfo.hasFlashUnit(), zoom?.minZoomRatio ?: 1f, zoom?.maxZoomRatio ?: 1f)
-                    onVideoQuality(videoCapture?.resolutionInfo?.resolution?.let { "${minOf(it.width, it.height)}p" } ?: "HD")
+                    // The crop is what gets encoded, so 3:2 from a 1440×1080 stream reads 960p rather than 1080p.
+                    onVideoQuality(videoCapture?.resolutionInfo?.let { info ->
+                        val crop = info.cropRect.takeUnless { it.isEmpty }
+                        "${minOf(crop?.width() ?: info.resolution.width, crop?.height() ?: info.resolution.height)}p"
+                    } ?: "HD")
                 }.onFailure { onError(it.message ?: "相機啟動失敗") }
             }
         }, main)

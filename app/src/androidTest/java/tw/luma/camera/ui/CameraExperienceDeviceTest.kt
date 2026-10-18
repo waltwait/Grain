@@ -24,6 +24,7 @@ import tw.luma.camera.CameraViewModel
 import tw.luma.camera.CaptureMode
 import tw.luma.camera.MainActivity
 import tw.luma.camera.RecordingStatus
+import tw.luma.camera.camera.FrameAspect
 import java.io.File
 import kotlin.math.abs
 
@@ -759,6 +760,95 @@ class CameraExperienceDeviceTest {
             sources.forEach { resolver.delete(it, null, null) }
             bitmap.recycle()
         }
+    }
+
+    @Test fun frameRatioButtonCyclesTheViewfinderFrameAndEachPhotoMatchesIt() {
+        ready()
+        val model = model()
+        val before = model.state.value
+        val saved = mutableListOf<android.net.Uri>()
+        try {
+            ui.runOnIdle { model.mode(CaptureMode.PHOTO); model.saveOriginal(false); model.clearMessage() }
+            ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.PHOTO }
+            val area = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
+            repeat(FrameAspect.entries.size) {
+                val aspect = model.state.value.photoAspect
+                ui.onNodeWithTag("frame-aspect").assertTextContains(aspect.label)
+                assertFrameMatches(aspect, area)
+                val revision = model.state.value.captureFeedback.savedRevision
+                ui.onNodeWithTag("shutter").performClick()
+                ui.waitUntil(30_000) { !model.state.value.busy && model.state.value.captureFeedback.savedRevision == revision + 1 }
+                val uri = requireNotNull(model.state.value.savedUri).also { saved += it }
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                ui.activity.contentResolver.openInputStream(uri).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+                assertOutputRatio(aspect, bounds.outWidth, bounds.outHeight, .01f)
+                ui.onNodeWithTag("frame-aspect").performClick()
+                ui.waitUntil(30_000) { model.state.value.ready && model.state.value.photoAspect == aspect.next() }
+                assertEquals("Changing the ratio must not move the viewfinder area", area, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
+            }
+            assertEquals("Four taps return to the starting ratio", before.photoAspect, model.state.value.photoAspect)
+        } finally {
+            saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
+            ui.runOnIdle { model.clearMessage(); model.saveOriginal(before.saveOriginal); model.mode(before.mode) }
+        }
+    }
+
+    @Test fun videoKeepsItsOwnFrameRatioAndRecordsIt() {
+        ready()
+        val model = model()
+        val before = model.state.value
+        val saved = mutableListOf<android.net.Uri>()
+        try {
+            ui.runOnIdle { model.recordWithAudio(false) }
+            ui.onNodeWithTag("mode-video").performClick()
+            ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.VIDEO }
+            val area = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
+            repeat(FrameAspect.entries.size) {
+                val aspect = model.state.value.videoAspect
+                ui.onNodeWithTag("frame-aspect").assertTextContains(aspect.label)
+                assertFrameMatches(aspect, area)
+                val previous = model.state.value.savedUri
+                ui.onNodeWithTag("shutter").performClick()
+                ui.waitUntil(20_000) { model.state.value.recordingStatus == RecordingStatus.RECORDING && model.state.value.recordingNs >= 1_500_000_000L }
+                ui.onNodeWithTag("frame-aspect").assertIsNotEnabled()
+                ui.onNodeWithTag("shutter").performClick()
+                ui.waitUntil(20_000) { !model.state.value.recording && model.state.value.savedUri != previous && model.state.value.savedMime == "video/mp4" }
+                val uri = requireNotNull(model.state.value.savedUri).also { saved += it }
+                MediaMetadataRetriever().use { retriever ->
+                    retriever.setDataSource(ui.activity, uri)
+                    assertOutputRatio(aspect, retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)!!.toInt(),
+                        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)!!.toInt(), .02f)
+                }
+                ui.onNodeWithTag("frame-aspect").performClick()
+                ui.waitUntil(30_000) { model.state.value.ready && model.state.value.videoAspect == aspect.next() }
+            }
+            ui.runOnIdle {
+                assertEquals("Four taps return to the starting ratio", before.videoAspect, model.state.value.videoAspect)
+                assertEquals("Video ratio changes must leave the photo ratio alone", before.photoAspect, model.state.value.photoAspect)
+            }
+            ui.onNodeWithTag("mode-photo").performClick()
+            ready()
+        } finally {
+            // This test owns only the clips it just created; never touch existing user media.
+            saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
+            ui.runOnIdle { model.recordWithAudio(before.recordWithAudio); model.mode(before.mode) }
+        }
+    }
+
+    private fun assertFrameMatches(aspect: FrameAspect, area: androidx.compose.ui.geometry.Rect) {
+        val frame = ui.onNodeWithTag("viewfinder-frame").fetchSemanticsNode().boundsInRoot
+        val (width, height) = aspect.screenShape(landscape = area.width > area.height)
+        assertEquals("${aspect.label} frame shape", width.toFloat() / height, frame.width / frame.height, .02f)
+        assertTrue("The ${aspect.label} frame must fill the viewfinder on one side",
+            abs(frame.width - area.width) < 2f || abs(frame.height - area.height) < 2f)
+        assertEquals(area.center.x, frame.center.x, 2f)
+        assertEquals(area.center.y, frame.center.y, 2f)
+    }
+
+    private fun assertOutputRatio(aspect: FrameAspect, width: Int, height: Int, tolerance: Float) {
+        assertTrue(width > 0 && height > 0)
+        assertEquals("${aspect.label} output was ${width}×$height", aspect.long.toFloat() / aspect.short,
+            maxOf(width, height).toFloat() / minOf(width, height), tolerance)
     }
 
     @Test fun flashIconCyclesOffAutoOnWithoutOpeningSettings() {

@@ -101,6 +101,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var exposureAnchor by remember { mutableStateOf<Offset?>(null) }
     var exposureFeedback by remember { mutableStateOf<ExposureFeedback?>(null) }
     var exposureDragging by remember { mutableStateOf(false) }
+    var viewfinderLandscape by remember { mutableStateOf<Boolean?>(null) }
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
     val currentDensity by rememberUpdatedState(LocalDensity.current.density)
@@ -152,14 +153,15 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
-    DisposableEffect(view, lifecycle, permitted, state.front, state.mode, retry) {
+    DisposableEffect(view, lifecycle, permitted, state.front, state.mode, state.frameAspect, viewfinderLandscape, retry) {
         focusFeedback = null
         exposureAnchor = null
         exposureFeedback = null
         exposureDragging = false
         activeControl = null
         var owned: CameraEngine? = null
-        if (permitted) {
+        val landscapeFrame = viewfinderLandscape
+        if (permitted && landscapeFrame != null) {
             val targets = CameraEffect.PREVIEW or if (state.mode == CaptureMode.VIDEO) CameraEffect.VIDEO_CAPTURE else 0
             val processor = LutSurfaceProcessor(targets) { error -> ContextCompat.getMainExecutor(context).execute { model.cameraError(error.message ?: "GPU 預覽失敗") } }
             val next = CameraEngine(context, lifecycle, view, processor, model::ready, model::actual, model::cameraError,
@@ -248,7 +250,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                 if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) exposureDragging = false
                 true
             }
-            view.post { next.bind(model.state.value.front, model.state.value.mode == CaptureMode.VIDEO) }
+            view.post { model.state.value.let { next.bind(it.front, it.mode == CaptureMode.VIDEO, it.frameAspect, landscapeFrame) } }
         }
         onDispose { owned?.close(); view.setOnTouchListener(null); view.keepScreenOn = false; engine = null; focusFeedback = null }
     }
@@ -274,14 +276,21 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             val landscape = maxWidth > maxHeight && maxWidth > 600.dp
             val preview: @Composable (Modifier) -> Unit = { modifier ->
                 BoxWithConstraints(modifier) {
-                    PreviewArea(state, model, view, permitted, Modifier.fillMaxSize(),
+                    val landscapeArea = maxWidth > maxHeight
+                    SideEffect { viewfinderLandscape = landscapeArea }
+                    val (frameWidth, frameHeight) = state.frameAspect.screenShape(landscapeArea)
+                    val frameRatio = frameWidth.toFloat() / frameHeight
+                    PreviewArea(state, model, view, permitted, frameRatio, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
-                    ViewfinderCaptureFeedback(state.captureFeedback.capturedPhotoId, Modifier.fillMaxSize())
+                    ViewfinderCaptureFeedback(state.captureFeedback.capturedPhotoId, Modifier.viewfinderFrame(frameRatio))
+                    // Touch points come from the preview view, so the indicators share its frame.
                     if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { feedback ->
                         key(feedback.request) {
-                            FocusIndicator(feedback) {
-                                if (focusFeedback?.request == feedback.request) focusFeedback = null
+                            Box(Modifier.viewfinderFrame(frameRatio)) {
+                                FocusIndicator(feedback) {
+                                    if (focusFeedback?.request == feedback.request) focusFeedback = null
+                                }
                             }
                         }
                     }
@@ -290,7 +299,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                             activeControl = null
                             panel = if (it == "filters" && panel == "filters") null else it
                         }
-                        exposureFeedback?.let { ExposureIndicator(it, state.capabilities.exposureStep) }
+                        exposureFeedback?.let { Box(Modifier.viewfinderFrame(frameRatio)) { ExposureIndicator(it, state.capabilities.exposureStep) } }
                         if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, { activeControl = it }, Modifier.align(Alignment.BottomCenter))
                     }
                     if (panel == "filters") {
@@ -320,6 +329,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         }) { panel = if (it == "filter") "filters" else null }
     }
 }
+
+/** The largest frame of [ratio] (width / height) centered in the viewfinder; the bars around it stay black. */
+private fun Modifier.viewfinderFrame(ratio: Float) = fillMaxSize().wrapContentSize(Alignment.Center).aspectRatio(ratio)
 
 private data class FocusFeedback(val request: Int, val point: Offset, val outcome: FocusOutcome? = null)
 private data class ExposureFeedback(val point: Offset, val index: Int)
@@ -380,14 +392,16 @@ private fun FocusIndicator(feedback: FocusFeedback, onFinished: () -> Unit) {
 }
 
 @Composable
-private fun PreviewArea(state: CameraUiState, model: CameraViewModel, view: PreviewView, granted: Boolean, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
+private fun PreviewArea(state: CameraUiState, model: CameraViewModel, view: PreviewView, granted: Boolean, frameRatio: Float, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
     Box(modifier.background(Color.Black).testTag("viewfinder"), contentAlignment = Alignment.Center) {
         if (granted) {
-            AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "相機即時預覽，可點擊對焦、左右滑動或雙指變焦" })
-            if (state.grid && state.ready) Canvas(Modifier.fillMaxSize()) {
-                for (i in 1..2) {
-                    drawLine(Color.White.copy(alpha = .2f), Offset(size.width * i / 3, 0f), Offset(size.width * i / 3, size.height), 1.dp.toPx())
-                    drawLine(Color.White.copy(alpha = .2f), Offset(0f, size.height * i / 3), Offset(size.width, size.height * i / 3), 1.dp.toPx())
+            Box(Modifier.viewfinderFrame(frameRatio).testTag("viewfinder-frame")) {
+                AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "相機即時預覽，可點擊對焦、左右滑動或雙指變焦" })
+                if (state.grid && state.ready) Canvas(Modifier.fillMaxSize()) {
+                    for (i in 1..2) {
+                        drawLine(Color.White.copy(alpha = .2f), Offset(size.width * i / 3, 0f), Offset(size.width * i / 3, size.height), 1.dp.toPx())
+                        drawLine(Color.White.copy(alpha = .2f), Offset(0f, size.height * i / 3), Offset(size.width, size.height * i / 3), 1.dp.toPx())
+                    }
                 }
             }
             if (!state.ready && state.cameraError == null) CircularProgressIndicator(Modifier.size(28.dp), color = Color.White)
@@ -426,11 +440,11 @@ private fun RecordingClock(model: CameraViewModel, status: RecordingStatus) {
 @Composable
 private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, newVersion: String?, modifier: Modifier, panel: (String) -> Unit) {
     NativeCameraToolbar(state, modifier, panel = panel, updateAvailable = newVersion != null,
-        onFlash = { model.changeCapture { it.copy(flash = it.flash.next()) } }) { RecordingClock(model, state.recordingStatus) }
+        onFlash = { model.changeCapture { it.copy(flash = it.flash.next()) } }, onAspect = model::nextAspect) { RecordingClock(model, state.recordingStatus) }
 }
 
 @Composable
-internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, onFlash: () -> Unit = {}, clock: @Composable () -> Unit) {
+internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, onFlash: () -> Unit = {}, onAspect: () -> Unit = {}, clock: @Composable () -> Unit) {
     val gradient = remember { Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent)) }
     Row(modifier.fillMaxWidth().background(gradient).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp),
@@ -441,6 +455,14 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
             val flashMode = FlashControl.shown(state.capture.flash, flashUsable)
             GlassIcon("flash", FlashControl.description(flashUsable, flashMode), FlashControl.enabled(flashUsable, state.busy, state.recording),
                 selected = flashMode == FlashMode.ON, mark = if (flashMode == FlashMode.AUTO) "A" else null) { onFlash() }
+        }
+        val aspectEnabled = !state.busy && !state.recording
+        Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).testTag("frame-aspect")
+            .semantics { contentDescription = "畫面比例" }, onClick = onAspect, enabled = aspectEnabled) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(state.frameAspect.label, Modifier.cameraControlRotation(), color = Color.White.copy(alpha = if (aspectEnabled) 1f else .35f),
+                    style = MaterialTheme.typography.labelMedium)
+            }
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
