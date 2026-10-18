@@ -67,6 +67,7 @@ import tw.luma.camera.CameraViewModel
 import tw.luma.camera.camera.CameraEngine
 import tw.luma.camera.camera.CameraOrientation
 import tw.luma.camera.camera.FocusOutcome
+import tw.luma.camera.camera.FrameAspect
 import kotlinx.coroutines.delay
 import tw.luma.camera.camera.shutterLabel
 import tw.luma.camera.gl.LutSurfaceProcessor
@@ -440,11 +441,11 @@ private fun RecordingClock(model: CameraViewModel, status: RecordingStatus) {
 @Composable
 private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, newVersion: String?, modifier: Modifier, panel: (String) -> Unit) {
     NativeCameraToolbar(state, modifier, panel = panel, updateAvailable = newVersion != null,
-        onFlash = { model.changeCapture { it.copy(flash = it.flash.next()) } }, onAspect = model::nextAspect) { RecordingClock(model, state.recordingStatus) }
+        onFlash = { model.changeCapture { it.copy(flash = it.flash.next()) } }) { RecordingClock(model, state.recordingStatus) }
 }
 
 @Composable
-internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, onFlash: () -> Unit = {}, onAspect: () -> Unit = {}, clock: @Composable () -> Unit) {
+internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, onFlash: () -> Unit = {}, clock: @Composable () -> Unit) {
     val gradient = remember { Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent)) }
     Row(modifier.fillMaxWidth().background(gradient).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp),
@@ -455,14 +456,6 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
             val flashMode = FlashControl.shown(state.capture.flash, flashUsable)
             GlassIcon("flash", FlashControl.description(flashUsable, flashMode), FlashControl.enabled(flashUsable, state.busy, state.recording),
                 selected = flashMode == FlashMode.ON, mark = if (flashMode == FlashMode.AUTO) "A" else null) { onFlash() }
-        }
-        val aspectEnabled = !state.busy && !state.recording
-        Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).testTag("frame-aspect")
-            .semantics { contentDescription = "畫面比例" }, onClick = onAspect, enabled = aspectEnabled) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(state.frameAspect.label, Modifier.cameraControlRotation(), color = Color.White.copy(alpha = if (aspectEnabled) 1f else .35f),
-                    style = MaterialTheme.typography.labelMedium)
-            }
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
@@ -607,6 +600,15 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     }
                     if (caps.awbLock && state.capture.kelvin == null && state.capture.wbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO) {
                         ToggleRow("鎖定自動白平衡", state.capture.wbLocked, !state.capture.manual) { checked -> model.changeCapture { it.copy(wbLocked = checked) } }
+                    }
+                    // Each mode keeps its own ratio, so the sheet edits the one for the mode it was opened in.
+                    Text("畫面比例", style = MaterialTheme.typography.titleMedium)
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        FrameAspect.entries.forEachIndexed { index, aspect ->
+                            SegmentedButton(selected = state.frameAspect == aspect, onClick = { model.selectAspect(aspect) },
+                                shape = SegmentedButtonDefaults.itemShape(index, FrameAspect.entries.size), enabled = !state.busy && !state.recording,
+                                modifier = Modifier.testTag("frame-aspect-${aspect.name}")) { Text(aspect.label) }
+                        }
                     }
                     ToggleRow("同時儲存原圖", state.saveOriginal, !state.busy, model::saveOriginal)
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }

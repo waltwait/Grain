@@ -167,14 +167,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = FlashMode.OFF)) } }
     /** Each mode keeps its own ratio; the camera rebinds so the crop follows the frame. */
-    fun nextAspect() {
+    fun selectAspect(aspect: FrameAspect) {
         val current = _state.value
-        if (current.busy || current.recording) return
-        val next = current.frameAspect.next()
+        if (current.busy || current.recording || aspect == current.frameAspect) return
         _state.update { it.copy(ready = false, actual = ActualCapture(), cameraError = null,
-            photoAspect = if (it.mode == CaptureMode.PHOTO) next else it.photoAspect,
-            videoAspect = if (it.mode == CaptureMode.VIDEO) next else it.videoAspect) }
-        prefs.edit().putString(if (current.mode == CaptureMode.VIDEO) "videoAspect" else "photoAspect", next.name).apply()
+            photoAspect = if (it.mode == CaptureMode.PHOTO) aspect else it.photoAspect,
+            videoAspect = if (it.mode == CaptureMode.VIDEO) aspect else it.videoAspect) }
+        prefs.edit().putString(if (current.mode == CaptureMode.VIDEO) "videoAspect" else "photoAspect", aspect.name).apply()
     }
     fun zoom(value: Float) { _state.update {
         val zoom = value.coerceIn(it.minZoom, it.maxZoom)
