@@ -762,7 +762,7 @@ class CameraExperienceDeviceTest {
         }
     }
 
-    @Test fun frameRatioButtonCyclesTheViewfinderFrameAndEachPhotoMatchesIt() {
+    @Test fun settingsChooseEachPhotoFrameRatioAndEachPhotoMatchesIt() {
         ready()
         val model = model()
         val before = model.state.value
@@ -770,10 +770,12 @@ class CameraExperienceDeviceTest {
         try {
             ui.runOnIdle { model.mode(CaptureMode.PHOTO); model.saveOriginal(false); model.clearMessage() }
             ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.PHOTO }
+            for (label in FrameAspect.entries.map { it.label }) ui.onAllNodesWithText(label).assertCountEquals(0)
             val area = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
-            repeat(FrameAspect.entries.size) {
-                val aspect = model.state.value.photoAspect
-                ui.onNodeWithTag("frame-aspect").assertTextContains(aspect.label)
+            for (aspect in FrameAspect.entries) {
+                chooseAspect(aspect)
+                ui.waitUntil(30_000) { model.state.value.ready && model.state.value.photoAspect == aspect }
+                assertEquals("Changing the ratio must not move the viewfinder area", area, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
                 assertFrameMatches(aspect, area)
                 val revision = model.state.value.captureFeedback.savedRevision
                 ui.onNodeWithTag("shutter").performClick()
@@ -782,18 +784,15 @@ class CameraExperienceDeviceTest {
                 val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 ui.activity.contentResolver.openInputStream(uri).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
                 assertOutputRatio(aspect, bounds.outWidth, bounds.outHeight, .01f)
-                ui.onNodeWithTag("frame-aspect").performClick()
-                ui.waitUntil(30_000) { model.state.value.ready && model.state.value.photoAspect == aspect.next() }
-                assertEquals("Changing the ratio must not move the viewfinder area", area, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
             }
-            assertEquals("Four taps return to the starting ratio", before.photoAspect, model.state.value.photoAspect)
+            ui.runOnIdle { assertEquals("Photo ratio changes must leave the video ratio alone", before.videoAspect, model.state.value.videoAspect) }
         } finally {
             saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
-            ui.runOnIdle { model.clearMessage(); model.saveOriginal(before.saveOriginal); model.mode(before.mode) }
+            ui.runOnIdle { model.clearMessage(); model.saveOriginal(before.saveOriginal); model.selectAspect(before.photoAspect); model.mode(before.mode) }
         }
     }
 
-    @Test fun videoKeepsItsOwnFrameRatioAndRecordsIt() {
+    @Test fun settingsChooseEachVideoFrameRatioAndEachClipMatchesIt() {
         ready()
         val model = model()
         val before = model.state.value
@@ -803,14 +802,14 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("mode-video").performClick()
             ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.VIDEO }
             val area = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
-            repeat(FrameAspect.entries.size) {
-                val aspect = model.state.value.videoAspect
-                ui.onNodeWithTag("frame-aspect").assertTextContains(aspect.label)
+            for (aspect in FrameAspect.entries) {
+                chooseAspect(aspect)
+                ui.waitUntil(30_000) { model.state.value.ready && model.state.value.videoAspect == aspect }
                 assertFrameMatches(aspect, area)
                 val previous = model.state.value.savedUri
                 ui.onNodeWithTag("shutter").performClick()
                 ui.waitUntil(20_000) { model.state.value.recordingStatus == RecordingStatus.RECORDING && model.state.value.recordingNs >= 1_500_000_000L }
-                ui.onNodeWithTag("frame-aspect").assertIsNotEnabled()
+                ui.onNodeWithContentDescription("更多設定").assertIsNotEnabled()
                 ui.onNodeWithTag("shutter").performClick()
                 ui.waitUntil(20_000) { !model.state.value.recording && model.state.value.savedUri != previous && model.state.value.savedMime == "video/mp4" }
                 val uri = requireNotNull(model.state.value.savedUri).also { saved += it }
@@ -819,20 +818,26 @@ class CameraExperienceDeviceTest {
                     assertOutputRatio(aspect, retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)!!.toInt(),
                         retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)!!.toInt(), .02f)
                 }
-                ui.onNodeWithTag("frame-aspect").performClick()
-                ui.waitUntil(30_000) { model.state.value.ready && model.state.value.videoAspect == aspect.next() }
             }
-            ui.runOnIdle {
-                assertEquals("Four taps return to the starting ratio", before.videoAspect, model.state.value.videoAspect)
-                assertEquals("Video ratio changes must leave the photo ratio alone", before.photoAspect, model.state.value.photoAspect)
-            }
-            ui.onNodeWithTag("mode-photo").performClick()
-            ready()
+            ui.runOnIdle { assertEquals("Video ratio changes must leave the photo ratio alone", before.photoAspect, model.state.value.photoAspect) }
         } finally {
             // This test owns only the clips it just created; never touch existing user media.
             saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
-            ui.runOnIdle { model.recordWithAudio(before.recordWithAudio); model.mode(before.mode) }
+            ui.runOnIdle {
+                model.recordWithAudio(before.recordWithAudio)
+                if (model.state.value.mode == CaptureMode.VIDEO) model.selectAspect(before.videoAspect)
+                model.mode(before.mode)
+            }
         }
+    }
+
+    /** The ratio lives in the settings sheet only; the viewfinder carries no ratio control. */
+    private fun chooseAspect(aspect: FrameAspect) {
+        ui.onNodeWithContentDescription("更多設定").performClick()
+        ui.onNodeWithTag("frame-aspect-${aspect.name}").performScrollTo().performClick()
+        ui.onNodeWithTag("frame-aspect-${aspect.name}").assertIsSelected()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        ui.waitUntil(5_000) { ui.onAllNodesWithTag("frame-aspect-${aspect.name}").fetchSemanticsNodes().isEmpty() }
     }
 
     private fun assertFrameMatches(aspect: FrameAspect, area: androidx.compose.ui.geometry.Rect) {

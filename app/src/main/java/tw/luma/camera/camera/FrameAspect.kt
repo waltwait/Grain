@@ -8,8 +8,6 @@ enum class FrameAspect(val long: Int, val short: Int) {
 
     val label: String get() = "$long:$short"
 
-    fun next(): FrameAspect = entries[(ordinal + 1) % entries.size]
-
     /** Width to height on screen: a portrait viewfinder holds an upright frame, a landscape one a wide frame. */
     fun screenShape(landscape: Boolean): Pair<Int, Int> = if (landscape) long to short else short to long
 

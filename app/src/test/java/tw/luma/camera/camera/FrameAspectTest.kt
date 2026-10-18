@@ -5,13 +5,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FrameAspectTest {
-    @Test fun toolbarButtonCyclesThroughEveryRatioAndWrapsAround() {
-        assertEquals(FrameAspect.RATIO_3_2, FrameAspect.RATIO_4_3.next())
-        assertEquals(FrameAspect.RATIO_16_9, FrameAspect.RATIO_3_2.next())
-        assertEquals(FrameAspect.RATIO_1_1, FrameAspect.RATIO_16_9.next())
-        assertEquals(FrameAspect.RATIO_4_3, FrameAspect.RATIO_1_1.next())
-    }
-
     @Test fun portraitViewfinderHoldsAnUprightFrameAndLandscapeAWideOne() {
         assertEquals(3 to 4, FrameAspect.RATIO_4_3.screenShape(landscape = false))
         assertEquals(2 to 3, FrameAspect.RATIO_3_2.screenShape(landscape = false))
