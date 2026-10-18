@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.10",
-  "versionCode": 43,
+  "versionName": "0.7.11",
+  "versionCode": 44,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.10/Grain-0.7.10-personal-fuji.apk",
-  "apkSize": 15038022,
-  "apkSha256": "f0decc5326c7cd7d489e09fdbb146eb0495943f7e354ff02860b5da3a08dd2c4",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.11/Grain-0.7.11-personal-fuji.apk",
+  "apkSize": 15054410,
+  "apkSha256": "3e74dc0a8271598aeff5580c3c760890564191f602e20277e0583656965f5b1c",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 拍照與錄影可在上方工具列切換畫面比例 4:3、3:2、16:9、1:1，觀景窗框內就是存下來的範圍；照片與錄影各自記住比例。\n- 照片預設改為 4:3、錄影預設 16:9，觀景窗會依比例留黑邊；錄影畫質標示改為實際存檔的尺寸。"
+  "notes": "- 畫面比例改到「更多設定」裡選擇，拍照畫面不再顯示比例按鈕；照片與錄影仍各自記住比例。"
 }
