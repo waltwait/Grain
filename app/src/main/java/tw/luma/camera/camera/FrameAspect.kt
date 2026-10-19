@@ -8,12 +8,11 @@ data class PhotoCrop(val left: Int, val top: Int, val width: Int, val height: In
 
 /** Shape of the saved photo or video as long side : short side; the viewfinder frame shows the same crop. */
 enum class FrameAspect(val long: Int, val short: Int) {
-    RATIO_4_3(4, 3), RATIO_3_2(3, 2), RATIO_16_9(16, 9), RATIO_1_1(1, 1);
+    // The picker's order: iOS's 4:3, 16:9 and 1:1, then the film ratio.
+    RATIO_4_3(4, 3), RATIO_16_9(16, 9), RATIO_1_1(1, 1), RATIO_3_2(3, 2);
 
-    val label: String get() = "$long:$short"
-
-    /** The ratio chip's order: iOS's 4:3, 16:9 and 1:1, then the film ratio. */
-    fun next(): FrameAspect = when (this) { RATIO_4_3 -> RATIO_16_9; RATIO_16_9 -> RATIO_1_1; RATIO_1_1 -> RATIO_3_2; RATIO_3_2 -> RATIO_4_3 }
+    /** Upright, like the phone's fixed camera screen: 3:4, 9:16, 1:1 and 2:3. */
+    val label: String get() = "$short:$long"
 
     /** The largest part of a [width] × [height] photo with this shape, from its middle and in its own orientation. */
     fun centerCrop(width: Int, height: Int): PhotoCrop {
