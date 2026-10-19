@@ -274,10 +274,14 @@ class CameraExperienceDeviceTest {
         val state = model().state.value
         val frame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
         val root = ui.onRoot().fetchSemanticsNode().boundsInRoot
-        assertTrue("Viewfinder must occupy at least 65% of the portrait height", frame.height >= root.height * .65f)
         ui.onAllNodesWithTag("control-zoom").assertCountEquals(1)
+        ui.onAllNodesWithTag("camera-control-strip").assertCountEquals(1)
         val zoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
         val strip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
+        assertTrue("Upright, the ISO row must sit in the dock under the viewfinder", strip.top >= frame.bottom - 1f)
+        assertTrue("Viewfinder and the ISO row under it must occupy at least 65% of the portrait height",
+            frame.height + strip.height >= root.height * .65f)
+        assertTrue("Zoom must stay on the viewfinder", zoom.bottom <= frame.bottom + 1f)
         assertEquals("Zoom must be centered above the control strip", frame.center.x, zoom.center.x, 2f)
         assertTrue("Zoom must remain separate from the control strip", zoom.bottom <= strip.top + 2f)
         if (state.maxZoom > state.minZoom) {
@@ -762,7 +766,7 @@ class CameraExperienceDeviceTest {
         }
     }
 
-    @Test fun settingsChooseEachPhotoFrameRatioAndEachPhotoMatchesIt() {
+    @Test fun controlsTrayChoosesEachPhotoFrameRatioAndEachPhotoMatchesIt() {
         ready()
         val model = model()
         val before = model.state.value
@@ -773,7 +777,7 @@ class CameraExperienceDeviceTest {
             for (label in FrameAspect.entries.map { it.label }) ui.onAllNodesWithText(label).assertCountEquals(0)
             val area = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
             for (aspect in FrameAspect.entries) {
-                chooseAspect(aspect)
+                chooseAspect(aspect, swipe = aspect.ordinal % 2 == 0)
                 ui.waitUntil(30_000) { model.state.value.ready && model.state.value.photoAspect == aspect }
                 assertEquals("Changing the ratio must not move the viewfinder area", area, ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot)
                 assertFrameMatches(aspect, area)
@@ -796,7 +800,7 @@ class CameraExperienceDeviceTest {
         }
     }
 
-    @Test fun settingsChooseEachVideoFrameRatioAndEachClipMatchesIt() {
+    @Test fun controlsTrayChoosesEachVideoFrameRatioAndEachClipMatchesIt() {
         ready()
         val model = model()
         val before = model.state.value
@@ -807,7 +811,7 @@ class CameraExperienceDeviceTest {
             ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.VIDEO }
             val area = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
             for (aspect in FrameAspect.entries) {
-                chooseAspect(aspect)
+                chooseAspect(aspect, swipe = false)
                 ui.waitUntil(30_000) { model.state.value.ready && model.state.value.videoAspect == aspect }
                 assertFrameMatches(aspect, area)
                 val previous = model.state.value.savedUri
@@ -836,12 +840,14 @@ class CameraExperienceDeviceTest {
         }
     }
 
-    /** Like iOS: swipe up on the mode row for the controls tray, tap the ratio until it reads [aspect], swipe back down. */
-    private fun chooseAspect(aspect: FrameAspect) {
+    /** Opens the controls tray by swiping up on the dock or tapping its ︿, taps the ratio until it reads [aspect], then closes it the same way. */
+    private fun chooseAspect(aspect: FrameAspect, swipe: Boolean) {
         val model = model()
         val video = model.state.value.mode == CaptureMode.VIDEO
-        ui.onNodeWithTag("camera-dock").performTouchInput { swipeUp(startY = height * .25f, endY = 0f) }
+        if (swipe) ui.onNodeWithTag("camera-dock").performTouchInput { swipeUp(startY = height * .25f, endY = 0f) }
+        else ui.onNodeWithContentDescription("相機控制項").performClick()
         ui.onNodeWithTag("controls-tray").assertIsDisplayed()
+        ui.onNodeWithTag("controls-tray-toggle").assertContentDescriptionEquals("收起相機控制項")
         repeat(FrameAspect.entries.size) {
             if (model.state.value.frameAspect != aspect) {
                 ui.onNodeWithTag("frame-aspect").performClick()
@@ -850,8 +856,10 @@ class CameraExperienceDeviceTest {
             }
         }
         ui.onNodeWithTag("frame-aspect").assertTextContains(aspect.label)
-        ui.onNodeWithTag("camera-dock").performTouchInput { swipeDown(startY = 0f, endY = height * .25f) }
+        if (swipe) ui.onNodeWithTag("camera-dock").performTouchInput { swipeDown(startY = 0f, endY = height * .25f) }
+        else ui.onNodeWithTag("controls-tray-toggle").performClick()
         ui.onNodeWithTag("controls-tray").assertDoesNotExist()
+        ui.onNodeWithTag("controls-tray-toggle").assertContentDescriptionEquals("相機控制項")
     }
 
     private fun assertFrameMatches(aspect: FrameAspect, area: androidx.compose.ui.geometry.Rect) {
@@ -870,9 +878,9 @@ class CameraExperienceDeviceTest {
         assertTrue("The ISO row must sit below the ${aspect.label} frame or on it",
             strip.top >= frame.bottom - 1f || strip.bottom <= frame.bottom + 1f)
         if (aspect == FrameAspect.RATIO_4_3 || aspect == FrameAspect.RATIO_1_1) {
-            // Like iOS, frames no taller than 4:3 stay on black between the toolbar and the ISO pill.
+            // Like iOS, frames no taller than 4:3 stay on black between the toolbar and the ISO row.
             assertTrue("The ${aspect.label} frame must start under the toolbar", frame.top >= toolbar.bottom - 1f)
-            assertTrue("The ISO pill must sit under the ${aspect.label} frame", strip.top >= frame.bottom - 1f)
+            assertTrue("The ISO row must sit under the ${aspect.label} frame", strip.top >= frame.bottom - 1f)
         }
     }
 
