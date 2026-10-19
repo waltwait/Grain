@@ -34,8 +34,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
@@ -58,23 +58,11 @@ enum class LiveControl(val title: String) { ISO("ISO"), SHUTTER("快門"), EV("�
 
 private val LocalLiveControlInteractionSource = staticCompositionLocalOf<MutableInteractionSource?> { null }
 
+/** The zoom badge and floating slider over the viewfinder; [showStrip] adds the ISO row when it cannot sit below. */
 @Composable
 internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier,
-    zoomGap: androidx.compose.ui.unit.Dp = 0.dp, onStripHeight: (Int) -> Unit = {}) {
-    NativeCameraControls(state, active, select = { next ->
-        if (next != null && next.entersManual && !state.capture.manual) {
-            engine?.enterManual()?.let { manual ->
-                val caps = state.capabilities
-                val safeManual = if (state.mode == CaptureMode.VIDEO) {
-                    val shutter = manual.shutterNs.coerceAtMost(33_333_333L).coerceAtLeast(caps.shutterRange?.lower ?: 1L)
-                    val iso = (manual.iso.toDouble() * manual.shutterNs / shutter).roundToInt()
-                    manual.copy(shutterNs = shutter, iso = caps.isoRange?.clamp(iso) ?: iso)
-                } else manual
-                model.changeCapture { safeManual }
-            }
-        }
-        select(next)
-    }, reset = { control ->
+    showStrip: Boolean = true) {
+    NativeCameraControls(state, active, select = liveSelect(state, model, engine, select), reset = { control ->
         when (control) {
             LiveControl.ISO, LiveControl.SHUTTER, LiveControl.APERTURE -> model.changeCapture { it.copy(manual = false, wbLocked = false) }
             LiveControl.EV -> model.changeCapture { it.copy(evIndex = 0) }
@@ -82,7 +70,62 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
             LiveControl.ZOOM -> model.zoom(1f)
         }
         if (control != LiveControl.WB) select(null)
-    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier, zoomGap = zoomGap, onStripHeight = onStripHeight)
+    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier, showStrip = showStrip)
+}
+
+/** The ISO row on its own, for the black above the shutter; its slider still opens over the viewfinder. */
+@Composable
+internal fun LiveControlStrip(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit,
+    modifier: Modifier = Modifier) {
+    ControlStrip(state, active, liveSelect(state, model, engine, select), modifier)
+}
+
+/** Opening ISO, shutter or aperture from auto first carries the exposure the camera is using into manual. */
+private fun liveSelect(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, select: (LiveControl?) -> Unit): (LiveControl?) -> Unit = { next ->
+    if (next != null && next.entersManual && !state.capture.manual) {
+        engine?.enterManual()?.let { manual ->
+            val caps = state.capabilities
+            val safeManual = if (state.mode == CaptureMode.VIDEO) {
+                val shutter = manual.shutterNs.coerceAtMost(33_333_333L).coerceAtLeast(caps.shutterRange?.lower ?: 1L)
+                val iso = (manual.iso.toDouble() * manual.shutterNs / shutter).roundToInt()
+                manual.copy(shutterNs = shutter, iso = caps.isoRange?.clamp(iso) ?: iso)
+            } else manual
+            model.changeCapture { safeManual }
+        }
+    }
+    select(next)
+}
+
+/** Transparent over the picture or the black below it; a soft shadow keeps the text readable on bright scenes. */
+@Composable
+private fun ControlStrip(state: CameraUiState, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier = Modifier) {
+    val controls = remember(state.capabilities.adjustableAperture) {
+        listOf(LiveControl.ISO, LiveControl.SHUTTER, LiveControl.EV, LiveControl.WB) +
+            if (state.capabilities.adjustableAperture) listOf(LiveControl.APERTURE) else emptyList()
+    }
+    val shadow = remember { Shadow(Color.Black.copy(alpha = .6f), blurRadius = 6f) }
+    Row(modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("camera-control-strip"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        controls.forEach { control ->
+            val selected = active == control
+            val enabled = state.liveControlsEnabled && control.supported(state)
+            val value = control.value(state)
+            Surface(onClick = { select(if (selected) null else control) }, enabled = enabled,
+                shape = RoundedCornerShape(10.dp), color = Color.Transparent,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("control-${control.name.lowercase()}").semantics {
+                    contentDescription = "${control.title} $value"
+                }) {
+                Column(Modifier.padding(horizontal = 2.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center) {
+                    Text(control.title, style = MaterialTheme.typography.labelSmall.copy(shadow = shadow), maxLines = 1,
+                        color = Color.White.copy(alpha = if (enabled) .62f else .4f))
+                    Text(value, style = MaterialTheme.typography.labelMedium.copy(shadow = shadow), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.Medium, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) .95f else .5f))
+                    Box(Modifier.padding(top = 3.dp).width(14.dp).height(2.dp)
+                        .background(if (selected && enabled) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape))
+                }
+            }
+        }
+    }
 }
 
 /** One floating slider, with fixed anchors so opening it never moves the buttons or viewfinder. */
@@ -94,15 +137,9 @@ internal fun NativeCameraControls(
     reset: (LiveControl) -> Unit,
     slider: @Composable (LiveControl, androidx.compose.ui.unit.Dp, Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    /** Space between the zoom badge and the ISO pill, so the badge can stay on the picture above a pill on black. */
-    zoomGap: androidx.compose.ui.unit.Dp = 0.dp,
-    onStripHeight: (Int) -> Unit = {},
+    showStrip: Boolean = true,
 ) {
     if (!state.ready) return
-    val controls = remember(state.capabilities.adjustableAperture) {
-        listOf(LiveControl.ISO, LiveControl.SHUTTER, LiveControl.EV, LiveControl.WB) +
-            if (state.capabilities.adjustableAperture) listOf(LiveControl.APERTURE) else emptyList()
-    }
     var lastControl by remember { mutableStateOf<LiveControl?>(null) }
     LaunchedEffect(active) { if (active != null) lastControl = active }
     val popupControl = active ?: lastControl
@@ -115,11 +152,10 @@ internal fun NativeCameraControls(
     val density = LocalDensity.current
     var stripHeight by remember(density) { mutableIntStateOf(with(density) { 56.dp.roundToPx() }) }
     var zoomHeight by remember(density) { mutableIntStateOf(with(density) { 52.dp.roundToPx() }) }
-    val lowerGradient = remember { Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .35f))) }
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val anchorHeight = with(density) { stripHeight.toDp() + zoomHeight.toDp() } + zoomGap
+        val anchorHeight = with(density) { (if (showStrip) stripHeight else 0).toDp() + zoomHeight.toDp() }
         val popupWidth = minOf(480.dp, maxWidth - 24.dp)
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().graphicsLayer { alpha = chromeOpacity }.background(lowerGradient)) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().graphicsLayer { alpha = chromeOpacity }) {
             Box(Modifier.fillMaxWidth().onSizeChanged { zoomHeight = it.height }.padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
                 val selected = active == LiveControl.ZOOM
                 val enabled = state.liveControlsEnabled && LiveControl.ZOOM.supported(state)
@@ -143,32 +179,7 @@ internal fun NativeCameraControls(
                     }
                 }
             }
-            Spacer(Modifier.height(zoomGap))
-            Row(Modifier.fillMaxWidth().onSizeChanged { stripHeight = it.height; onStripHeight(it.height) }.padding(horizontal = 12.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .9f), CircleShape).padding(horizontal = 6.dp)
-                .testTag("camera-control-strip"),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                controls.forEach { control ->
-                    val selected = active == control
-                    val enabled = state.liveControlsEnabled && control.supported(state)
-                    val value = control.value(state)
-                    Surface(onClick = { select(if (selected) null else control) }, enabled = enabled,
-                        shape = RoundedCornerShape(10.dp), color = Color.Transparent,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("control-${control.name.lowercase()}").semantics {
-                            contentDescription = "${control.title} $value"
-                        }) {
-                        Column(Modifier.padding(horizontal = 2.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center) {
-                            Text(control.title, style = MaterialTheme.typography.labelSmall, maxLines = 1,
-                                color = Color.White.copy(alpha = if (enabled) .62f else .4f))
-                            Text(value, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                fontWeight = FontWeight.Medium, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) .95f else .5f))
-                            Box(Modifier.padding(top = 3.dp).width(14.dp).height(2.dp)
-                                .background(if (selected && enabled) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape))
-                        }
-                    }
-                }
-            }
+            if (showStrip) ControlStrip(state, active, select, Modifier.onSizeChanged { stripHeight = it.height })
         }
         if (popupControl != null && popupControl.supported(state)) {
             val enabled = state.liveControlsEnabled && active == popupControl

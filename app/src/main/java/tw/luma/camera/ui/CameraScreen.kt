@@ -113,9 +113,8 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var exposureFeedback by remember { mutableStateOf<ExposureFeedback?>(null) }
     var exposureDragging by remember { mutableStateOf(false) }
     var viewfinderLandscape by remember { mutableStateOf<Boolean?>(null) }
-    // Measured toolbar and ISO pill heights; the defaults match them so the frame does not jump on first layout.
+    // Measured toolbar height; the default matches it so the frame does not jump on first layout.
     var toolbarHeight by remember { mutableStateOf<Int?>(null) }
-    var stripHeight by remember { mutableStateOf<Int?>(null) }
     var trayOpen by rememberSaveable { mutableStateOf(false) }
     // Photos are always taken 4:3 and cut to their ratio when saved, so a photo ratio never rebinds the camera.
     val bindAspect = if (state.mode == CaptureMode.VIDEO) state.videoAspect else FrameAspect.RATIO_4_3
@@ -148,6 +147,8 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         return
     }
     val openGallery = { model.pausePreview(); galleryOpen = true }
+    // A control picked from the dock closes the filter tray so its slider can open over the viewfinder.
+    val selectControl: (LiveControl?) -> Unit = { activeControl = it; if (it != null && panel == "filters") panel = null }
     val shutter = {
         activeControl = null
         if (panel == "filters") panel = null
@@ -301,12 +302,11 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                     val density = LocalDensity.current
                     val layout = with(density) {
                         ViewfinderFrame.place(constraints.maxWidth, constraints.maxHeight, frameWidth.toFloat() / frameHeight,
-                            toolbar = toolbarHeight ?: 56.dp.roundToPx(), strip = stripHeight ?: 48.dp.roundToPx(), gap = 12.dp.roundToPx())
+                            toolbar = toolbarHeight ?: 56.dp.roundToPx())
                     }
                     val animatedFrame by animateRectAsState(layout.frame.toRect(), tween(250), label = "viewfinder-frame")
                     val frame = animatedFrame.roundToIntRect()
                     val controlsLift by animateIntAsState(layout.controlsLift, tween(250), label = "controls-lift")
-                    val zoomGap by animateIntAsState(layout.zoomGap, tween(250), label = "zoom-gap")
                     PreviewArea(state, model, view, permitted, frame, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
@@ -328,9 +328,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                             panel = if (it == "filters" && panel == "filters") null else it
                         }
                         exposureFeedback?.let { Box(Modifier.viewfinderFrame(frame)) { ExposureIndicator(it, state.capabilities.exposureStep) } }
-                        if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, { activeControl = it },
-                            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { controlsLift.toDp() }),
-                            zoomGap = with(density) { zoomGap.toDp() }) { stripHeight = it }
+                        // Upright, the ISO row lives in the dock so nothing but the zoom badge covers the picture.
+                        if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, selectControl,
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { controlsLift.toDp() }), showStrip = landscape)
                     }
                     if (panel == "filters") {
                         FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,
@@ -344,10 +344,14 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openGallery, Modifier.width(164.dp).fillMaxHeight(), true, trayOpen) { trayOpen = it }
+                CameraDock(state, model, shutter, openGallery, Modifier.width(164.dp).fillMaxHeight(), true, trayOpen, { trayOpen = it })
             } else Column(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openGallery, Modifier.fillMaxWidth(), false, trayOpen) { trayOpen = it }
+                CameraDock(state, model, shutter, openGallery, Modifier.fillMaxWidth(), false, trayOpen, { trayOpen = it }) {
+                    // The row keeps its place without a camera, so the viewfinder does not resize when one appears.
+                    LiveControlStrip(state, model, engine, activeControl, selectControl,
+                        Modifier.graphicsLayer { alpha = if (permitted && state.cameraError == null) 1f else 0f })
+                }
             }
         }
     }
@@ -512,7 +516,7 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
 
 @Composable
 private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, modifier: Modifier, landscape: Boolean,
-    trayOpen: Boolean, onTray: (Boolean) -> Unit) {
+    trayOpen: Boolean, onTray: (Boolean) -> Unit, controls: @Composable () -> Unit = {}) {
     val enabled = !state.busy && !state.recording
     val density = LocalDensity.current
     val currentOnTray by rememberUpdatedState(onTray)
@@ -539,6 +543,13 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
                         color = Color.White.copy(alpha = if (enabled) 1f else .4f), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
                 }
             }
+            if (!landscape) Surface(onClick = { onTray(!trayOpen) }, shape = CircleShape, color = Color.Transparent,
+                modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("controls-tray-toggle")
+                    .semantics { contentDescription = if (trayOpen) "收起相機控制項" else "相機控制項" }) {
+                Box(contentAlignment = Alignment.Center) {
+                    CameraGlyph(if (trayOpen) "chevron-down" else "chevron-up", Modifier.size(18.dp), Color.White.copy(alpha = .7f))
+                }
+            }
         }
     }
     val capture: @Composable () -> Unit = {
@@ -550,6 +561,7 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             enabled, openGallery)
     }
     Column(modifier.background(Color.Black).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (landscape) Arrangement.SpaceEvenly else Arrangement.Top) {
+        if (!landscape) controls()
         modes()
         if (landscape) {
             capture()
@@ -594,6 +606,8 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
                 drawRoundRect(tint, Offset(w*.59f,h*.2f), androidx.compose.ui.geometry.Size(w*.16f,h*.6f), androidx.compose.ui.geometry.CornerRadius(w*.025f))
             }
             "back" -> { line(.66f,.2f,.34f,.5f); line(.34f,.5f,.66f,.8f) }
+            "chevron-up" -> { line(.2f,.64f,.5f,.34f); line(.5f,.34f,.8f,.64f) }
+            "chevron-down" -> { line(.2f,.36f,.5f,.66f); line(.5f,.66f,.8f,.36f) }
             "check" -> { line(.18f,.51f,.4f,.73f); line(.4f,.73f,.82f,.27f) }
             "edit" -> {
                 drawPath(Path().apply { moveTo(w*.18f,h*.7f); lineTo(w*.68f,h*.2f); lineTo(w*.8f,h*.32f); lineTo(w*.3f,h*.82f); lineTo(w*.18f,h*.82f); close() }, tint, style = stroke)
