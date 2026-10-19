@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.16",
-  "versionCode": 49,
+  "versionName": "0.7.17",
+  "versionCode": 50,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.16/Grain-0.7.16-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.17/Grain-0.7.17-personal-fuji.apk",
   "apkSize": 15333784,
-  "apkSha256": "7d5653c621a0a90039172732bce975fff6d992dee36bd56c0cdcd0873d478a39",
+  "apkSha256": "b0f6812c4bfe24f39c7c81a9e1ef802a6654f05742c49473e92ac2d6bbf18ea0",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 相簿「編輯」分頁的「＋」現在也能選影片，iPhone 的 .mov 等格式會轉成到處都能播的 MP4（H.264＋AAC）；一次可以選多支，原檔不會被改動。\n- 轉檔前可以選 FUJIFILM／KODAK／GRAIN 濾鏡和強度，預覽畫面是影片中間的一格；不選濾鏡就只轉格式，本來就是 H.264 的影片幾秒就好。\n- iPhone 的 HDR 影片會轉成一般亮度。轉好的 MP4 存在 Movies/Grain Edits，也會出現在「編輯成品」裡，點開就能播放。"
+  "notes": "- 控制面板頂端的短橫條按下去不再出現灰色反白。"
 }
