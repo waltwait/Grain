@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import tw.luma.camera.performance.grainTrace
 import tw.luma.camera.storage.SaveTarget
+import tw.luma.camera.storage.VideoStorage
 import tw.luma.camera.ui.NO_FILTER_LABEL
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
@@ -54,7 +55,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val (items, edits) = withContext(Dispatchers.IO) {
                     grainTrace("Grain.gallery.query") {
-                        (query(false) + query(true)).sortedWith(compareByDescending<GalleryItem> { it.addedSeconds }.thenByDescending { it.id }) to queryEdits()
+                        (query(false) + query(true)).sortedWith(newestFirst) to
+                            (queryEdits() + query(true, VideoStorage.EDIT_QUERY_PATH)).sortedWith(newestFirst)
                     }
                 }
                 _state.value = GalleryState(items, loading = false, edits = edits)
@@ -64,13 +66,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun query(video: Boolean): List<GalleryItem> {
+    private val newestFirst = compareByDescending<GalleryItem> { it.addedSeconds }.thenByDescending { it.id }
+
+    private fun query(video: Boolean, path: String = if (video) "Movies/Grain/" else "Pictures/Grain/"): List<GalleryItem> {
         val collection = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val columns = listOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.DATE_ADDED) +
             if (video) listOf(MediaStore.Video.VideoColumns.DURATION) else emptyList()
         val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0"
         return resolver.query(collection, columns.toTypedArray(), selection,
-            arrayOf(if (video) "Movies/Grain/" else "Pictures/Grain/", getApplication<Application>().packageName),
+            arrayOf(path, getApplication<Application>().packageName),
             "${MediaStore.MediaColumns.DATE_ADDED} DESC, ${MediaStore.MediaColumns._ID} DESC")?.use { cursor ->
             val result = ArrayList<GalleryItem>()
             while (cursor.moveToNext()) {
@@ -114,7 +118,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     } catch (e: CancellationException) { throw e }
     catch (_: Exception) { null }
 
-    /** Edited photos live in their own folder; each one carries the Uri of its original copy when that still exists. */
+    /** Edited photos live in their own folder; each one carries the Uri of its original copy when that still exists. Converted videos are added beside them. */
     private fun queryEdits(): List<GalleryItem> {
         val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0"
