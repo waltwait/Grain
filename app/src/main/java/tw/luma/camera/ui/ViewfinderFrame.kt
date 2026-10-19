@@ -7,14 +7,15 @@ import kotlin.math.roundToInt
 data class ViewfinderLayout(val frame: IntRect, val controlsLift: Int)
 
 /**
- * Lays the viewfinder out like iOS: a 4:3 frame sits right under the toolbar and every ratio is placed against it.
- * Shorter frames are centered inside it; taller ones start under the toolbar, or run under it when they would
- * otherwise need side bars. The zoom badge stands on the 4:3 frame's bottom edge whatever the ratio.
+ * Lays the viewfinder out like iOS: a 4:3 frame sits between the toolbar and the [dock] of controls floating at the
+ * bottom, and every ratio is placed against it. Shorter frames are centered inside it; taller ones start under the
+ * toolbar and run down behind the dock, or run under the toolbar too when they would otherwise need side bars. The
+ * zoom badge stands on the 4:3 frame's bottom edge whatever the ratio.
  */
 object ViewfinderFrame {
-    fun place(width: Int, height: Int, ratio: Float, toolbar: Int): ViewfinderLayout {
+    fun place(width: Int, height: Int, ratio: Float, toolbar: Int, dock: Int = 0): ViewfinderLayout {
         val boxRatio = if (width > height) 4f / 3 else 3f / 4
-        val box = fit(width, height - toolbar, boxRatio, top = toolbar, areaWidth = width)
+        val box = fit(width, (height - toolbar - dock).coerceAtLeast(1), boxRatio, top = toolbar, areaWidth = width)
         val frame = if (ratio >= boxRatio) {
             val inside = fit(box.width, box.height, ratio, top = 0, areaWidth = box.width)
             val top = box.top + (box.height - inside.height) / 2

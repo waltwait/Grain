@@ -271,47 +271,54 @@ class CameraExperienceDeviceTest {
 
     @Test fun portraitViewfinderIsLargeAndZoomControlsWork() {
         ready()
-        val state = model().state.value
-        val frame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
-        val root = ui.onRoot().fetchSemanticsNode().boundsInRoot
-        ui.onAllNodesWithTag("control-zoom").assertCountEquals(1)
-        ui.onAllNodesWithTag("camera-control-strip").assertCountEquals(1)
-        val zoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
-        val strip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
-        assertTrue("Upright, the ISO row must sit in the dock under the viewfinder", strip.top >= frame.bottom - 1f)
-        assertTrue("Viewfinder and the ISO row under it must occupy at least 65% of the portrait height",
-            frame.height + strip.height >= root.height * .65f)
-        assertTrue("Zoom must stay on the viewfinder", zoom.bottom <= frame.bottom + 1f)
-        assertEquals("Zoom must be centered above the control strip", frame.center.x, zoom.center.x, 2f)
-        assertTrue("Zoom must remain separate from the control strip", zoom.bottom <= strip.top + 2f)
-        if (state.maxZoom > state.minZoom) {
-            ui.onNodeWithTag("control-zoom").performClick()
-            val expandedFrame = ui.onNodeWithTag("viewfinder").fetchSemanticsNode().boundsInRoot
-            val expandedZoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
-            val expandedStrip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
-            assertEquals("Opening a slider must not resize the viewfinder", frame, expandedFrame)
-            assertEquals("Opening a slider must not move zoom", zoom, expandedZoom)
-            assertEquals("Opening a slider must not move the control strip", strip, expandedStrip)
-            val slider = ui.onNodeWithTag("live-slider-zoom").fetchSemanticsNode().boundsInRoot
-            assertTrue("The floating slider must not cover zoom", slider.bottom <= zoom.top + 2f)
-            assertTrue("Camera adjustments must use a horizontal slider", slider.width > slider.height * 3f)
-            ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeRight(startX = width * .2f, endX = width * .8f) }
-            ui.waitUntil(5_000) { abs(model().state.value.capture.zoom - state.capture.zoom) > .01f }
-            val rightZoom = model().state.value.capture.zoom
-            ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeLeft(startX = width * .8f, endX = width * .2f) }
-            ui.waitUntil(5_000) { model().state.value.capture.zoom < rightZoom - .01f }
-            ui.onNodeWithTag("control-zoom").performClick()
-            ui.runOnIdle { model().zoom(state.minZoom) }
-            swipeViewfinder(right = true)
-            ui.waitUntil(5_000) { model().state.value.capture.zoom > state.minZoom + .01f }
-            val viewfinderZoom = model().state.value.capture.zoom
-            assertEquals("Horizontal zoom must not adjust exposure", state.capture.evIndex, model().state.value.capture.evIndex)
-            ui.onNodeWithTag("focus-indicator").assertDoesNotExist()
-            swipeViewfinder(right = false)
-            ui.waitUntil(5_000) { model().state.value.capture.zoom < viewfinderZoom - .01f }
-            ui.runOnIdle { model().zoom(1f) }
-        }
-        screenshot("luma-photo-ui.png")
+        val before = model().state.value
+        // The zoom badge and the ISO row are placed against the 4:3 photo frame, so measure them there.
+        ui.runOnIdle { model().mode(CaptureMode.PHOTO) }
+        ui.waitUntil(30_000) { model().state.value.ready && model().state.value.mode == CaptureMode.PHOTO }
+        ui.runOnIdle { model().aspect(FrameAspect.RATIO_4_3) }
+        try {
+            val state = model().state.value
+            val frame = ui.onNodeWithTag("viewfinder-frame").fetchSemanticsNode().boundsInRoot
+            val root = ui.onRoot().fetchSemanticsNode().boundsInRoot
+            ui.onAllNodesWithTag("control-zoom").assertCountEquals(1)
+            ui.onAllNodesWithTag("camera-control-strip").assertCountEquals(1)
+            val zoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
+            val strip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
+            assertTrue("Upright, the ISO row must sit in the dock under the 4:3 frame", strip.top >= frame.bottom - 1f)
+            assertTrue("The 4:3 frame must occupy at least 55% of the portrait height", frame.height >= root.height * .55f)
+            assertEquals("The 4:3 frame must use the whole width", root.width, frame.width, 2f)
+            assertTrue("Zoom must stay on the viewfinder", zoom.bottom <= frame.bottom + 1f)
+            assertEquals("Zoom must be centered above the control strip", frame.center.x, zoom.center.x, 2f)
+            assertTrue("Zoom must remain separate from the control strip", zoom.bottom <= strip.top + 2f)
+            if (state.maxZoom > state.minZoom) {
+                ui.onNodeWithTag("control-zoom").performClick()
+                val expandedFrame = ui.onNodeWithTag("viewfinder-frame").fetchSemanticsNode().boundsInRoot
+                val expandedZoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
+                val expandedStrip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
+                assertEquals("Opening a slider must not resize the viewfinder", frame, expandedFrame)
+                assertEquals("Opening a slider must not move zoom", zoom, expandedZoom)
+                assertEquals("Opening a slider must not move the control strip", strip, expandedStrip)
+                val slider = ui.onNodeWithTag("live-slider-zoom").fetchSemanticsNode().boundsInRoot
+                assertTrue("The floating slider must not cover zoom", slider.bottom <= zoom.top + 2f)
+                assertTrue("Camera adjustments must use a horizontal slider", slider.width > slider.height * 3f)
+                ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeRight(startX = width * .2f, endX = width * .8f) }
+                ui.waitUntil(5_000) { abs(model().state.value.capture.zoom - state.capture.zoom) > .01f }
+                val rightZoom = model().state.value.capture.zoom
+                ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeLeft(startX = width * .8f, endX = width * .2f) }
+                ui.waitUntil(5_000) { model().state.value.capture.zoom < rightZoom - .01f }
+                ui.onNodeWithTag("control-zoom").performClick()
+                ui.runOnIdle { model().zoom(state.minZoom) }
+                swipeViewfinder(right = true)
+                ui.waitUntil(5_000) { model().state.value.capture.zoom > state.minZoom + .01f }
+                val viewfinderZoom = model().state.value.capture.zoom
+                assertEquals("Horizontal zoom must not adjust exposure", state.capture.evIndex, model().state.value.capture.evIndex)
+                ui.onNodeWithTag("focus-indicator").assertDoesNotExist()
+                swipeViewfinder(right = false)
+                ui.waitUntil(5_000) { model().state.value.capture.zoom < viewfinderZoom - .01f }
+                ui.runOnIdle { model().zoom(1f) }
+            }
+            screenshot("luma-photo-ui.png")
+        } finally { ui.runOnIdle { model().aspect(before.photoAspect); model().mode(before.mode) } }
     }
 
     @Test fun filteredVideoRecordsDecodesAndStopsCleanly() {
@@ -794,7 +801,7 @@ class CameraExperienceDeviceTest {
             saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
             ui.runOnIdle {
                 model.clearMessage(); model.saveOriginal(before.saveOriginal)
-                repeat(FrameAspect.entries.size) { if (model.state.value.photoAspect != before.photoAspect) model.nextAspect() }
+                model.aspect(before.photoAspect)
                 model.mode(before.mode)
             }
         }
@@ -833,33 +840,33 @@ class CameraExperienceDeviceTest {
             saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
             ui.runOnIdle {
                 model.recordWithAudio(before.recordWithAudio)
-                if (model.state.value.mode == CaptureMode.VIDEO)
-                    repeat(FrameAspect.entries.size) { if (model.state.value.videoAspect != before.videoAspect) model.nextAspect() }
+                if (model.state.value.mode == CaptureMode.VIDEO) model.aspect(before.videoAspect)
                 model.mode(before.mode)
             }
         }
     }
 
-    /** Opens the controls tray by swiping up on the dock or tapping its ︿, taps the ratio until it reads [aspect], then closes it the same way. */
+    /** Like iOS: opens the controls panel by swiping up on the dock or tapping ⠿, picks [aspect] under 比例, then closes it the same way. */
     private fun chooseAspect(aspect: FrameAspect, swipe: Boolean) {
         val model = model()
         val video = model.state.value.mode == CaptureMode.VIDEO
         if (swipe) ui.onNodeWithTag("camera-dock").performTouchInput { swipeUp(startY = height * .25f, endY = 0f) }
         else ui.onNodeWithContentDescription("相機控制項").performClick()
         ui.onNodeWithTag("controls-tray").assertIsDisplayed()
-        ui.onNodeWithTag("controls-tray-toggle").assertContentDescriptionEquals("收起相機控制項")
-        repeat(FrameAspect.entries.size) {
-            if (model.state.value.frameAspect != aspect) {
-                ui.onNodeWithTag("frame-aspect").performClick()
-                if (video) ui.waitUntil(30_000) { model.state.value.ready }
-                else ui.runOnIdle { assertTrue("A photo ratio must not restart the camera", model.state.value.ready) }
-            }
-        }
+        // The panel hides the ISO row and the mode capsule it covers.
+        ui.onAllNodesWithTag("camera-control-strip").assertCountEquals(0)
+        ui.onAllNodesWithTag("mode-photo").assertCountEquals(0)
+        ui.onAllNodesWithTag("frame-aspect-${aspect.name}").assertCountEquals(0)
+        ui.onNodeWithTag("frame-aspect").performClick()
+        for (each in FrameAspect.entries) ui.onNodeWithTag("frame-aspect-${each.name}").assertTextEquals(each.label)
+        ui.onNodeWithTag("frame-aspect-${aspect.name}").performClick().assertIsSelected()
+        if (video) ui.waitUntil(30_000) { model.state.value.ready && model.state.value.frameAspect == aspect }
+        else ui.runOnIdle { assertTrue("A photo ratio must not restart the camera", model.state.value.ready) }
         ui.onNodeWithTag("frame-aspect").assertTextContains(aspect.label)
-        if (swipe) ui.onNodeWithTag("camera-dock").performTouchInput { swipeDown(startY = 0f, endY = height * .25f) }
-        else ui.onNodeWithTag("controls-tray-toggle").performClick()
+        if (swipe) ui.onNodeWithTag("camera-dock").performTouchInput { swipeDown(startY = height * .75f, endY = height.toFloat()) }
+        else ui.onNodeWithContentDescription("收起相機控制項").performClick()
         ui.onNodeWithTag("controls-tray").assertDoesNotExist()
-        ui.onNodeWithTag("controls-tray-toggle").assertContentDescriptionEquals("相機控制項")
+        ui.onNodeWithTag("controls-tray-toggle").assertIsDisplayed()
     }
 
     private fun assertFrameMatches(aspect: FrameAspect, area: androidx.compose.ui.geometry.Rect) {
@@ -878,7 +885,7 @@ class CameraExperienceDeviceTest {
         assertTrue("The ISO row must sit below the ${aspect.label} frame or on it",
             strip.top >= frame.bottom - 1f || strip.bottom <= frame.bottom + 1f)
         if (aspect == FrameAspect.RATIO_4_3 || aspect == FrameAspect.RATIO_1_1) {
-            // Like iOS, frames no taller than 4:3 stay on black between the toolbar and the ISO row.
+            // Like iOS, frames no taller than 4:3 stay on black between the toolbar and the ISO row; taller ones run behind it.
             assertTrue("The ${aspect.label} frame must start under the toolbar", frame.top >= toolbar.bottom - 1f)
             assertTrue("The ISO row must sit under the ${aspect.label} frame", strip.top >= frame.bottom - 1f)
         }

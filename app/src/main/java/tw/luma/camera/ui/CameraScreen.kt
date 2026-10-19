@@ -20,7 +20,11 @@ import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraEffect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.sp
@@ -113,8 +117,10 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var exposureFeedback by remember { mutableStateOf<ExposureFeedback?>(null) }
     var exposureDragging by remember { mutableStateOf(false) }
     var viewfinderLandscape by remember { mutableStateOf<Boolean?>(null) }
-    // Measured toolbar height; the default matches it so the frame does not jump on first layout.
+    // Measured toolbar, dock and shutter heights; the defaults match them so nothing jumps on first layout.
     var toolbarHeight by remember { mutableStateOf<Int?>(null) }
+    var dockHeight by remember { mutableStateOf<Int?>(null) }
+    var shutterHeight by remember { mutableStateOf<Int?>(null) }
     var trayOpen by rememberSaveable { mutableStateOf(false) }
     // Photos are always taken 4:3 and cut to their ratio when saved, so a photo ratio never rebinds the camera.
     val bindAspect = if (state.mode == CaptureMode.VIDEO) state.videoAspect else FrameAspect.RATIO_4_3
@@ -149,6 +155,10 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val openGallery = { model.pausePreview(); galleryOpen = true }
     // A control picked from the dock closes the filter tray so its slider can open over the viewfinder.
     val selectControl: (LiveControl?) -> Unit = { activeControl = it; if (it != null && panel == "filters") panel = null }
+    val tray: (Boolean) -> Unit = { open ->
+        trayOpen = open
+        if (open) { activeControl = null; if (panel == "filters") panel = null }
+    }
     val shutter = {
         activeControl = null
         if (panel == "filters") panel = null
@@ -294,15 +304,18 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     Scaffold(containerColor = Color.Black, contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding).safeDrawingPadding()) {
             val landscape = maxWidth > maxHeight && maxWidth > 600.dp
+            val density = LocalDensity.current
+            // Upright, the dock floats over the bottom of the viewfinder so taller frames can run down behind it.
+            val dock = if (landscape) 0 else dockHeight ?: with(density) { 212.dp.roundToPx() }
+            val dockDp = with(density) { dock.toDp() }
             val preview: @Composable (Modifier) -> Unit = { modifier ->
                 BoxWithConstraints(modifier) {
                     val landscapeArea = maxWidth > maxHeight
                     SideEffect { viewfinderLandscape = landscapeArea }
                     val (frameWidth, frameHeight) = state.frameAspect.screenShape(landscapeArea)
-                    val density = LocalDensity.current
                     val layout = with(density) {
                         ViewfinderFrame.place(constraints.maxWidth, constraints.maxHeight, frameWidth.toFloat() / frameHeight,
-                            toolbar = toolbarHeight ?: 56.dp.roundToPx())
+                            toolbar = toolbarHeight ?: 56.dp.roundToPx(), dock = dock)
                     }
                     val animatedFrame by animateRectAsState(layout.frame.toRect(), tween(250), label = "viewfinder-frame")
                     val frame = animatedFrame.roundToIntRect()
@@ -325,6 +338,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         CameraToolbar(state, model, newVersion, Modifier.align(Alignment.TopCenter)
                             .onSizeChanged { toolbarHeight = it.height }.testTag("camera-toolbar")) {
                             activeControl = null
+                            trayOpen = false
                             panel = if (it == "filters" && panel == "filters") null else it
                         }
                         exposureFeedback?.let { Box(Modifier.viewfinderFrame(frame)) { ExposureIndicator(it, state.capabilities.exposureStep) } }
@@ -334,24 +348,31 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                     }
                     if (panel == "filters") {
                         FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,
-                            maxHeight = (maxHeight - 56.dp).coerceAtLeast(48.dp), compact = maxHeight < 360.dp,
+                            maxHeight = (maxHeight - 56.dp - dockDp).coerceAtLeast(48.dp), compact = maxHeight - dockDp < 360.dp,
                             onSelect = model::selectLut,
                             onStrength = { value -> model.changeFilter { it.copy(strength = value) } },
                             onStrengthFinished = model::saveFilterStrength, onImport = openLut,
-                            onMore = { panel = "filter" }, onClose = { panel = null }, modifier = Modifier.align(Alignment.BottomCenter))
+                            onMore = { panel = "filter" }, onClose = { panel = null },
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dockDp))
                     }
+                    if (landscape && trayOpen) ControlsPanel(state, model, { trayOpen = false },
+                        Modifier.align(Alignment.BottomCenter).padding(12.dp).widthIn(max = 420.dp))
                 }
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openGallery, Modifier.width(164.dp).fillMaxHeight(), true, trayOpen, { trayOpen = it })
-            } else Column(Modifier.fillMaxSize()) {
-                preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openGallery, Modifier.fillMaxWidth(), false, trayOpen, { trayOpen = it }) {
+                CameraDock(state, model, shutter, openGallery, Modifier.width(164.dp).fillMaxHeight(), true, trayOpen, tray)
+            } else Box(Modifier.fillMaxSize()) {
+                preview(Modifier.fillMaxSize())
+                CameraDock(state, model, shutter, openGallery, Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height },
+                    false, trayOpen, tray, { shutterHeight = it }) {
                     // The row keeps its place without a camera, so the viewfinder does not resize when one appears.
                     LiveControlStrip(state, model, engine, activeControl, selectControl,
                         Modifier.graphicsLayer { alpha = if (permitted && state.cameraError == null) 1f else 0f })
                 }
+                // Like iOS, the panel rises from just above the shutter over the ISO row and mode capsule it hides.
+                if (trayOpen) ControlsPanel(state, model, { trayOpen = false }, Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = with(density) { (shutterHeight ?: 112.dp.roundToPx()).toDp() }).padding(horizontal = 12.dp))
             }
         }
     }
@@ -482,45 +503,50 @@ private fun CameraToolbar(state: CameraUiState, model: CameraViewModel, newVersi
 
 @Composable
 internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modifier, panel: (String) -> Unit, updateAvailable: Boolean = false, onFlash: () -> Unit = {}, clock: @Composable () -> Unit) {
-    val gradient = remember { Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent)) }
-    Row(modifier.fillMaxWidth().background(gradient).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, modifier = Modifier.width(56.dp).heightIn(min = 48.dp),
-            onClick = { panel("settings") }, enabled = !state.recording) {
-            Box(contentAlignment = Alignment.Center) { Text(state.videoQuality, Modifier.cameraControlRotation(), color = Color.White, style = MaterialTheme.typography.labelMedium) }
-        } else {
-            val flashUsable = FlashControl.usable(state.hasFlash, state.capture.manual)
-            val flashMode = FlashControl.shown(state.capture.flash, flashUsable)
-            GlassIcon("flash", FlashControl.description(flashUsable, flashMode), FlashControl.enabled(flashUsable, state.busy, state.recording),
-                selected = flashMode == FlashMode.ON, mark = if (flashMode == FlashMode.AUTO) "A" else null) { onFlash() }
-        }
-        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+    // Like iOS: the film on the left and flash with settings in one glass capsule on the right, floating on black.
+    Row(modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (state.recording) Surface(shape = CircleShape, color = Color(0xFFE43F45)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(6.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(7.dp))
                     clock()
                 }
-            } else Surface(onClick = { panel("filters") }, color = Color.Transparent, enabled = !state.busy,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("filter-picker").semantics {
+            } else Surface(onClick = { panel("filters") }, shape = CircleShape, color = GrainSurfaces.glass,
+                border = BorderStroke(1.dp, GrainSurfaces.glassEdge), enabled = !state.busy,
+                modifier = Modifier.height(48.dp).testTag("filter-picker").semantics {
                     contentDescription = "選擇底片 ${state.filter.lut?.title ?: NO_FILTER_LABEL}"
                 }) {
-                Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    CameraGlyph("lut", Modifier.size(16.dp).cameraControlRotation()); Spacer(Modifier.width(6.dp))
+                Row(Modifier.padding(start = 14.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CameraGlyph("lut", Modifier.size(16.dp).cameraControlRotation()); Spacer(Modifier.width(7.dp))
                     Text(state.filter.lut?.title?.removePrefix("富士 ") ?: NO_FILTER_LABEL, color = Color.White, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
-        GlassIcon("tune", "更多設定", !state.busy && !state.recording, badge = updateAvailable) { panel("settings") }
+        Spacer(Modifier.width(12.dp))
+        Row(Modifier.background(GrainSurfaces.glass, CircleShape).border(1.dp, GrainSurfaces.glassEdge, CircleShape),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (state.mode == CaptureMode.VIDEO) Surface(color = Color.Transparent, shape = CircleShape, modifier = Modifier.width(56.dp).height(48.dp),
+                onClick = { panel("settings") }, enabled = !state.recording) {
+                Box(contentAlignment = Alignment.Center) { Text(state.videoQuality, Modifier.cameraControlRotation(), color = Color.White, style = MaterialTheme.typography.labelMedium) }
+            } else {
+                val flashUsable = FlashControl.usable(state.hasFlash, state.capture.manual)
+                val flashMode = FlashControl.shown(state.capture.flash, flashUsable)
+                GlassIcon("flash", FlashControl.description(flashUsable, flashMode), FlashControl.enabled(flashUsable, state.busy, state.recording),
+                    selected = flashMode == FlashMode.ON, mark = if (flashMode == FlashMode.AUTO) "A" else null) { onFlash() }
+            }
+            GlassIcon("tune", "更多設定", !state.busy && !state.recording, badge = updateAvailable) { panel("settings") }
+        }
     }
 }
 
 @Composable
 private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, modifier: Modifier, landscape: Boolean,
-    trayOpen: Boolean, onTray: (Boolean) -> Unit, controls: @Composable () -> Unit = {}) {
+    trayOpen: Boolean, onTray: (Boolean) -> Unit, onShutterHeight: (Int) -> Unit = {}, controls: @Composable () -> Unit = {}) {
     val enabled = !state.busy && !state.recording
     val density = LocalDensity.current
     val currentOnTray by rememberUpdatedState(onTray)
-    // Like iOS, swiping up on the mode row swaps it for the controls tray and swiping down brings it back.
+    // Like iOS, swiping up on the dock opens the controls panel and swiping down closes it.
     val swipe = Modifier.pointerInput(density) {
         val threshold = with(density) { 24.dp.toPx() }
         var travel = 0f
@@ -528,28 +554,10 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             if (travel < -threshold) currentOnTray(true) else if (travel > threshold) currentOnTray(false)
         }) { change, dy -> travel += dy; change.consume() }
     }
-    val modes: @Composable () -> Unit = {
-        // The mode row keeps its place under the tray, so opening the tray never resizes the viewfinder.
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = if (trayOpen) 0f else 1f }) {
-                CaptureMode.entries.forEach { mode -> TextButton(onClick = { model.mode(mode) }, enabled = enabled && !trayOpen, modifier = Modifier.testTag(if (mode == CaptureMode.PHOTO) "mode-photo" else "mode-video")) {
-                    Text(if (mode == CaptureMode.PHOTO) "照片" else "錄影", color = if (state.mode == mode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .6f), fontWeight = FontWeight.SemiBold)
-                } }
-            }
-            if (trayOpen) Row(Modifier.matchParentSize().testTag("controls-tray"), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Surface(onClick = model::nextAspect, enabled = enabled, shape = CircleShape, color = Color.White.copy(alpha = .12f),
-                    modifier = Modifier.testTag("frame-aspect").semantics { contentDescription = "畫面比例" }) {
-                    Text(state.frameAspect.label, Modifier.padding(horizontal = 18.dp, vertical = 8.dp).cameraControlRotation(),
-                        color = Color.White.copy(alpha = if (enabled) 1f else .4f), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
-                }
-            }
-            if (!landscape) Surface(onClick = { onTray(!trayOpen) }, shape = CircleShape, color = Color.Transparent,
-                modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("controls-tray-toggle")
-                    .semantics { contentDescription = if (trayOpen) "收起相機控制項" else "相機控制項" }) {
-                Box(contentAlignment = Alignment.Center) {
-                    CameraGlyph(if (trayOpen) "chevron-down" else "chevron-up", Modifier.size(18.dp), Color.White.copy(alpha = .7f))
-                }
-            }
+    val more: @Composable () -> Unit = {
+        Surface(onClick = { onTray(!trayOpen) }, shape = CircleShape, color = GrainSurfaces.glass, border = BorderStroke(1.dp, GrainSurfaces.glassEdge),
+            modifier = Modifier.size(44.dp).testTag("controls-tray-toggle").semantics { contentDescription = "相機控制項" }) {
+            Box(contentAlignment = Alignment.Center) { CameraGlyph("dots", Modifier.size(18.dp)) }
         }
     }
     val capture: @Composable () -> Unit = {
@@ -560,26 +568,123 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             state.captureFeedback.phase == tw.luma.camera.camera.PhotoPhase.SAVING || state.recordingStatus == RecordingStatus.STOPPING,
             enabled, openGallery)
     }
-    Column(modifier.background(Color.Black).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (landscape) Arrangement.SpaceEvenly else Arrangement.Top) {
-        if (!landscape) controls()
-        modes()
-        if (landscape) {
-            capture()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                gallery(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, click = model::toggleFront)
-            }
-        } else {
-            Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                gallery(); capture(); GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, false, click = model::toggleFront)
-            }
+    val flip: @Composable () -> Unit = { GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, glass = true, click = model::toggleFront) }
+    if (landscape) Column(modifier.background(Color.Black).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
+        ModeCapsule(state, model, enabled)
+        more()
+        capture()
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            gallery(); flip()
         }
         CameraStatusLine(state.message)
+    } else Column(modifier.then(swipe).testTag("camera-dock").padding(horizontal = 22.dp).padding(bottom = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        // The ISO row and mode capsule keep their place under the controls panel, so opening it never moves the viewfinder.
+        Column(Modifier.graphicsLayer { alpha = if (trayOpen) 0f else 1f }.then(if (trayOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
+            controls()
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                ModeCapsule(state, model, enabled)
+                Box(Modifier.align(Alignment.CenterEnd)) { more() }
+            }
+        }
+        Column(Modifier.onSizeChanged { onShutterHeight(it.height + with(density) { 4.dp.roundToPx() }) }.padding(top = 8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                gallery(); capture(); flip()
+            }
+            CameraStatusLine(state.message)
+        }
+    }
+}
+
+/** Photo and video in one glass capsule, the chosen one lit gold like iOS. */
+@Composable
+private fun ModeCapsule(state: CameraUiState, model: CameraViewModel, enabled: Boolean) {
+    Row(Modifier.background(GrainSurfaces.glass, CircleShape).border(1.dp, GrainSurfaces.glassEdge, CircleShape).padding(4.dp)) {
+        CaptureMode.entries.forEach { mode ->
+            val selected = state.mode == mode
+            Surface(onClick = { model.mode(mode) }, enabled = enabled, shape = CircleShape,
+                color = if (selected) Color.White.copy(alpha = .18f) else Color.Transparent,
+                modifier = Modifier.height(40.dp).testTag(if (mode == CaptureMode.PHOTO) "mode-photo" else "mode-video")) {
+                Box(Modifier.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                    Text(if (mode == CaptureMode.PHOTO) "照片" else "錄影", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) .75f else .4f))
+                }
+            }
+        }
+    }
+}
+
+/** Like iOS 26 and 27, labelled tiles on glass; the ratios open under 比例. */
+@Composable
+private fun ControlsPanel(state: CameraUiState, model: CameraViewModel, close: () -> Unit, modifier: Modifier) {
+    var ratios by rememberSaveable { mutableStateOf(false) }
+    val enabled = !state.busy && !state.recording
+    val photo = state.mode == CaptureMode.PHOTO
+    Surface(modifier.fillMaxWidth().testTag("controls-tray"), shape = RoundedCornerShape(30.dp), color = GrainSurfaces.glass,
+        border = BorderStroke(1.dp, GrainSurfaces.glassEdge)) {
+        Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 14.dp)) {
+            Box(Modifier.fillMaxWidth().height(24.dp).clickable(role = Role.Button, onClick = close).testTag("controls-tray-close")
+                .semantics { contentDescription = "收起相機控制項" }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(36.dp, 4.dp).background(Color.White.copy(alpha = .38f), CircleShape))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PanelTile("ratio", "比例", state.frameAspect.label, enabled, Modifier.weight(1f).testTag("frame-aspect"), selected = ratios) { ratios = !ratios }
+                if (photo) {
+                    val usable = FlashControl.usable(state.hasFlash, state.capture.manual)
+                    val flash = when (FlashControl.shown(state.capture.flash, usable)) { FlashMode.AUTO -> "自動"; FlashMode.ON -> "開"; FlashMode.OFF -> "關" }
+                    PanelTile("flash", "閃光燈", flash, FlashControl.enabled(usable, state.busy, state.recording), Modifier.weight(1f)) {
+                        model.changeCapture { it.copy(flash = it.flash.next()) }
+                    }
+                } else PanelTile("mic", "錄音", if (state.recordWithAudio) "開" else "關", !state.recording, Modifier.weight(1f)) {
+                    model.recordWithAudio(!state.recordWithAudio)
+                }
+                PanelTile("grid", "格線", if (state.grid) "開" else "關", true, Modifier.weight(1f)) { model.toggleGrid() }
+                if (photo) PanelTile("original", "存原圖", if (state.saveOriginal) "開" else "關", !state.busy, Modifier.weight(1f)) {
+                    model.saveOriginal(!state.saveOriginal)
+                }
+            }
+            if (ratios) Row(Modifier.padding(top = 10.dp).fillMaxWidth().background(Color.White.copy(alpha = .1f), CircleShape).padding(4.dp)) {
+                FrameAspect.entries.forEach { aspect ->
+                    val chosen = state.frameAspect == aspect
+                    Surface(onClick = { model.aspect(aspect) }, enabled = enabled, shape = CircleShape,
+                        color = if (chosen) Color.White.copy(alpha = .2f) else Color.Transparent,
+                        modifier = Modifier.weight(1f).height(40.dp).testTag("frame-aspect-${aspect.name}").semantics { selected = chosen }) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(aspect.label, Modifier.cameraControlRotation(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge,
+                                color = if (chosen) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .4f))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, badge: Boolean = false, mark: String? = null, click: () -> Unit) {
-    Surface(onClick = click, enabled = enabled, shape = CircleShape, color = if (selected) Color.Black.copy(alpha = .22f) else Color.Transparent,
+private fun PanelTile(icon: String, title: String, value: String, enabled: Boolean, modifier: Modifier, selected: Boolean = false, click: () -> Unit) {
+    val tint = when {
+        selected -> MaterialTheme.colorScheme.primary
+        enabled -> Color.White
+        else -> Color.White.copy(alpha = .4f)
+    }
+    Surface(onClick = click, enabled = enabled, shape = RoundedCornerShape(18.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .2f) else Color.White.copy(alpha = .1f),
+        modifier = modifier.height(78.dp)) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            CameraGlyph(icon, Modifier.size(22.dp).cameraControlRotation(), tint)
+            Text(title, Modifier.padding(top = 2.dp), color = tint.copy(alpha = tint.alpha * .75f), maxLines = 1, style = MaterialTheme.typography.labelSmall)
+            Text(value, color = tint, fontWeight = FontWeight.Bold, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun GlassIcon(icon: String, description: String, enabled: Boolean = true, selected: Boolean = false, badge: Boolean = false, mark: String? = null,
+    glass: Boolean = false, click: () -> Unit) {
+    Surface(onClick = click, enabled = enabled, shape = CircleShape,
+        color = if (selected) Color.Black.copy(alpha = .22f) else if (glass) GrainSurfaces.glass else Color.Transparent,
+        border = if (glass) BorderStroke(1.dp, GrainSurfaces.glassEdge) else null,
         modifier = Modifier.size(48.dp).semantics { contentDescription = description; if (badge) stateDescription = "有新版" }) {
         Box(contentAlignment = Alignment.Center) {
             CameraGlyph(icon, Modifier.size(25.dp).cameraControlRotation(), if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .35f))
@@ -606,8 +711,21 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
                 drawRoundRect(tint, Offset(w*.59f,h*.2f), androidx.compose.ui.geometry.Size(w*.16f,h*.6f), androidx.compose.ui.geometry.CornerRadius(w*.025f))
             }
             "back" -> { line(.66f,.2f,.34f,.5f); line(.34f,.5f,.66f,.8f) }
-            "chevron-up" -> { line(.2f,.64f,.5f,.34f); line(.5f,.34f,.8f,.64f) }
-            "chevron-down" -> { line(.2f,.36f,.5f,.66f); line(.5f,.66f,.8f,.36f) }
+            "dots" -> for (x in listOf(.36f, .64f)) for (y in listOf(.2f, .5f, .8f)) drawCircle(tint, w*.09f, Offset(w*x,h*y))
+            "ratio" -> drawRoundRect(tint, Offset(w*.25f,h*.14f), androidx.compose.ui.geometry.Size(w*.5f,h*.72f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
+            "grid" -> {
+                drawRoundRect(tint, Offset(w*.12f,h*.12f), androidx.compose.ui.geometry.Size(w*.76f,h*.76f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
+                line(.37f,.12f,.37f,.88f); line(.63f,.12f,.63f,.88f); line(.12f,.37f,.88f,.37f); line(.12f,.63f,.88f,.63f)
+            }
+            "original" -> {
+                drawRoundRect(tint, Offset(w*.3f,h*.3f), androidx.compose.ui.geometry.Size(w*.56f,h*.56f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
+                drawPath(Path().apply { moveTo(w*.7f,h*.14f); lineTo(w*.24f,h*.14f); quadraticTo(w*.14f,h*.14f,w*.14f,h*.24f); lineTo(w*.14f,h*.7f) }, tint, style = stroke)
+            }
+            "mic" -> {
+                drawRoundRect(tint, Offset(w*.37f,h*.1f), androidx.compose.ui.geometry.Size(w*.26f,h*.46f), androidx.compose.ui.geometry.CornerRadius(w*.13f), style=stroke)
+                drawArc(tint, 0f, 180f, false, Offset(w*.24f,h*.28f), androidx.compose.ui.geometry.Size(w*.52f,h*.44f), style=stroke)
+                line(.5f,.72f,.5f,.88f); line(.36f,.88f,.64f,.88f)
+            }
             "check" -> { line(.18f,.51f,.4f,.73f); line(.4f,.73f,.82f,.27f) }
             "edit" -> {
                 drawPath(Path().apply { moveTo(w*.18f,h*.7f); lineTo(w*.68f,h*.2f); lineTo(w*.8f,h*.32f); lineTo(w*.3f,h*.82f); lineTo(w*.18f,h*.82f); close() }, tint, style = stroke)

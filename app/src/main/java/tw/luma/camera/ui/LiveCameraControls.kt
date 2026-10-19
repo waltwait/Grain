@@ -167,13 +167,12 @@ internal fun NativeCameraControls(
                     }) {
                     // Keep the touch target and slider anchor fixed while shrinking the visible badge.
                     Box(contentAlignment = Alignment.Center) {
-                        Surface(modifier = Modifier.size(36.dp), shape = CircleShape,
-                            color = Color.Black.copy(alpha = .28f),
-                            border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .24f))) {
+                        Surface(modifier = Modifier.size(40.dp), shape = CircleShape, color = GrainSurfaces.glass,
+                            border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else GrainSurfaces.glassEdge)) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(value, Modifier.cameraControlRotation(), style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1, softWrap = false,
-                                    fontWeight = FontWeight.SemiBold, color = if (selected && enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .55f))
+                                    maxLines = 1, softWrap = false, fontWeight = FontWeight.Bold,
+                                    color = if (enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .55f))
                             }
                         }
                     }

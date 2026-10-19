@@ -21,11 +21,8 @@ class FrameAspectTest {
         assertEquals(AspectRatio.RATIO_4_3, FrameAspect.RATIO_1_1.videoStream)
     }
 
-    @Test fun ratioChipCyclesInTheIosOrderThenThreeTwo() {
-        assertEquals(FrameAspect.RATIO_16_9, FrameAspect.RATIO_4_3.next())
-        assertEquals(FrameAspect.RATIO_1_1, FrameAspect.RATIO_16_9.next())
-        assertEquals(FrameAspect.RATIO_3_2, FrameAspect.RATIO_1_1.next())
-        assertEquals(FrameAspect.RATIO_4_3, FrameAspect.RATIO_3_2.next())
+    @Test fun pickerListsTheIosRatiosThenTheFilmRatioUpright() {
+        assertEquals(listOf("3:4", "9:16", "1:1", "2:3"), FrameAspect.entries.map { it.label })
     }
 
     @Test fun photoIsCutFromTheMiddleOfTheFullFrameKeepingItsOrientation() {

@@ -167,10 +167,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = FlashMode.OFF)) } }
     /** Each mode keeps its own ratio. Photos are cut to it when saved, so only a video ratio rebinds the camera. */
-    fun nextAspect() {
+    fun aspect(next: FrameAspect) {
         val current = _state.value
-        if (current.busy || current.recording) return
-        val next = current.frameAspect.next()
+        if (current.busy || current.recording || next == current.frameAspect) return
         _state.update {
             if (it.mode == CaptureMode.VIDEO) it.copy(videoAspect = next, ready = false, actual = ActualCapture(), cameraError = null)
             else it.copy(photoAspect = next)

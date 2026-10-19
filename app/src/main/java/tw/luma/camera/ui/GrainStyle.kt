@@ -17,6 +17,9 @@ internal object GrainSurfaces {
     val raised = Color(0xFF242529)
     val control = Color(0xFF202124)
     val tray = Color(0xF0161719)
+    /** iOS-style glass behind the camera's floating buttons, dark enough for white or gold text over any photo. */
+    val glass = Color(0xB82C2C2E)
+    val glassEdge = Color(0x29FFFFFF)
 }
 
 /** Selected chips use the brand gold like tabs and selected cards, not Material's default grey-lavender. */
