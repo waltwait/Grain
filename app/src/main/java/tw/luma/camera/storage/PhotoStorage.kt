@@ -9,6 +9,7 @@ import android.graphics.Matrix
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.exifinterface.media.ExifInterface
+import tw.luma.camera.camera.FrameAspect
 import tw.luma.camera.gl.FilterSettings
 import tw.luma.camera.gl.LutRenderer
 import tw.luma.camera.performance.grainTrace
@@ -30,10 +31,11 @@ object PhotoStorage {
      * [time] and [index] name the output: the first output of a photo is GRAIN_EDIT_<time>.jpg, later ones get -2, -3, …
      * and share the one original, which only the first call for a photo writes ([saveOriginal]). Returns the edited photo's Uri.
      * An edit target is never saved without its original unless an earlier call for the same photo already wrote it, which the
-     * caller says by passing [saveOriginal] = false together with a [time] it has used before.
+     * caller says by passing [saveOriginal] = false together with a [time] it has used before. An [aspect] cuts the
+     * edited photo from the middle of the upright source, as iOS does; the original keeps the whole frame.
      */
     fun processAndSave(context: Context, source: File, filter: FilterSettings, target: SaveTarget,
-        saveOriginal: Boolean = target.alwaysSaveOriginal, time: String = timeStamp(), index: Int = 1): Uri {
+        saveOriginal: Boolean = target.alwaysSaveOriginal, time: String = timeStamp(), index: Int = 1, aspect: FrameAspect? = null): Uri {
         val exif = ExifInterface(source)
         val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -58,6 +60,12 @@ object PhotoStorage {
             val matrix = Matrix().apply { if (exif.isFlipped) postScale(-1f, 1f); postRotate(rotation.toFloat()) }
             oriented = if (rotation != 0 || exif.isFlipped) Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true) else decoded
             if (oriented !== decoded) decoded.recycle()
+            val crop = aspect?.centerCrop(oriented.width, oriented.height)
+            if (crop != null && (crop.width != oriented.width || crop.height != oriented.height)) {
+                val cut = Bitmap.createBitmap(oriented, crop.left, crop.top, crop.width, crop.height)
+                oriented.recycle()
+                oriented = cut
+            }
             filtered = grainTrace("Grain.photo.filter") { LutRenderer.apply(oriented, filter) }
             grainTrace("Grain.photo.jpeg") { encoded.outputStream().use { check(filtered.compress(Bitmap.CompressFormat.JPEG, 95, it)) { "照片編碼失敗" } } }
             ExifInterface(encoded).apply {

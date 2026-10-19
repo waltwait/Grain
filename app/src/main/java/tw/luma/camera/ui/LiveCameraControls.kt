@@ -60,7 +60,7 @@ private val LocalLiveControlInteractionSource = staticCompositionLocalOf<Mutable
 
 @Composable
 internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier,
-    onChromeHeight: (Int) -> Unit = {}) {
+    zoomGap: androidx.compose.ui.unit.Dp = 0.dp, onStripHeight: (Int) -> Unit = {}) {
     NativeCameraControls(state, active, select = { next ->
         if (next != null && next.entersManual && !state.capture.manual) {
             engine?.enterManual()?.let { manual ->
@@ -82,7 +82,7 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
             LiveControl.ZOOM -> model.zoom(1f)
         }
         if (control != LiveControl.WB) select(null)
-    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier, onChromeHeight = onChromeHeight)
+    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier, zoomGap = zoomGap, onStripHeight = onStripHeight)
 }
 
 /** One floating slider, with fixed anchors so opening it never moves the buttons or viewfinder. */
@@ -94,8 +94,9 @@ internal fun NativeCameraControls(
     reset: (LiveControl) -> Unit,
     slider: @Composable (LiveControl, androidx.compose.ui.unit.Dp, Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    /** Height of the zoom badge and ISO row together, without the floating slider. */
-    onChromeHeight: (Int) -> Unit = {},
+    /** Space between the zoom badge and the ISO pill, so the badge can stay on the picture above a pill on black. */
+    zoomGap: androidx.compose.ui.unit.Dp = 0.dp,
+    onStripHeight: (Int) -> Unit = {},
 ) {
     if (!state.ready) return
     val controls = remember(state.capabilities.adjustableAperture) {
@@ -116,10 +117,9 @@ internal fun NativeCameraControls(
     var zoomHeight by remember(density) { mutableIntStateOf(with(density) { 52.dp.roundToPx() }) }
     val lowerGradient = remember { Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .35f))) }
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val anchorHeight = with(density) { stripHeight.toDp() + zoomHeight.toDp() }
+        val anchorHeight = with(density) { stripHeight.toDp() + zoomHeight.toDp() } + zoomGap
         val popupWidth = minOf(480.dp, maxWidth - 24.dp)
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { onChromeHeight(it.height) }
-            .graphicsLayer { alpha = chromeOpacity }.background(lowerGradient)) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().graphicsLayer { alpha = chromeOpacity }.background(lowerGradient)) {
             Box(Modifier.fillMaxWidth().onSizeChanged { zoomHeight = it.height }.padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
                 val selected = active == LiveControl.ZOOM
                 val enabled = state.liveControlsEnabled && LiveControl.ZOOM.supported(state)
@@ -143,7 +143,10 @@ internal fun NativeCameraControls(
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().onSizeChanged { stripHeight = it.height }.padding(horizontal = 12.dp, vertical = 4.dp).testTag("camera-control-strip"),
+            Spacer(Modifier.height(zoomGap))
+            Row(Modifier.fillMaxWidth().onSizeChanged { stripHeight = it.height; onStripHeight(it.height) }.padding(horizontal = 12.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .9f), CircleShape).padding(horizontal = 6.dp)
+                .testTag("camera-control-strip"),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 controls.forEach { control ->
                     val selected = active == control

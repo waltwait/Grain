@@ -166,14 +166,16 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     } }
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = FlashMode.OFF)) } }
-    /** Each mode keeps its own ratio; the camera rebinds so the crop follows the frame. */
-    fun selectAspect(aspect: FrameAspect) {
+    /** Each mode keeps its own ratio. Photos are cut to it when saved, so only a video ratio rebinds the camera. */
+    fun nextAspect() {
         val current = _state.value
-        if (current.busy || current.recording || aspect == current.frameAspect) return
-        _state.update { it.copy(ready = false, actual = ActualCapture(), cameraError = null,
-            photoAspect = if (it.mode == CaptureMode.PHOTO) aspect else it.photoAspect,
-            videoAspect = if (it.mode == CaptureMode.VIDEO) aspect else it.videoAspect) }
-        prefs.edit().putString(if (current.mode == CaptureMode.VIDEO) "videoAspect" else "photoAspect", aspect.name).apply()
+        if (current.busy || current.recording) return
+        val next = current.frameAspect.next()
+        _state.update {
+            if (it.mode == CaptureMode.VIDEO) it.copy(videoAspect = next, ready = false, actual = ActualCapture(), cameraError = null)
+            else it.copy(photoAspect = next)
+        }
+        prefs.edit().putString(if (current.mode == CaptureMode.VIDEO) "videoAspect" else "photoAspect", next.name).apply()
     }
     fun zoom(value: Float) { _state.update {
         val zoom = value.coerceIn(it.minZoom, it.maxZoom)
@@ -252,7 +254,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
                 _state.update { it.copy(captureFeedback = it.captureFeedback.capturedPhoto(requestId)) }
-                val uri = withContext(Dispatchers.IO) { PhotoStorage.processAndSave(getApplication(), file, snapshot.filter, SaveTarget.CAMERA, snapshot.saveOriginal) }
+                val uri = withContext(Dispatchers.IO) { PhotoStorage.processAndSave(getApplication(), file, snapshot.filter, SaveTarget.CAMERA, snapshot.saveOriginal,
+                    aspect = snapshot.photoAspect) }
                 val thumb = loadMediaThumbnail(uri)
                 _state.update { it.copy(savedUri = uri, thumbnail = thumb, savedMime = "image/jpeg",
                     captureFeedback = it.captureFeedback.savedPhoto(requestId)) }
