@@ -8,6 +8,12 @@ import android.view.MotionEvent
 import android.view.GestureDetector
 import android.view.ScaleGestureDetector
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.animateRectAsState
+import androidx.compose.ui.unit.roundToIntRect
+import androidx.compose.ui.unit.toRect
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
@@ -107,9 +113,12 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var exposureFeedback by remember { mutableStateOf<ExposureFeedback?>(null) }
     var exposureDragging by remember { mutableStateOf(false) }
     var viewfinderLandscape by remember { mutableStateOf<Boolean?>(null) }
-    // Measured toolbar and zoom-plus-ISO heights; the defaults match them so the frame does not jump on first layout.
+    // Measured toolbar and ISO pill heights; the defaults match them so the frame does not jump on first layout.
     var toolbarHeight by remember { mutableStateOf<Int?>(null) }
-    var controlsHeight by remember { mutableStateOf<Int?>(null) }
+    var stripHeight by remember { mutableStateOf<Int?>(null) }
+    var trayOpen by rememberSaveable { mutableStateOf(false) }
+    // Photos are always taken 4:3 and cut to their ratio when saved, so a photo ratio never rebinds the camera.
+    val bindAspect = if (state.mode == CaptureMode.VIDEO) state.videoAspect else FrameAspect.RATIO_4_3
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
     val currentDensity by rememberUpdatedState(LocalDensity.current.density)
@@ -161,7 +170,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
-    DisposableEffect(view, lifecycle, permitted, state.front, state.mode, state.frameAspect, viewfinderLandscape, retry) {
+    DisposableEffect(view, lifecycle, permitted, state.front, state.mode, bindAspect, viewfinderLandscape, retry) {
         focusFeedback = null
         exposureAnchor = null
         exposureFeedback = null
@@ -189,6 +198,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             val taps = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDown(event: MotionEvent) = true
                 override fun onSingleTapUp(event: MotionEvent): Boolean {
+                    trayOpen = false
                     if (multiTouch || !model.state.value.liveControlsEnabled) return false
                     val request = ++focusRequest
                     activeControl = null
@@ -258,7 +268,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                 if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) exposureDragging = false
                 true
             }
-            view.post { model.state.value.let { next.bind(it.front, it.mode == CaptureMode.VIDEO, it.frameAspect, landscapeFrame) } }
+            view.post { model.state.value.let { next.bind(it.front, it.mode == CaptureMode.VIDEO, bindAspect, landscapeFrame) } }
         }
         onDispose { owned?.close(); view.setOnTouchListener(null); view.keepScreenOn = false; engine = null; focusFeedback = null }
     }
@@ -273,6 +283,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     LaunchedEffect(state.capture.manual) { if (state.capture.manual) exposureFeedback = null }
     BackHandler(enabled = activeControl != null) { activeControl = null }
     BackHandler(enabled = panel == "filters") { panel = null }
+    BackHandler(enabled = trayOpen) { trayOpen = false }
     LaunchedEffect(engine, state.capture, state.ready) { if (state.ready) engine?.apply(state.capture) }
     LaunchedEffect(engine, state.filter) { engine?.setFilter(state.filter) }
     SideEffect { view.keepScreenOn = state.recording }
@@ -290,9 +301,12 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                     val density = LocalDensity.current
                     val layout = with(density) {
                         ViewfinderFrame.place(constraints.maxWidth, constraints.maxHeight, frameWidth.toFloat() / frameHeight,
-                            toolbar = toolbarHeight ?: 56.dp.roundToPx(), controls = controlsHeight ?: 108.dp.roundToPx(), gap = 12.dp.roundToPx())
+                            toolbar = toolbarHeight ?: 56.dp.roundToPx(), strip = stripHeight ?: 48.dp.roundToPx(), gap = 12.dp.roundToPx())
                     }
-                    val frame = layout.frame
+                    val animatedFrame by animateRectAsState(layout.frame.toRect(), tween(250), label = "viewfinder-frame")
+                    val frame = animatedFrame.roundToIntRect()
+                    val controlsLift by animateIntAsState(layout.controlsLift, tween(250), label = "controls-lift")
+                    val zoomGap by animateIntAsState(layout.zoomGap, tween(250), label = "zoom-gap")
                     PreviewArea(state, model, view, permitted, frame, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
@@ -315,7 +329,8 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         }
                         exposureFeedback?.let { Box(Modifier.viewfinderFrame(frame)) { ExposureIndicator(it, state.capabilities.exposureStep) } }
                         if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, { activeControl = it },
-                            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { layout.controlsLift.toDp() })) { controlsHeight = it }
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { controlsLift.toDp() }),
+                            zoomGap = with(density) { zoomGap.toDp() }) { stripHeight = it }
                     }
                     if (panel == "filters") {
                         FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,
@@ -329,10 +344,10 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxHeight())
-                CameraDock(state, model, shutter, openGallery, Modifier.width(164.dp).fillMaxHeight(), true)
+                CameraDock(state, model, shutter, openGallery, Modifier.width(164.dp).fillMaxHeight(), true, trayOpen) { trayOpen = it }
             } else Column(Modifier.fillMaxSize()) {
                 preview(Modifier.weight(1f).fillMaxWidth())
-                CameraDock(state, model, shutter, openGallery, Modifier.fillMaxWidth(), false)
+                CameraDock(state, model, shutter, openGallery, Modifier.fillMaxWidth(), false, trayOpen) { trayOpen = it }
             }
         }
     }
@@ -496,13 +511,34 @@ internal fun NativeCameraToolbar(state: CameraUiState, modifier: Modifier = Modi
 }
 
 @Composable
-private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, modifier: Modifier, landscape: Boolean) {
+private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: () -> Unit, openGallery: () -> Unit, modifier: Modifier, landscape: Boolean,
+    trayOpen: Boolean, onTray: (Boolean) -> Unit) {
     val enabled = !state.busy && !state.recording
+    val density = LocalDensity.current
+    val currentOnTray by rememberUpdatedState(onTray)
+    // Like iOS, swiping up on the mode row swaps it for the controls tray and swiping down brings it back.
+    val swipe = Modifier.pointerInput(density) {
+        val threshold = with(density) { 24.dp.toPx() }
+        var travel = 0f
+        detectVerticalDragGestures(onDragStart = { travel = 0f }, onDragEnd = {
+            if (travel < -threshold) currentOnTray(true) else if (travel > threshold) currentOnTray(false)
+        }) { change, dy -> travel += dy; change.consume() }
+    }
     val modes: @Composable () -> Unit = {
-        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-            CaptureMode.entries.forEach { mode -> TextButton(onClick = { model.mode(mode) }, enabled = enabled, modifier = Modifier.testTag(if (mode == CaptureMode.PHOTO) "mode-photo" else "mode-video")) {
-                Text(if (mode == CaptureMode.PHOTO) "照片" else "錄影", color = if (state.mode == mode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .6f), fontWeight = FontWeight.SemiBold)
-            } }
+        // The mode row keeps its place under the tray, so opening the tray never resizes the viewfinder.
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = if (trayOpen) 0f else 1f }) {
+                CaptureMode.entries.forEach { mode -> TextButton(onClick = { model.mode(mode) }, enabled = enabled && !trayOpen, modifier = Modifier.testTag(if (mode == CaptureMode.PHOTO) "mode-photo" else "mode-video")) {
+                    Text(if (mode == CaptureMode.PHOTO) "照片" else "錄影", color = if (state.mode == mode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .6f), fontWeight = FontWeight.SemiBold)
+                } }
+            }
+            if (trayOpen) Row(Modifier.matchParentSize().testTag("controls-tray"), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Surface(onClick = model::nextAspect, enabled = enabled, shape = CircleShape, color = Color.White.copy(alpha = .12f),
+                    modifier = Modifier.testTag("frame-aspect").semantics { contentDescription = "畫面比例" }) {
+                    Text(state.frameAspect.label, Modifier.padding(horizontal = 18.dp, vertical = 8.dp).cameraControlRotation(),
+                        color = Color.White.copy(alpha = if (enabled) 1f else .4f), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
     }
     val capture: @Composable () -> Unit = {
@@ -513,7 +549,7 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             state.captureFeedback.phase == tw.luma.camera.camera.PhotoPhase.SAVING || state.recordingStatus == RecordingStatus.STOPPING,
             enabled, openGallery)
     }
-    Column(modifier.background(Color.Black).padding(horizontal = 22.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (landscape) Arrangement.SpaceEvenly else Arrangement.Top) {
+    Column(modifier.background(Color.Black).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (landscape) Arrangement.SpaceEvenly else Arrangement.Top) {
         modes()
         if (landscape) {
             capture()
@@ -617,15 +653,6 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     }
                     if (caps.awbLock && state.capture.kelvin == null && state.capture.wbMode == android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO) {
                         ToggleRow("鎖定自動白平衡", state.capture.wbLocked, !state.capture.manual) { checked -> model.changeCapture { it.copy(wbLocked = checked) } }
-                    }
-                    // Each mode keeps its own ratio, so the sheet edits the one for the mode it was opened in.
-                    Text("畫面比例", style = MaterialTheme.typography.titleMedium)
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                        FrameAspect.entries.forEachIndexed { index, aspect ->
-                            SegmentedButton(selected = state.frameAspect == aspect, onClick = { model.selectAspect(aspect) },
-                                shape = SegmentedButtonDefaults.itemShape(index, FrameAspect.entries.size), enabled = !state.busy && !state.recording,
-                                modifier = Modifier.testTag("frame-aspect-${aspect.name}")) { Text(aspect.label) }
-                        }
                     }
                     ToggleRow("同時儲存原圖", state.saveOriginal, !state.busy, model::saveOriginal)
                     ToggleRow("顯示構圖格線", state.grid) { model.toggleGrid() }

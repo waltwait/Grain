@@ -788,7 +788,11 @@ class CameraExperienceDeviceTest {
             ui.runOnIdle { assertEquals("Photo ratio changes must leave the video ratio alone", before.videoAspect, model.state.value.videoAspect) }
         } finally {
             saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
-            ui.runOnIdle { model.clearMessage(); model.saveOriginal(before.saveOriginal); model.selectAspect(before.photoAspect); model.mode(before.mode) }
+            ui.runOnIdle {
+                model.clearMessage(); model.saveOriginal(before.saveOriginal)
+                repeat(FrameAspect.entries.size) { if (model.state.value.photoAspect != before.photoAspect) model.nextAspect() }
+                model.mode(before.mode)
+            }
         }
     }
 
@@ -825,19 +829,29 @@ class CameraExperienceDeviceTest {
             saved.forEach { ui.activity.contentResolver.delete(it, null, null) }
             ui.runOnIdle {
                 model.recordWithAudio(before.recordWithAudio)
-                if (model.state.value.mode == CaptureMode.VIDEO) model.selectAspect(before.videoAspect)
+                if (model.state.value.mode == CaptureMode.VIDEO)
+                    repeat(FrameAspect.entries.size) { if (model.state.value.videoAspect != before.videoAspect) model.nextAspect() }
                 model.mode(before.mode)
             }
         }
     }
 
-    /** The ratio lives in the settings sheet only; the viewfinder carries no ratio control. */
+    /** Like iOS: swipe up on the mode row for the controls tray, tap the ratio until it reads [aspect], swipe back down. */
     private fun chooseAspect(aspect: FrameAspect) {
-        ui.onNodeWithContentDescription("更多設定").performClick()
-        ui.onNodeWithTag("frame-aspect-${aspect.name}").performScrollTo().performClick()
-        ui.onNodeWithTag("frame-aspect-${aspect.name}").assertIsSelected()
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-        ui.waitUntil(5_000) { ui.onAllNodesWithTag("frame-aspect-${aspect.name}").fetchSemanticsNodes().isEmpty() }
+        val model = model()
+        val video = model.state.value.mode == CaptureMode.VIDEO
+        ui.onNodeWithTag("camera-dock").performTouchInput { swipeUp(startY = height * .25f, endY = 0f) }
+        ui.onNodeWithTag("controls-tray").assertIsDisplayed()
+        repeat(FrameAspect.entries.size) {
+            if (model.state.value.frameAspect != aspect) {
+                ui.onNodeWithTag("frame-aspect").performClick()
+                if (video) ui.waitUntil(30_000) { model.state.value.ready }
+                else ui.runOnIdle { assertTrue("A photo ratio must not restart the camera", model.state.value.ready) }
+            }
+        }
+        ui.onNodeWithTag("frame-aspect").assertTextContains(aspect.label)
+        ui.onNodeWithTag("camera-dock").performTouchInput { swipeDown(startY = 0f, endY = height * .25f) }
+        ui.onNodeWithTag("controls-tray").assertDoesNotExist()
     }
 
     private fun assertFrameMatches(aspect: FrameAspect, area: androidx.compose.ui.geometry.Rect) {
@@ -855,6 +869,11 @@ class CameraExperienceDeviceTest {
         val strip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
         assertTrue("The ISO row must sit below the ${aspect.label} frame or on it",
             strip.top >= frame.bottom - 1f || strip.bottom <= frame.bottom + 1f)
+        if (aspect == FrameAspect.RATIO_4_3 || aspect == FrameAspect.RATIO_1_1) {
+            // Like iOS, frames no taller than 4:3 stay on black between the toolbar and the ISO pill.
+            assertTrue("The ${aspect.label} frame must start under the toolbar", frame.top >= toolbar.bottom - 1f)
+            assertTrue("The ISO pill must sit under the ${aspect.label} frame", strip.top >= frame.bottom - 1f)
+        }
     }
 
     private fun assertOutputRatio(aspect: FrameAspect, width: Int, height: Int, tolerance: Float) {

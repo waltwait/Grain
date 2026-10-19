@@ -1,12 +1,31 @@
 package tw.luma.camera.camera
 
 import androidx.camera.core.AspectRatio
+import kotlin.math.roundToInt
+
+/** Pixels kept from a photo: [left], [top], [width] and [height] in the source bitmap. */
+data class PhotoCrop(val left: Int, val top: Int, val width: Int, val height: Int)
 
 /** Shape of the saved photo or video as long side : short side; the viewfinder frame shows the same crop. */
 enum class FrameAspect(val long: Int, val short: Int) {
     RATIO_4_3(4, 3), RATIO_3_2(3, 2), RATIO_16_9(16, 9), RATIO_1_1(1, 1);
 
     val label: String get() = "$long:$short"
+
+    /** The ratio chip's order: iOS's 4:3, 16:9 and 1:1, then the film ratio. */
+    fun next(): FrameAspect = when (this) { RATIO_4_3 -> RATIO_16_9; RATIO_16_9 -> RATIO_1_1; RATIO_1_1 -> RATIO_3_2; RATIO_3_2 -> RATIO_4_3 }
+
+    /** The largest part of a [width] × [height] photo with this shape, from its middle and in its own orientation. */
+    fun centerCrop(width: Int, height: Int): PhotoCrop {
+        val (w, h) = screenShape(landscape = width > height)
+        return if (width.toLong() * h > height.toLong() * w) {
+            val cropWidth = (height.toDouble() * w / h).roundToInt()
+            PhotoCrop((width - cropWidth) / 2, 0, cropWidth, height)
+        } else {
+            val cropHeight = (width.toDouble() * h / w).roundToInt()
+            PhotoCrop(0, (height - cropHeight) / 2, width, cropHeight)
+        }
+    }
 
     /** Width to height on screen: a portrait viewfinder holds an upright frame, a landscape one a wide frame. */
     fun screenShape(landscape: Boolean): Pair<Int, Int> = if (landscape) long to short else short to long

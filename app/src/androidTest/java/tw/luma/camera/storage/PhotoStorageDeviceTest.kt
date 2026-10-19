@@ -66,6 +66,16 @@ class PhotoStorageDeviceTest {
         assertEquals(before + 3, count(SaveTarget.CAMERA))
     }
 
+    @Test fun aRatioCutsTheEditedPhotoFromTheMiddleWhileTheOriginalKeepsTheWholeFrame() {
+        val square = PhotoStorage.processAndSave(context, source, FilterSettings(), SaveTarget.CAMERA, saveOriginal = true,
+            aspect = tw.luma.camera.camera.FrameAspect.RATIO_1_1).also { written += it }
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(square).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        assertEquals("64 × 48 cut to 1:1", 48 to 48, bounds.outWidth to bounds.outHeight)
+        val original = requireNotNull(find(SaveTarget.CAMERA, jpgOriginal(requireNotNull(nameAndPath(square)).first))).also { written += it }
+        assertArrayEquals(source.readBytes(), requireNotNull(resolver.openInputStream(original)).use { it.readBytes() })
+    }
+
     @Test fun aNonJpegSourceKeepsItsOwnFormatAsTheOriginal() {
         val png = File.createTempFile("storage-test-", ".png", context.cacheDir)
         val bitmap = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(170, 120, 90)) }
