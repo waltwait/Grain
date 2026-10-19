@@ -47,7 +47,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -103,6 +107,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var exposureFeedback by remember { mutableStateOf<ExposureFeedback?>(null) }
     var exposureDragging by remember { mutableStateOf(false) }
     var viewfinderLandscape by remember { mutableStateOf<Boolean?>(null) }
+    // Measured toolbar and zoom-plus-ISO heights; the defaults match them so the frame does not jump on first layout.
+    var toolbarHeight by remember { mutableStateOf<Int?>(null) }
+    var controlsHeight by remember { mutableStateOf<Int?>(null) }
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
     val currentDensity by rememberUpdatedState(LocalDensity.current.density)
@@ -280,15 +287,20 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                     val landscapeArea = maxWidth > maxHeight
                     SideEffect { viewfinderLandscape = landscapeArea }
                     val (frameWidth, frameHeight) = state.frameAspect.screenShape(landscapeArea)
-                    val frameRatio = frameWidth.toFloat() / frameHeight
-                    PreviewArea(state, model, view, permitted, frameRatio, Modifier.fillMaxSize(),
+                    val density = LocalDensity.current
+                    val layout = with(density) {
+                        ViewfinderFrame.place(constraints.maxWidth, constraints.maxHeight, frameWidth.toFloat() / frameHeight,
+                            toolbar = toolbarHeight ?: 56.dp.roundToPx(), controls = controlsHeight ?: 108.dp.roundToPx(), gap = 12.dp.roundToPx())
+                    }
+                    val frame = layout.frame
+                    PreviewArea(state, model, view, permitted, frame, Modifier.fillMaxSize(),
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
-                    ViewfinderCaptureFeedback(state.captureFeedback.capturedPhotoId, Modifier.viewfinderFrame(frameRatio))
+                    ViewfinderCaptureFeedback(state.captureFeedback.capturedPhotoId, Modifier.viewfinderFrame(frame))
                     // Touch points come from the preview view, so the indicators share its frame.
                     if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { feedback ->
                         key(feedback.request) {
-                            Box(Modifier.viewfinderFrame(frameRatio)) {
+                            Box(Modifier.viewfinderFrame(frame)) {
                                 FocusIndicator(feedback) {
                                     if (focusFeedback?.request == feedback.request) focusFeedback = null
                                 }
@@ -296,12 +308,14 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         }
                     }
                     if (permitted && state.cameraError == null) {
-                        CameraToolbar(state, model, newVersion, Modifier.align(Alignment.TopCenter)) {
+                        CameraToolbar(state, model, newVersion, Modifier.align(Alignment.TopCenter)
+                            .onSizeChanged { toolbarHeight = it.height }.testTag("camera-toolbar")) {
                             activeControl = null
                             panel = if (it == "filters" && panel == "filters") null else it
                         }
-                        exposureFeedback?.let { Box(Modifier.viewfinderFrame(frameRatio)) { ExposureIndicator(it, state.capabilities.exposureStep) } }
-                        if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, { activeControl = it }, Modifier.align(Alignment.BottomCenter))
+                        exposureFeedback?.let { Box(Modifier.viewfinderFrame(frame)) { ExposureIndicator(it, state.capabilities.exposureStep) } }
+                        if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, { activeControl = it },
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { layout.controlsLift.toDp() })) { controlsHeight = it }
                     }
                     if (panel == "filters") {
                         FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,
@@ -331,8 +345,11 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     }
 }
 
-/** The largest frame of [ratio] (width / height) centered in the viewfinder; the bars around it stay black. */
-private fun Modifier.viewfinderFrame(ratio: Float) = fillMaxSize().wrapContentSize(Alignment.Center).aspectRatio(ratio)
+/** Fills the viewfinder and lays its content out in [frame], the part the photo or video keeps; the rest stays black. */
+private fun Modifier.viewfinderFrame(frame: IntRect) = layout { measurable, constraints ->
+    val placeable = measurable.measure(Constraints.fixed(frame.width, frame.height))
+    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(frame.left, frame.top) }
+}
 
 private data class FocusFeedback(val request: Int, val point: Offset, val outcome: FocusOutcome? = null)
 private data class ExposureFeedback(val point: Offset, val index: Int)
@@ -393,10 +410,10 @@ private fun FocusIndicator(feedback: FocusFeedback, onFinished: () -> Unit) {
 }
 
 @Composable
-private fun PreviewArea(state: CameraUiState, model: CameraViewModel, view: PreviewView, granted: Boolean, frameRatio: Float, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
+private fun PreviewArea(state: CameraUiState, model: CameraViewModel, view: PreviewView, granted: Boolean, frame: IntRect, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
     Box(modifier.background(Color.Black).testTag("viewfinder"), contentAlignment = Alignment.Center) {
         if (granted) {
-            Box(Modifier.viewfinderFrame(frameRatio).testTag("viewfinder-frame")) {
+            Box(Modifier.viewfinderFrame(frame).testTag("viewfinder-frame")) {
                 AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "相機即時預覽，可點擊對焦、左右滑動或雙指變焦" })
                 if (state.grid && state.ready) Canvas(Modifier.fillMaxSize()) {
                     for (i in 1..2) {

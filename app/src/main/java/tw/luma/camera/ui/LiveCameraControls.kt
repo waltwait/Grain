@@ -59,7 +59,8 @@ enum class LiveControl(val title: String) { ISO("ISO"), SHUTTER("快門"), EV("�
 private val LocalLiveControlInteractionSource = staticCompositionLocalOf<MutableInteractionSource?> { null }
 
 @Composable
-internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier) {
+internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier,
+    onChromeHeight: (Int) -> Unit = {}) {
     NativeCameraControls(state, active, select = { next ->
         if (next != null && next.entersManual && !state.capture.manual) {
             engine?.enterManual()?.let { manual ->
@@ -81,7 +82,7 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
             LiveControl.ZOOM -> model.zoom(1f)
         }
         if (control != LiveControl.WB) select(null)
-    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier)
+    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier, onChromeHeight = onChromeHeight)
 }
 
 /** One floating slider, with fixed anchors so opening it never moves the buttons or viewfinder. */
@@ -93,6 +94,8 @@ internal fun NativeCameraControls(
     reset: (LiveControl) -> Unit,
     slider: @Composable (LiveControl, androidx.compose.ui.unit.Dp, Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** Height of the zoom badge and ISO row together, without the floating slider. */
+    onChromeHeight: (Int) -> Unit = {},
 ) {
     if (!state.ready) return
     val controls = remember(state.capabilities.adjustableAperture) {
@@ -115,7 +118,8 @@ internal fun NativeCameraControls(
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val anchorHeight = with(density) { stripHeight.toDp() + zoomHeight.toDp() }
         val popupWidth = minOf(480.dp, maxWidth - 24.dp)
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().graphicsLayer { alpha = chromeOpacity }.background(lowerGradient)) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { onChromeHeight(it.height) }
+            .graphicsLayer { alpha = chromeOpacity }.background(lowerGradient)) {
             Box(Modifier.fillMaxWidth().onSizeChanged { zoomHeight = it.height }.padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
                 val selected = active == LiveControl.ZOOM
                 val enabled = state.liveControlsEnabled && LiveControl.ZOOM.supported(state)
