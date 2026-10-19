@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.11",
-  "versionCode": 44,
+  "versionName": "0.7.12",
+  "versionCode": 45,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.11/Grain-0.7.11-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.12/Grain-0.7.12-personal-fuji.apk",
   "apkSize": 15054410,
-  "apkSha256": "3e74dc0a8271598aeff5580c3c760890564191f602e20277e0583656965f5b1c",
+  "apkSha256": "60043383716b4e41514bcd34b94d32b7a77645b65660781b0565bc0f6652adbc",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 畫面比例改到「更多設定」裡選擇，拍照畫面不再顯示比例按鈕；照片與錄影仍各自記住比例。"
+  "notes": "- 4:3 等比例的觀景窗改為貼齊上方，工具列疊在畫面上；ISO／快門／曝光／白平衡列留在下方黑邊，不再貼著畫面底邊。1:1 仍置中，放不下時 ISO 列改疊在畫面底部。"
 }
