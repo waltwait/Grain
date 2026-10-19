@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.14",
-  "versionCode": 47,
+  "versionName": "0.7.15",
+  "versionCode": 48,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.14/Grain-0.7.14-personal-fuji.apk",
-  "apkSize": 15054410,
-  "apkSha256": "fa2add6a5cf52e747505a25941b6af9bd7ac4b90709dd5ca41c1ce7f2d921af5",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.15/Grain-0.7.15-personal-fuji.apk",
+  "apkSize": 15070794,
+  "apkSha256": "907590c8f9d74003086a522cc20c8f673dc2a2024bf15f15d35bcf6c5e2648a1",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- ISO／快門／曝光／白平衡改成透明文字，直拿時移到快門上方的黑邊，不再蓋住畫面；觀景窗下緣拿掉暗色漸層，濾鏡從上到下看起來一致。\n- 「照片／錄影」右邊新增「︿」，點一下就能打開比例切換，再點一下收起；往上滑一樣可以打開。\n- 「1×」變焦仍留在 4:3 畫面底部；平板橫放時 ISO 列以透明文字留在畫面下緣。"
+  "notes": "- 相機畫面改成最新 iOS 的樣式：上方左邊是底片，右邊一顆膠囊放閃光燈和設定；「照片／錄影」改成膠囊，選中的是金字；變焦和前後鏡頭改成半透明圓鈕。\n- 「照片／錄影」右邊的「⠿」或往上滑會打開控制面板，有比例、閃光燈、格線、存原圖（錄影時是錄音）；點「比例」一次列出 3:4、9:16、1:1、2:3，直接點想要的比例。點短橫條、往下滑、點畫面或返回就收起。\n- 比例改用直式標示。9:16 和 2:3 會從工具列下方延伸到快門後面，按鈕半透明疊在畫面上；3:4 和 1:1 維持在黑底上。"
 }
