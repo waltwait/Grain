@@ -39,7 +39,6 @@ internal fun EditedHome(edits: List<GalleryItem>, model: GalleryViewModel, open:
             TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp).testTag("edited-retry")) { Text("重試") }
         }
         if (edits.isNotEmpty()) {
-            Text("編輯成品", Modifier.align(Alignment.Start).padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge)
             LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), contentPadding = PaddingValues(2.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.fillMaxSize().testTag("edited-grid")) {

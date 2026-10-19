@@ -42,6 +42,7 @@ data class VideoEditorUiState(
     val poster: Bitmap? = null,
     val durationMs: Long = 0,
     val loading: Boolean = false,
+    val convertOnly: Boolean = false,
     val selectedId: String? = null,
     val filter: FilterSettings = FilterSettings(),
     val comparing: Boolean = false,
@@ -53,8 +54,8 @@ data class VideoEditorUiState(
     /** Videos are picked, or a pick was refused and says why. */
     val active get() = sources.isNotEmpty() || error != null
     val saving get() = batch?.running == true
-    val canEdit get() = sources.isNotEmpty() && !saving
-    val canSave get() = canEdit && (selectedId == null || filter.lut != null) && batch?.let { it.saved.size < it.total } != false
+    val canEdit get() = sources.isNotEmpty() && !saving && !convertOnly
+    val canSave get() = sources.isNotEmpty() && !saving && (convertOnly || selectedId == null || filter.lut != null) && batch?.let { it.saved.size < it.total } != false
     val previewSettings get() = if (comparing) FilterSettings() else filter
     /** Every video is saved with the current film, so there is no draft left to keep. */
     val finished get() = !saving && batch != null && batch.saved.size == batch.total
@@ -87,6 +88,17 @@ class VideoEditorViewModel(application: Application) : AndroidViewModel(applicat
         switching = FilterSwitching()
         _state.value = VideoEditorUiState(sources = sources)
         load(0)
+    }
+
+    /** Opens [uris] in plain MP4 conversion mode without filter controls and starts converting immediately. */
+    fun convert(uris: List<Uri>, onSaved: (Uri) -> Unit) {
+        if (_state.value.saving || uris.isEmpty()) return
+        val sources = uris.map(Uri::toString).distinct()
+        if (sources.size > PhotoBatchProgress.MAX_PHOTOS) { reject("一次最多選 ${PhotoBatchProgress.MAX_PHOTOS} 支影片"); return }
+        switching = FilterSwitching()
+        _state.value = VideoEditorUiState(sources = sources, convertOnly = true)
+        load(0)
+        save(onSaved)
     }
 
     /** Shows why a pick cannot be edited, in place of the videos. */

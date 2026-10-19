@@ -51,6 +51,7 @@ internal fun VideoEditorBody(state: VideoEditorUiState, model: VideoEditorViewMo
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val panelHeight = minOf(280.dp, maxHeight * .42f)
             if (state.sources.isEmpty()) VideoMessage(state.error, Modifier.fillMaxSize())
+            else if (state.convertOnly) VideoPreview(state, model, Modifier.fillMaxSize())
             else if (maxWidth >= 700.dp && maxWidth > maxHeight) Row(Modifier.fillMaxSize()) {
                 VideoPreview(state, model, Modifier.weight(1f).fillMaxHeight())
                 VideoFilters(state, entries, model, Modifier.width(320.dp).fillMaxHeight())
@@ -113,10 +114,12 @@ private fun VideoPreview(state: VideoEditorUiState, model: VideoEditorViewModel,
         val poster = state.poster
         if (poster != null) {
             VideoPoster(state, model, Modifier.fillMaxSize())
-            Row(Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = PHOTO_OVERLAY_SCRIM_ALPHA), RoundedCornerShape(12.dp))) {
-                TextButton(onClick = model::compare, enabled = state.canEdit,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("video-compare").semantics { selected = state.comparing }) {
-                    Text(if (state.comparing) "濾鏡" else "原圖")
+            if (!state.convertOnly) {
+                Row(Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = PHOTO_OVERLAY_SCRIM_ALPHA), RoundedCornerShape(12.dp))) {
+                    TextButton(onClick = model::compare, enabled = state.canEdit,
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("video-compare").semantics { selected = state.comparing }) {
+                        Text(if (state.comparing) "濾鏡" else "原圖")
+                    }
                 }
             }
             Text("▶ ${ZoomControls.recordingTime(state.durationMs.coerceAtLeast(0) * 1_000_000)}",
@@ -137,8 +140,8 @@ private fun VideoPoster(state: VideoEditorUiState, model: VideoEditorViewModel, 
     var view by remember { mutableStateOf<PhotoPreviewView?>(null) }
     AndroidView(factory = { context -> PhotoPreviewView(context, { _, _ -> }, { model.previewFailed() }).also { view = it } },
         modifier = modifier.testTag("video-editor-preview").semantics {
-            contentDescription = "影片濾鏡預覽"
-            stateDescription = if (state.comparing) "原圖" else "濾鏡預覽"
+            contentDescription = if (state.convertOnly) "影片預覽" else "影片濾鏡預覽"
+            stateDescription = if (state.convertOnly || state.comparing) "原圖" else "濾鏡預覽"
         }, onRelease = { it.releasePreview() }, update = {
             state.poster?.let { poster -> it.submit(poster, state.previewSettings, state.revision) }
         })

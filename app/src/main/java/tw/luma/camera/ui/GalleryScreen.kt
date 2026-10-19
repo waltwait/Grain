@@ -112,7 +112,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     val context = LocalContext.current
     val mediaImport = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoBatchProgress.MAX_PHOTOS)) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult // Cancelling the picker keeps the existing draft.
-        // Photos go to the photo editor and videos are converted to MP4; one pick is either kind.
+        // Photos go to the photo editor and videos go to the video filter editor; one pick is either kind.
         val videos = uris.filter { context.contentResolver.getType(it)?.startsWith("video/") == true }
         when {
             videos.isEmpty() -> { videoEditor.discard(); importEditor.openBatch(uris) }
@@ -120,7 +120,13 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
             else -> videoEditor.reject("照片和影片請分開選")
         }
     }
+    val videoConvertImport = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoBatchProgress.MAX_PHOTOS)) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        importEditor.discard()
+        videoEditor.convert(uris, onSaved)
+    }
     val chooseMedia = { mediaImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+    val chooseConvertVideo = { videoConvertImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
     LaunchedEffect(entries) { importEditor.setLuts(entries); videoEditor.setLuts(entries) }
     // Unfinished drafts survive tab switches, but a fully exported import starts fresh once the editor tab is left.
     LaunchedEffect(tabPager.settledPage) {
@@ -176,10 +182,26 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                 }
                 if (editing) Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = chooseMedia, enabled = !busy && !tabPager.isScrollInProgress,
-                        modifier = Modifier.size(48.dp).testTag("editor-choose")
-                            .semantics { contentDescription = if (hasImport || hasVideo) "重新選擇照片或影片" else "選擇照片或影片" }) {
-                        CameraGlyph("add", Modifier.size(24.dp), LocalContentColor.current)
+                    var chooseMenuOpen by rememberSaveable { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { chooseMenuOpen = true }, enabled = !busy && !tabPager.isScrollInProgress,
+                            modifier = Modifier.size(48.dp).testTag("editor-choose")
+                                .semantics { contentDescription = if (hasImport || hasVideo) "重新選擇照片或影片" else "選擇照片或影片" }) {
+                            CameraGlyph("add", Modifier.size(24.dp), LocalContentColor.current)
+                        }
+                        DropdownMenu(expanded = chooseMenuOpen, onDismissRequest = { chooseMenuOpen = false },
+                            containerColor = GrainSurfaces.raised) {
+                            DropdownMenuItem(
+                                text = { Text("套濾鏡編輯") },
+                                onClick = { chooseMenuOpen = false; chooseMedia() },
+                                modifier = Modifier.testTag("editor-choose-filter"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text("影片轉檔") },
+                                onClick = { chooseMenuOpen = false; chooseConvertVideo() },
+                                modifier = Modifier.testTag("editor-choose-convert"),
+                            )
+                        }
                     }
                     if (hasVideo) IconButton(onClick = { videoEditor.save(onSaved) }, enabled = videoState.canSave && !tabPager.isScrollInProgress,
                         modifier = Modifier.size(48.dp).testTag("video-save").semantics { contentDescription = "轉成 MP4" }) {

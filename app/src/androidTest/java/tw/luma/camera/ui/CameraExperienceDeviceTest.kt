@@ -1037,6 +1037,7 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("gallery-edit-tab").performClick()
             ui.waitUntil(10_000) { ui.onAllNodesWithTag("edited-item").fetchSemanticsNodes().size == existing + 1 }
             ui.onNodeWithTag("edited-grid").assertIsDisplayed()
+            ui.onAllNodesWithText("編輯成品").assertCountEquals(0)
             ui.onAllNodesWithContentDescription("照片 ${base}_original.jpg").assertCountEquals(0)
             ui.onNodeWithContentDescription("照片 $base.jpg").performClick()
             ui.onNodeWithTag("gallery-pager").assertIsDisplayed()

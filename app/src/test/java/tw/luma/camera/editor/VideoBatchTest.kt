@@ -40,4 +40,16 @@ class VideoBatchTest {
         assertTrue(refused.active)
         assertFalse(refused.canSave)
     }
+
+    @Test fun convertOnlyDisablesFilterEditingWhileAllowingSave() {
+        val converting = VideoEditorUiState(sources = listOf("a"), convertOnly = true)
+        assertFalse(converting.canEdit)
+        assertTrue(converting.canSave)
+        val stopped = converting.copy(batch = VideoBatch(2, saved = setOf("a"), stopped = true))
+        assertFalse(stopped.canEdit)
+        assertTrue(stopped.canSave)
+        val done = converting.copy(batch = VideoBatch(1, saved = setOf("a")))
+        assertTrue(done.finished)
+        assertFalse(done.canSave)
+    }
 }
