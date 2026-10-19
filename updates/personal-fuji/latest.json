@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.15",
-  "versionCode": 48,
+  "versionName": "0.7.16",
+  "versionCode": 49,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.15/Grain-0.7.15-personal-fuji.apk",
-  "apkSize": 15070794,
-  "apkSha256": "907590c8f9d74003086a522cc20c8f673dc2a2024bf15f15d35bcf6c5e2648a1",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.16/Grain-0.7.16-personal-fuji.apk",
+  "apkSize": 15333784,
+  "apkSha256": "7d5653c621a0a90039172732bce975fff6d992dee36bd56c0cdcd0873d478a39",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 相機畫面改成最新 iOS 的樣式：上方左邊是底片，右邊一顆膠囊放閃光燈和設定；「照片／錄影」改成膠囊，選中的是金字；變焦和前後鏡頭改成半透明圓鈕。\n- 「照片／錄影」右邊的「⠿」或往上滑會打開控制面板，有比例、閃光燈、格線、存原圖（錄影時是錄音）；點「比例」一次列出 3:4、9:16、1:1、2:3，直接點想要的比例。點短橫條、往下滑、點畫面或返回就收起。\n- 比例改用直式標示。9:16 和 2:3 會從工具列下方延伸到快門後面，按鈕半透明疊在畫面上；3:4 和 1:1 維持在黑底上。"
+  "notes": "- 相簿「編輯」分頁的「＋」現在也能選影片，iPhone 的 .mov 等格式會轉成到處都能播的 MP4（H.264＋AAC）；一次可以選多支，原檔不會被改動。\n- 轉檔前可以選 FUJIFILM／KODAK／GRAIN 濾鏡和強度，預覽畫面是影片中間的一格；不選濾鏡就只轉格式，本來就是 H.264 的影片幾秒就好。\n- iPhone 的 HDR 影片會轉成一般亮度。轉好的 MP4 存在 Movies/Grain Edits，也會出現在「編輯成品」裡，點開就能播放。"
 }
