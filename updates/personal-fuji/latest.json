@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.12",
-  "versionCode": 45,
+  "versionName": "0.7.13",
+  "versionCode": 46,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.12/Grain-0.7.12-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.13/Grain-0.7.13-personal-fuji.apk",
   "apkSize": 15054410,
-  "apkSha256": "60043383716b4e41514bcd34b94d32b7a77645b65660781b0565bc0f6652adbc",
+  "apkSha256": "bbf7ff47483a384d7067486b72b0f7ebea52c06ceadd11cb821f9834612cd475",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 4:3 等比例的觀景窗改為貼齊上方，工具列疊在畫面上；ISO／快門／曝光／白平衡列留在下方黑邊，不再貼著畫面底邊。1:1 仍置中，放不下時 ISO 列改疊在畫面底部。"
+  "notes": "- 畫面比例改成像 iOS 一樣切換：在「照片／錄影」那列往上滑打開控制列，點比例依序換 4:3、16:9、1:1、3:2；往下滑、點畫面或返回就收起。「更多設定」不再有比例選項。\n- 照片換比例不必重新啟動鏡頭，畫面直接以動畫切換；照片以 4:3 拍攝後從中間裁切，同時儲存的原圖保留完整 4:3。錄影換比例仍會短暫重新啟動鏡頭。\n- 工具列回到上方黑底，4:3 畫面接在工具列下方，1:1 在 4:3 範圍內置中；ISO／快門／曝光／白平衡改為深灰圓角列，固定在 4:3 畫面下方。"
 }
