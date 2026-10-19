@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.17",
-  "versionCode": 50,
+  "versionName": "0.7.18",
+  "versionCode": 51,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.17/Grain-0.7.17-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.18/Grain-0.7.18-personal-fuji.apk",
   "apkSize": 15333784,
-  "apkSha256": "b0f6812c4bfe24f39c7c81a9e1ef802a6654f05742c49473e92ac2d6bbf18ea0",
+  "apkSha256": "bf5cdad54ded137db31cbf6f8074cc6f0261527b5bb168ccb2d2dfdd5e017a9e",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 控制面板頂端的短橫條按下去不再出現灰色反白。"
+  "notes": "- 相簿「編輯」分頁右上角「＋」拆成「套濾鏡編輯」與「影片轉檔」兩條路：套濾鏡編輯可選照片或影片調色；影片轉檔選完影片即直接轉成 MP4，不顯示濾鏡面板。\n- 移除「編輯」分頁首頁縮圖牆上方的「編輯成品」標題文字。"
 }
