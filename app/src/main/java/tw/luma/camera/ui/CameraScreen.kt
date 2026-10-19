@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
@@ -624,7 +625,9 @@ private fun ControlsPanel(state: CameraUiState, model: CameraViewModel, close: (
     Surface(modifier.fillMaxWidth().testTag("controls-tray"), shape = RoundedCornerShape(30.dp), color = GrainSurfaces.glass,
         border = BorderStroke(1.dp, GrainSurfaces.glassEdge)) {
         Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 14.dp)) {
-            Box(Modifier.fillMaxWidth().height(24.dp).clickable(role = Role.Button, onClick = close).testTag("controls-tray-close")
+            // No pressed highlight: the bar is only a handle, and a grey band across the panel's top looked like a fault.
+            Box(Modifier.fillMaxWidth().height(24.dp).clickable(remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = close)
+                .testTag("controls-tray-close")
                 .semantics { contentDescription = "收起相機控制項" }, contentAlignment = Alignment.Center) {
                 Box(Modifier.size(36.dp, 4.dp).background(Color.White.copy(alpha = .38f), CircleShape))
             }
