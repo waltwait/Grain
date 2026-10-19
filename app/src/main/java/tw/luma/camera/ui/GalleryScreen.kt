@@ -76,6 +76,7 @@ import tw.luma.camera.gallery.GallerySearch
 import tw.luma.camera.gallery.SearchKey
 import androidx.compose.foundation.shape.CircleShape
 import tw.luma.camera.editor.PhotoEditorViewModel
+import tw.luma.camera.editor.VideoEditorViewModel
 import tw.luma.camera.editor.PhotoBatchProgress
 import tw.luma.camera.gallery.GalleryItem
 import tw.luma.camera.gallery.GalleryViewModel
@@ -88,13 +89,17 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     val state by model.state.collectAsStateWithLifecycle()
     val importEditor: PhotoEditorViewModel = viewModel(key = "gallery-import-editor")
     val importState by importEditor.state.collectAsStateWithLifecycle()
+    val videoEditor: VideoEditorViewModel = viewModel(key = "gallery-video-editor")
+    val videoState by videoEditor.state.collectAsStateWithLifecycle()
+    val busy = importState.saving || videoState.saving
     val tabs = rememberSaveableStateHolder()
     val tabPager = rememberPagerState { 2 }
     val tabScope = rememberCoroutineScope()
     val editing = tabPager.currentPage == 1
     val hasImport = importState.sources.isNotEmpty()
+    val hasVideo = videoState.active
     val changeTab: (Boolean) -> Unit = { next ->
-        if (!importState.saving) tabScope.launch { tabPager.animateScrollToPage(if (next) 1 else 0) }
+        if (!busy) tabScope.launch { tabPager.animateScrollToPage(if (next) 1 else 0) }
     }
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var filterOpen by rememberSaveable { mutableStateOf(false) }
@@ -104,14 +109,23 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedEdit by rememberSaveable { mutableStateOf(false) }
     val grid = rememberLazyGridState()
-    val photoImport = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoBatchProgress.MAX_PHOTOS)) { uris ->
-        importEditor.openBatch(uris)
+    val context = LocalContext.current
+    val mediaImport = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoBatchProgress.MAX_PHOTOS)) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult // Cancelling the picker keeps the existing draft.
+        // Photos go to the photo editor and videos are converted to MP4; one pick is either kind.
+        val videos = uris.filter { context.contentResolver.getType(it)?.startsWith("video/") == true }
+        when {
+            videos.isEmpty() -> { videoEditor.discard(); importEditor.openBatch(uris) }
+            videos.size == uris.size -> { importEditor.discard(); videoEditor.open(videos) }
+            else -> videoEditor.reject("照片和影片請分開選")
+        }
     }
-    val choosePhoto = { photoImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-    LaunchedEffect(entries) { importEditor.setLuts(entries) }
+    val chooseMedia = { mediaImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+    LaunchedEffect(entries) { importEditor.setLuts(entries); videoEditor.setLuts(entries) }
     // Unfinished drafts survive tab switches, but a fully exported import starts fresh once the editor tab is left.
     LaunchedEffect(tabPager.settledPage) {
         if (tabPager.settledPage == 0 && importEditor.state.value.finished) importEditor.discard()
+        if (tabPager.settledPage == 0 && videoEditor.state.value.let { it.finished || it.sources.isEmpty() }) videoEditor.discard()
     }
     val lifecycle = LocalLifecycleOwner.current
     DisposableEffect(model, lifecycle) {
@@ -132,9 +146,9 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     val viewerItems = if (selectedEdit) state.edits else items
     val selectedIndex = viewerItems.indexOfFirst { it.uri.toString() == selected }
     val goBack: () -> Unit = {
-        if (!importState.saving) {
+        if (!busy) {
             if (editing || tabPager.targetPage == 1) changeTab(false)
-            else { importEditor.discard(); editor.discard(); close() }
+            else { importEditor.discard(); videoEditor.discard(); editor.discard(); close() }
         }
     }
     BackHandler(enabled = selectedIndex < 0, onBack = goBack)
@@ -143,27 +157,35 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
             GalleryViewer(viewerItems, selectedIndex, model, editor, entries, { selected = null }, onSaved)
         } else Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                BackIconButton(onClick = goBack, enabled = !importState.saving,
+                BackIconButton(onClick = goBack, enabled = !busy,
                     modifier = Modifier.align(Alignment.CenterStart).testTag("gallery-close"),
                     description = if (editing) "返回照片" else "返回相機")
-                Column(Modifier.align(Alignment.Center).padding(horizontal = if (editing && hasImport) 96.dp else 48.dp),
+                Column(Modifier.align(Alignment.Center).padding(horizontal = if (editing && (hasImport || hasVideo)) 96.dp else 48.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Grain", modifier = Modifier.testTag("gallery-title"), fontFamily = NewsreaderBrand, style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = Color(0xFFF5F3EB), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Every tab has a second line, so the title never shifts when switching between them.
-                    val subtitle = GalleryHeader.subtitle(editing, state.items.size, state.edits.size,
-                        if (importState.sources.size > 1) importState.previewIndex + 1 to importState.sources.size else null,
+                    val batchPosition = when {
+                        hasVideo -> if (videoState.sources.size > 1) videoState.previewIndex + 1 to videoState.sources.size else null
+                        importState.sources.size > 1 -> importState.previewIndex + 1 to importState.sources.size
+                        else -> null
+                    }
+                    val subtitle = GalleryHeader.subtitle(editing, state.items.size, state.edits.size, batchPosition,
                         filteredCount = items.size.takeIf { filtering })
                     Text(subtitle, maxLines = 1, style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = .78f))
                 }
                 if (editing) Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = choosePhoto, enabled = !importState.saving && !tabPager.isScrollInProgress,
+                    IconButton(onClick = chooseMedia, enabled = !busy && !tabPager.isScrollInProgress,
                         modifier = Modifier.size(48.dp).testTag("editor-choose")
-                            .semantics { contentDescription = if (hasImport) "重新選擇照片" else "選擇照片" }) {
+                            .semantics { contentDescription = if (hasImport || hasVideo) "重新選擇照片或影片" else "選擇照片或影片" }) {
                         CameraGlyph("add", Modifier.size(24.dp), LocalContentColor.current)
                     }
-                    if (hasImport) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
+                    if (hasVideo) IconButton(onClick = { videoEditor.save(onSaved) }, enabled = videoState.canSave && !tabPager.isScrollInProgress,
+                        modifier = Modifier.size(48.dp).testTag("video-save").semantics { contentDescription = "轉成 MP4" }) {
+                        if (videoState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                        else CameraGlyph("check", Modifier.size(24.dp), LocalContentColor.current)
+                    } else if (hasImport) IconButton(onClick = { importEditor.save(onSaved) }, enabled = importState.canSave && !tabPager.isScrollInProgress,
                         modifier = Modifier.size(48.dp).testTag("editor-save")
                             .semantics { contentDescription = if (importState.isBatch) "批次儲存照片" else "儲存新照片" }) {
                         if (importState.saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -179,11 +201,12 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     }
                 }
             }
-            HorizontalPager(state = tabPager, userScrollEnabled = !importState.saving,
+            HorizontalPager(state = tabPager, userScrollEnabled = !busy,
                 key = { if (it == 0) "photos" else "editor" }, beyondViewportPageCount = 0,
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("gallery-tabs-pager")) { page ->
                 if (page == 1) tabs.SaveableStateProvider("editor") {
-                    if (importState.bitmap == null && !importState.loading && importState.error == null) {
+                    if (hasVideo) VideoEditorBody(videoState, videoEditor, entries, Modifier.fillMaxSize())
+                    else if (importState.bitmap == null && !importState.loading && importState.error == null) {
                         EditedHome(state.edits, model, { item -> selected = item.uri.toString(); selectedEdit = true }, state.error, model::refresh)
                     } else Column(Modifier.fillMaxSize().testTag("photo-editor")) {
                         if (importState.isBatch) PhotoBatchControls(importState, importEditor, onSaved)
@@ -218,7 +241,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                     }
                 }
             }
-            PhotoEditTabs(editing, !importState.saving, changeTab, "gallery-photo-tab", "gallery-edit-tab",
+            PhotoEditTabs(editing, !busy, changeTab, "gallery-photo-tab", "gallery-edit-tab",
                 Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
         }
     }
@@ -506,4 +529,4 @@ private fun VideoControls(player: Player, playing: Boolean, enabled: Boolean) {
     }
 }
 
-private fun durationLabel(ms: Long) = ZoomControls.recordingTime(ms.coerceAtLeast(0).coerceAtMost(Long.MAX_VALUE / 1_000_000) * 1_000_000)
+internal fun durationLabel(ms: Long) = ZoomControls.recordingTime(ms.coerceAtLeast(0).coerceAtMost(Long.MAX_VALUE / 1_000_000) * 1_000_000)

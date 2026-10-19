@@ -1,6 +1,8 @@
 package tw.luma.camera.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
@@ -18,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -25,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import tw.luma.camera.gallery.GalleryItem
 import tw.luma.camera.gallery.GalleryViewModel
 
-/** Edit tab home: reopen a past edit to compare it with its original. Photo picking lives in the header. */
+/** Edit tab home: reopen a past edit to compare it with its original, or play a converted video. Picking lives in the header. */
 @Composable
 internal fun EditedHome(edits: List<GalleryItem>, model: GalleryViewModel, open: (GalleryItem) -> Unit,
     error: String? = null, retry: () -> Unit = {}) {
@@ -42,8 +45,13 @@ internal fun EditedHome(edits: List<GalleryItem>, model: GalleryViewModel, open:
                 modifier = Modifier.fillMaxSize().testTag("edited-grid")) {
                 items(edits, key = { it.uri.toString() }, contentType = { "media" }) { item ->
                     Surface(onClick = { open(item) }, shape = RoundedCornerShape(2.dp), color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.aspectRatio(1f).testTag("edited-item").semantics { contentDescription = "照片 ${item.name}" }) {
-                        GalleryThumbnail(item, model, Modifier.fillMaxSize())
+                        modifier = Modifier.aspectRatio(1f).testTag("edited-item").semantics { contentDescription = "${if (item.video) "影片" else "照片"} ${item.name}" }) {
+                        Box {
+                            GalleryThumbnail(item, model, Modifier.fillMaxSize())
+                            if (item.video) Text("▶ ${durationLabel(item.durationMs)}", Modifier.align(Alignment.BottomEnd).padding(5.dp)
+                                .background(Color.Black.copy(alpha = .7f), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
+                                style = MaterialTheme.typography.labelSmall, color = Color.White)
+                        }
                     }
                 }
             }

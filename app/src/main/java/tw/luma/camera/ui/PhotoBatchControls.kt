@@ -83,7 +83,7 @@ internal fun PhotoBatchControls(state: PhotoEditorUiState, model: PhotoEditorVie
 }
 
 @Composable
-private fun BatchThumbnail(source: String, modifier: Modifier) {
+internal fun BatchThumbnail(source: String, modifier: Modifier) {
     val context = LocalContext.current
     var bitmap by remember(source) { mutableStateOf<Bitmap?>(null) }
     val cancellation = remember(source) { CancellationSignal() }
