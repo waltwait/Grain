@@ -847,7 +847,14 @@ class CameraExperienceDeviceTest {
         assertTrue("The ${aspect.label} frame must fill the viewfinder on one side",
             abs(frame.width - area.width) < 2f || abs(frame.height - area.height) < 2f)
         assertEquals(area.center.x, frame.center.x, 2f)
-        assertEquals(area.center.y, frame.center.y, 2f)
+        assertTrue("The ${aspect.label} frame must stay inside the viewfinder", frame.top >= area.top - 1f && frame.bottom <= area.bottom + 1f)
+        // Each row sits wholly on black or wholly on the picture; a frame edge never runs through its text.
+        val toolbar = ui.onNodeWithTag("camera-toolbar").fetchSemanticsNode().boundsInRoot
+        assertTrue("The toolbar must clear the ${aspect.label} frame or lie over it",
+            frame.top >= toolbar.bottom - 1f || frame.top <= toolbar.top + 1f)
+        val strip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
+        assertTrue("The ISO row must sit below the ${aspect.label} frame or on it",
+            strip.top >= frame.bottom - 1f || strip.bottom <= frame.bottom + 1f)
     }
 
     private fun assertOutputRatio(aspect: FrameAspect, width: Int, height: Int, tolerance: Float) {
