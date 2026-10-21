@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.18",
-  "versionCode": 51,
+  "versionName": "0.7.19",
+  "versionCode": 52,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.18/Grain-0.7.18-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.19/Grain-0.7.19-personal-fuji.apk",
   "apkSize": 15333784,
-  "apkSha256": "bf5cdad54ded137db31cbf6f8074cc6f0261527b5bb168ccb2d2dfdd5e017a9e",
+  "apkSha256": "c517fcdf9612ecac86c53fc2cafe5812fc4878238029c71244941a26cf18f642",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 相簿「編輯」分頁右上角「＋」拆成「套濾鏡編輯」與「影片轉檔」兩條路：套濾鏡編輯可選照片或影片調色；影片轉檔選完影片即直接轉成 MP4，不顯示濾鏡面板。\n- 移除「編輯」分頁首頁縮圖牆上方的「編輯成品」標題文字。"
+  "notes": "- 畫面底部的「1×」點一下會展開成變焦膠囊（.6／1／2／3／10，依鏡頭支援自動隱藏），點數字就平順跳到那個倍率，約兩秒後收回成一顆、顯示目前倍率。\n- 膠囊展開時再點一次目前的倍率，可以打開細調滑桿；左右滑畫面和雙指縮放照舊，點畫面也會收回膠囊。"
 }
