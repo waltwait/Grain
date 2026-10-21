@@ -160,7 +160,7 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
     BackHandler(enabled = selectedIndex < 0, onBack = goBack)
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("grain-gallery")) {
         if (selectedIndex >= 0) {
-            GalleryViewer(viewerItems, selectedIndex, model, editor, entries, { selected = null }, onSaved)
+            Box(Modifier.fillMaxSize().openIn(.94f)) { GalleryViewer(viewerItems, selectedIndex, model, editor, entries, { selected = null }, onSaved) }
         } else Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
                 BackIconButton(onClick = goBack, enabled = !busy,
@@ -227,17 +227,19 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
                 key = { if (it == 0) "photos" else "editor" }, beyondViewportPageCount = 0,
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("gallery-tabs-pager")) { page ->
                 if (page == 1) tabs.SaveableStateProvider("editor") {
-                    if (hasVideo) VideoEditorBody(videoState, videoEditor, entries, Modifier.fillMaxSize())
+                    if (hasVideo) VideoEditorBody(videoState, videoEditor, entries, Modifier.fillMaxSize().openIn(.98f))
                     else if (importState.bitmap == null && !importState.loading && importState.error == null) {
                         EditedHome(state.edits, model, { item -> selected = item.uri.toString(); selectedEdit = true }, state.error, model::refresh)
-                    } else Column(Modifier.fillMaxSize().testTag("photo-editor")) {
+                    } else Column(Modifier.fillMaxSize().openIn(.98f).testTag("photo-editor")) {
                         if (importState.isBatch) PhotoBatchControls(importState, importEditor, onSaved)
                         PhotoEditorBody(importState, importEditor, entries,
                             { importEditor.preview(importState.previewIndex) }, onSaved, Modifier.weight(1f).fillMaxWidth())
                     }
                 } else tabs.SaveableStateProvider("photos") {
                     Column(Modifier.fillMaxSize()) {
-                        if (filterOpen) GalleryFilterBar(query, { query = it }, filter, { filter = it }, FilmIndex.usedFilms(films.filterKeys { id -> state.items.any { it.id == id } }), film, { film = it })
+                        AnimatedVisibility(filterOpen, enter = GrainMotion.expandIn(), exit = GrainMotion.shrinkOut()) {
+                            GalleryFilterBar(query, { query = it }, filter, { filter = it }, FilmIndex.usedFilms(films.filterKeys { id -> state.items.any { it.id == id } }), film, { film = it })
+                        }
                         when {
                             state.error != null -> GalleryEmpty(state.error!!, "重試", model::refresh)
                             state.loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
