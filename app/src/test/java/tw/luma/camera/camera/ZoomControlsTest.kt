@@ -13,6 +13,31 @@ class ZoomControlsTest {
     @Test fun ultraWideUsesActualMinimumRatherThanInventingHalfX() {
         assertEquals(listOf(.6f, 1f, 2f, 3f), ZoomControls.presets(.6f, 3f))
     }
+    @Test fun galaxyStopsAreUltraWideMainTwoThreeAndTen() {
+        assertEquals(listOf(.6f, 1f, 2f, 3f, 10f), ZoomControls.presets(.6f, 30f))
+        assertEquals(listOf(1f, 2f, 3f), ZoomControls.presets(1f, 8f))
+    }
+    @Test fun buttonsPrintTheRatioShortWithoutALeadingZero() {
+        assertEquals(".6", ZoomControls.short(.6f))
+        assertEquals("1", ZoomControls.short(1f))
+        assertEquals("2.4", ZoomControls.short(2.43f))
+        assertEquals("10", ZoomControls.short(10f))
+    }
+    @Test fun theLastPresetAtOrBelowTheZoomShowsIt() {
+        val presets = listOf(.6f, 1f, 2f, 3f, 10f)
+        assertEquals(1, ZoomControls.activePreset(presets, 1f))
+        assertEquals(2, ZoomControls.activePreset(presets, 2.4f))
+        assertEquals(0, ZoomControls.activePreset(presets, .8f))
+        assertEquals(4, ZoomControls.activePreset(presets, 30f))
+        assertEquals(0, ZoomControls.activePreset(listOf(2f, 3f), 1.5f))
+    }
+    @Test fun aPresetGlidesAlongThePinchScaleAndEndsExactlyOnIt() {
+        val steps = ZoomControls.glide(1f, 4f, steps = 4)
+        assertEquals(listOf(4f), steps.takeLast(1))
+        assertEquals(1.4142f, steps[0], .0001f)
+        assertEquals(2f, steps[1], .0001f)
+        assertEquals(listOf(3f), ZoomControls.glide(3f, 3f))
+    }
     @Test fun invalidCapabilitiesProduceNoButtons() {
         assertTrue(ZoomControls.presets(Float.NaN, 8f).isEmpty())
         assertTrue(ZoomControls.presets(3f, 1f).isEmpty())
