@@ -21,6 +21,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.border
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -40,6 +43,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,10 +62,13 @@ enum class LiveControl(val title: String) { ISO("ISO"), SHUTTER("快門"), EV("�
 
 private val LocalLiveControlInteractionSource = staticCompositionLocalOf<MutableInteractionSource?> { null }
 
-/** The zoom badge and floating slider over the viewfinder; [showStrip] adds the ISO row when it cannot sit below. */
+/**
+ * The zoom button and floating slider over the viewfinder; [showStrip] adds the ISO row when it cannot sit below.
+ * [presetsOpen] says whether the zoom button is unfolded into its preset buttons.
+ */
 @Composable
 internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, engine: CameraEngine?, active: LiveControl?, select: (LiveControl?) -> Unit, modifier: Modifier,
-    showStrip: Boolean = true) {
+    showStrip: Boolean = true, presetsOpen: Boolean = false, onPresetsOpen: (Boolean) -> Unit = {}) {
     NativeCameraControls(state, active, select = liveSelect(state, model, engine, select), reset = { control ->
         when (control) {
             LiveControl.ISO, LiveControl.SHUTTER, LiveControl.APERTURE -> model.changeCapture { it.copy(manual = false, wbLocked = false) }
@@ -70,7 +77,8 @@ internal fun LiveCameraControls(state: CameraUiState, model: CameraViewModel, en
             LiveControl.ZOOM -> model.zoom(1f)
         }
         if (control != LiveControl.WB) select(null)
-    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier, showStrip = showStrip)
+    }, slider = { control, width, enabled -> ControlSlider(control, state, model, width, enabled) }, modifier = modifier, showStrip = showStrip,
+        presetsOpen = presetsOpen, onPresetsOpen = onPresetsOpen, onZoomPreset = model::zoomTo)
 }
 
 /** The ISO row on its own, for the black above the shutter; its slider still opens over the viewfinder. */
@@ -138,6 +146,9 @@ internal fun NativeCameraControls(
     slider: @Composable (LiveControl, androidx.compose.ui.unit.Dp, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     showStrip: Boolean = true,
+    presetsOpen: Boolean = false,
+    onPresetsOpen: (Boolean) -> Unit = {},
+    onZoomPreset: (Float) -> Unit = {},
 ) {
     if (!state.ready) return
     var lastControl by remember { mutableStateOf<LiveControl?>(null) }
@@ -160,7 +171,34 @@ internal fun NativeCameraControls(
                 val selected = active == LiveControl.ZOOM
                 val enabled = state.liveControlsEnabled && LiveControl.ZOOM.supported(state)
                 val value = LiveControl.ZOOM.value(state)
-                Surface(onClick = { select(if (selected) null else LiveControl.ZOOM) }, enabled = enabled,
+                val zoom = state.capture.zoom
+                val presets = remember(state.minZoom, state.maxZoom) { ZoomControls.presets(state.minZoom, state.maxZoom) }
+                val unfolded = presetsOpen && enabled && presets.size > 1
+                val fold by rememberUpdatedState(onPresetsOpen)
+                // The presets fold back into one button a moment after the last pick, unless the fine slider is open.
+                LaunchedEffect(unfolded, selected, zoom) { if (unfolded && !selected) { delay(2_000); fold(false) } }
+                if (unfolded) {
+                    val chosenIndex = ZoomControls.activePreset(presets, zoom)
+                    Row(Modifier.height(48.dp).background(GrainSurfaces.glass, CircleShape).border(1.dp, GrainSurfaces.glassEdge, CircleShape)
+                        .padding(horizontal = 4.dp).testTag("zoom-presets"), verticalAlignment = Alignment.CenterVertically) {
+                        presets.forEachIndexed { index, preset ->
+                            val chosen = index == chosenIndex
+                            // Tapping the chosen one again opens the fine slider; any other jumps to its ratio.
+                            Surface(onClick = { if (chosen) select(if (selected) null else LiveControl.ZOOM) else { if (selected) select(null); onZoomPreset(preset) } },
+                                enabled = enabled, shape = CircleShape, color = if (chosen) Color.White.copy(alpha = .2f) else Color.Transparent,
+                                modifier = Modifier.size(40.dp).testTag("zoom-preset-$index").semantics {
+                                    this.selected = chosen
+                                    contentDescription = "變焦 ${ZoomControls.short(preset)}×"
+                                }) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(if (chosen) ZoomControls.short(zoom) + "×" else ZoomControls.short(preset), Modifier.cameraControlRotation(),
+                                        style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false, fontWeight = FontWeight.Bold,
+                                        color = if (chosen) MaterialTheme.colorScheme.primary else Color.White)
+                                }
+                            }
+                        }
+                    }
+                } else Surface(onClick = { if (presets.size > 1) fold(true) else select(if (selected) null else LiveControl.ZOOM) }, enabled = enabled,
                     shape = CircleShape, color = Color.Transparent,
                     modifier = Modifier.size(48.dp).testTag("control-zoom").semantics {
                         contentDescription = "變焦 $value"
@@ -170,7 +208,7 @@ internal fun NativeCameraControls(
                         Surface(modifier = Modifier.size(40.dp), shape = CircleShape, color = GrainSurfaces.glass,
                             border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else GrainSurfaces.glassEdge)) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(value, Modifier.cameraControlRotation(), style = MaterialTheme.typography.labelMedium,
+                                Text(ZoomControls.short(zoom) + "×", Modifier.cameraControlRotation(), style = MaterialTheme.typography.labelMedium,
                                     maxLines = 1, softWrap = false, fontWeight = FontWeight.Bold,
                                     color = if (enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .55f))
                             }

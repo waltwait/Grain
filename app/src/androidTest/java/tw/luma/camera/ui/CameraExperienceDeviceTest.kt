@@ -25,6 +25,7 @@ import tw.luma.camera.CaptureMode
 import tw.luma.camera.MainActivity
 import tw.luma.camera.RecordingStatus
 import tw.luma.camera.camera.FrameAspect
+import tw.luma.camera.camera.ZoomControls
 import java.io.File
 import kotlin.math.abs
 
@@ -291,22 +292,23 @@ class CameraExperienceDeviceTest {
             assertEquals("Zoom must be centered above the control strip", frame.center.x, zoom.center.x, 2f)
             assertTrue("Zoom must remain separate from the control strip", zoom.bottom <= strip.top + 2f)
             if (state.maxZoom > state.minZoom) {
-                ui.onNodeWithTag("control-zoom").performClick()
+                openZoomSlider()
                 val expandedFrame = ui.onNodeWithTag("viewfinder-frame").fetchSemanticsNode().boundsInRoot
-                val expandedZoom = ui.onNodeWithTag("control-zoom").fetchSemanticsNode().boundsInRoot
+                val expandedZoom = ui.onNodeWithTag(zoomAnchor()).fetchSemanticsNode().boundsInRoot
                 val expandedStrip = ui.onNodeWithTag("camera-control-strip").fetchSemanticsNode().boundsInRoot
                 assertEquals("Opening a slider must not resize the viewfinder", frame, expandedFrame)
-                assertEquals("Opening a slider must not move zoom", zoom, expandedZoom)
+                assertEquals("The zoom presets open where the zoom button was", zoom.center.x, expandedZoom.center.x, 2f)
+                assertEquals("The zoom presets open where the zoom button was", zoom.center.y, expandedZoom.center.y, 2f)
                 assertEquals("Opening a slider must not move the control strip", strip, expandedStrip)
                 val slider = ui.onNodeWithTag("live-slider-zoom").fetchSemanticsNode().boundsInRoot
-                assertTrue("The floating slider must not cover zoom", slider.bottom <= zoom.top + 2f)
+                assertTrue("The floating slider must not cover zoom", slider.bottom <= expandedZoom.top + 2f)
                 assertTrue("Camera adjustments must use a horizontal slider", slider.width > slider.height * 3f)
                 ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeRight(startX = width * .2f, endX = width * .8f) }
                 ui.waitUntil(5_000) { abs(model().state.value.capture.zoom - state.capture.zoom) > .01f }
                 val rightZoom = model().state.value.capture.zoom
                 ui.onNodeWithTag("live-slider-zoom").performTouchInput { swipeLeft(startX = width * .8f, endX = width * .2f) }
                 ui.waitUntil(5_000) { model().state.value.capture.zoom < rightZoom - .01f }
-                ui.onNodeWithTag("control-zoom").performClick()
+                closeZoomSlider()
                 ui.runOnIdle { model().zoom(state.minZoom) }
                 swipeViewfinder(right = true)
                 ui.waitUntil(5_000) { model().state.value.capture.zoom > state.minZoom + .01f }
@@ -319,6 +321,31 @@ class CameraExperienceDeviceTest {
             }
             screenshot("luma-photo-ui.png")
         } finally { ui.runOnIdle { model().aspect(before.photoAspect); model().mode(before.mode) } }
+    }
+
+    @Test fun zoomButtonUnfoldsIntoPresetsThatJumpThereAndFoldBack() {
+        ready()
+        val state = model().state.value
+        val presets = ZoomControls.presets(state.minZoom, state.maxZoom)
+        org.junit.Assume.assumeTrue("Needs a lens with more than one zoom stop", presets.size > 1)
+        try {
+            ui.onNodeWithTag("control-zoom").performClick()
+            ui.onNodeWithTag("zoom-presets").assertIsDisplayed()
+            presets.indices.forEach { ui.onNodeWithTag("zoom-preset-$it").assertIsDisplayed() }
+            ui.onAllNodesWithTag("live-slider-zoom").assertCountEquals(0)
+            val target = presets.last()
+            ui.onNodeWithTag("zoom-preset-${presets.lastIndex}").performClick()
+            ui.waitUntil(5_000) { abs(model().state.value.capture.zoom - target) < .01f }
+            ui.onNodeWithTag("zoom-preset-${presets.lastIndex}").assertIsSelected()
+            // A moment after the pick the presets fold back into one button that shows the new ratio.
+            ui.waitUntil(6_000) { ui.onAllNodesWithTag("zoom-presets").fetchSemanticsNodes().isEmpty() }
+            ui.onNodeWithTag("control-zoom").assertTextEquals(ZoomControls.short(target) + "×")
+            // Tapping the picture folds them at once.
+            ui.onNodeWithTag("control-zoom").performClick()
+            ui.onNodeWithTag("zoom-presets").assertIsDisplayed()
+            ui.onNodeWithTag("viewfinder-frame").performTouchInput { click(Offset(width / 2f, height * .3f)) }
+            ui.waitUntil(3_000) { ui.onAllNodesWithTag("zoom-presets").fetchSemanticsNodes().isEmpty() }
+        } finally { ui.runOnIdle { model().zoom(1f) } }
     }
 
     @Test fun filteredVideoRecordsDecodesAndStopsCleanly() {
@@ -336,10 +363,11 @@ class CameraExperienceDeviceTest {
             if (model.state.value.maxZoom > model.state.value.minZoom) {
                 val duration = model.state.value.recordingNs
                 val initialZoom = model.state.value.capture.zoom
-                ui.onNodeWithTag("control-zoom").assertIsEnabled().performClick()
+                ui.onNodeWithTag("control-zoom").assertIsEnabled()
+                openZoomSlider()
                 ui.onNodeWithTag("live-slider-zoom").performSemanticsAction(SemanticsActions.SetProgress) { it(.6f) }
                 ui.waitUntil(5_000) { abs(model.state.value.capture.zoom - initialZoom) > .01f }
-                ui.onNodeWithTag("control-zoom").performClick()
+                closeZoomSlider()
                 val sliderZoom = model.state.value.capture.zoom
                 ui.onNodeWithTag("viewfinder").performTouchInput {
                     val center = Offset(width / 2f, height * .45f)
@@ -1136,6 +1164,21 @@ class CameraExperienceDeviceTest {
         "${MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${MediaStore.Images.Media.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.Images.Media.IS_PENDING} = 0",
         arrayOf(path, ui.activity.packageName), null,
     )?.use { it.count } ?: 0
+
+    /** Opens the zoom slider: straight from the zoom button, or from the chosen preset once the button has unfolded. */
+    private fun openZoomSlider() {
+        ui.onNodeWithTag("control-zoom").performClick()
+        if (zoomAnchor() == "zoom-presets") chosenZoomPreset().performClick()
+        ui.onNodeWithTag("live-slider-zoom").assertIsDisplayed()
+    }
+
+    private fun closeZoomSlider() {
+        if (zoomAnchor() == "zoom-presets") chosenZoomPreset().performClick() else ui.onNodeWithTag("control-zoom").performClick()
+    }
+
+    private fun zoomAnchor() = if (ui.onAllNodesWithTag("zoom-presets").fetchSemanticsNodes().isEmpty()) "control-zoom" else "zoom-presets"
+
+    private fun chosenZoomPreset() = ui.onNode(isSelected() and hasAnyAncestor(hasTestTag("zoom-presets")))
 
     private fun swipeViewfinder(right: Boolean) {
         ui.onNodeWithTag("viewfinder").performTouchInput {

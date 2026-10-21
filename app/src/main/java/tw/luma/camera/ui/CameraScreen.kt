@@ -123,6 +123,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var dockHeight by remember { mutableStateOf<Int?>(null) }
     var shutterHeight by remember { mutableStateOf<Int?>(null) }
     var trayOpen by rememberSaveable { mutableStateOf(false) }
+    var zoomPresetsOpen by remember { mutableStateOf(false) }
     // Photos are always taken 4:3 and cut to their ratio when saved, so a photo ratio never rebinds the camera.
     val bindAspect = if (state.mode == CaptureMode.VIDEO) state.videoAspect else FrameAspect.RATIO_4_3
     val currentEngine by rememberUpdatedState(engine)
@@ -188,6 +189,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         exposureFeedback = null
         exposureDragging = false
         activeControl = null
+        zoomPresetsOpen = false
         var owned: CameraEngine? = null
         val landscapeFrame = viewfinderLandscape
         if (permitted && landscapeFrame != null) {
@@ -211,6 +213,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                 override fun onDown(event: MotionEvent) = true
                 override fun onSingleTapUp(event: MotionEvent): Boolean {
                     trayOpen = false
+                    zoomPresetsOpen = false
                     if (multiTouch || !model.state.value.liveControlsEnabled) return false
                     val request = ++focusRequest
                     activeControl = null
@@ -345,7 +348,8 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         exposureFeedback?.let { Box(Modifier.viewfinderFrame(frame)) { ExposureIndicator(it, state.capabilities.exposureStep) } }
                         // Upright, the ISO row lives in the dock so nothing but the zoom badge covers the picture.
                         if (panel != "filters") LiveCameraControls(state, model, engine, activeControl, selectControl,
-                            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { controlsLift.toDp() }), showStrip = landscape)
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { controlsLift.toDp() }), showStrip = landscape,
+                            presetsOpen = zoomPresetsOpen, onPresetsOpen = { zoomPresetsOpen = it })
                     }
                     if (panel == "filters") {
                         FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,

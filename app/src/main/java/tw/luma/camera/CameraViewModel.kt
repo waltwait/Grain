@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import tw.luma.camera.camera.FlashMode
 import tw.luma.camera.camera.ZoomControls
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import tw.luma.camera.camera.ActualCapture
 import tw.luma.camera.camera.CaptureFeedback
@@ -90,6 +92,7 @@ data class CameraUiState(
 class CameraViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(CameraUiState())
     val state: StateFlow<CameraUiState> = _state
+    private var zoomGlide: Job? = null
     // Camera metadata and recorder events must not invalidate the whole camera screen.
     val uiState = state.map { it.copy(actual = ActualCapture(), recordingNs = 0) }
         .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CameraUiState())
@@ -176,7 +179,17 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
         prefs.edit().putString(if (current.mode == CaptureMode.VIDEO) "videoAspect" else "photoAspect", next.name).apply()
     }
-    fun zoom(value: Float) { _state.update {
+    /** Pinches, drags and the slider set the zoom at once, stopping a preset's glide. */
+    fun zoom(value: Float) { zoomGlide?.cancel(); setZoom(value) }
+
+    /** A zoom button glides to its ratio in about a fifth of a second instead of jumping. */
+    fun zoomTo(value: Float) {
+        zoomGlide?.cancel()
+        val steps = ZoomControls.glide(_state.value.capture.zoom, value)
+        zoomGlide = viewModelScope.launch { for (step in steps) { setZoom(step); delay(16) } }
+    }
+
+    private fun setZoom(value: Float) { _state.update {
         val zoom = value.coerceIn(it.minZoom, it.maxZoom)
         if (it.liveControlsEnabled && zoom != it.capture.zoom) it.copy(capture = it.capture.copy(zoom = zoom)) else it
     } }
