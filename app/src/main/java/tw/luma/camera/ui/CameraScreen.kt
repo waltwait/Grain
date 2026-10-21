@@ -9,6 +9,9 @@ import android.view.GestureDetector
 import android.view.ScaleGestureDetector
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateRectAsState
 import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.toRect
@@ -143,14 +146,16 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val openLut = { lutImport.launch(arrayOf("*/*")) }
     if (updatesOpen) {
         destinations.SaveableStateProvider("updates") {
-            AppUpdateScreen(updateModel) { updatesOpen = false }
+            Box(Modifier.fillMaxSize().background(Color.Black).openIn()) { AppUpdateScreen(updateModel) { updatesOpen = false } }
         }
         return
     }
     if (galleryOpen) {
         destinations.SaveableStateProvider("gallery") {
-            GalleryScreen(galleryModel, { galleryOpen = false }, editorModel, state.luts,
-                { galleryModel.refresh() })
+            Box(Modifier.fillMaxSize().background(Color.Black).openIn()) {
+                GalleryScreen(galleryModel, { galleryOpen = false }, editorModel, state.luts,
+                    { galleryModel.refresh() })
+            }
         }
         return
     }
@@ -339,7 +344,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         }
                     }
                     if (permitted && state.cameraError == null) {
-                        CameraToolbar(state, model, newVersion, Modifier.align(Alignment.TopCenter)
+                        CameraToolbar(state, model, newVersion, Modifier.align(Alignment.TopCenter).openIn(1f)
                             .onSizeChanged { toolbarHeight = it.height }.testTag("camera-toolbar")) {
                             activeControl = null
                             trayOpen = false
@@ -351,17 +356,17 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                             Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { controlsLift.toDp() }), showStrip = landscape,
                             presetsOpen = zoomPresetsOpen, onPresetsOpen = { zoomPresetsOpen = it })
                     }
-                    if (panel == "filters") {
+                    AnimatedVisibility(panel == "filters", Modifier.align(Alignment.BottomCenter).padding(bottom = dockDp),
+                        enter = GrainMotion.riseIn(), exit = GrainMotion.sinkOut()) {
                         FilterTray(state.luts, state.selectedLut, state.filter.strength, !state.busy && !state.recording,
                             maxHeight = (maxHeight - 56.dp - dockDp).coerceAtLeast(48.dp), compact = maxHeight - dockDp < 360.dp,
                             onSelect = model::selectLut,
                             onStrength = { value -> model.changeFilter { it.copy(strength = value) } },
                             onStrengthFinished = model::saveFilterStrength, onImport = openLut,
-                            onMore = { panel = "filter" }, onClose = { panel = null },
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dockDp))
+                            onMore = { panel = "filter" }, onClose = { panel = null })
                     }
-                    if (landscape && trayOpen) ControlsPanel(state, model, { trayOpen = false },
-                        Modifier.align(Alignment.BottomCenter).padding(12.dp).widthIn(max = 420.dp))
+                    if (landscape) AnimatedVisibility(trayOpen, Modifier.align(Alignment.BottomCenter).padding(12.dp).widthIn(max = 420.dp),
+                        enter = GrainMotion.riseIn(), exit = GrainMotion.sinkOut()) { ControlsPanel(state, model, { trayOpen = false }, Modifier) }
                 }
             }
             if (landscape) Row(Modifier.fillMaxSize()) {
@@ -376,8 +381,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         Modifier.graphicsLayer { alpha = if (permitted && state.cameraError == null) 1f else 0f })
                 }
                 // Like iOS, the panel rises from just above the shutter over the ISO row and mode capsule it hides.
-                if (trayOpen) ControlsPanel(state, model, { trayOpen = false }, Modifier.align(Alignment.BottomCenter)
-                    .padding(bottom = with(density) { (shutterHeight ?: 112.dp.roundToPx()).toDp() }).padding(horizontal = 12.dp))
+                AnimatedVisibility(trayOpen, Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = with(density) { (shutterHeight ?: 112.dp.roundToPx()).toDp() }).padding(horizontal = 12.dp),
+                    enter = GrainMotion.riseIn(), exit = GrainMotion.sinkOut()) { ControlsPanel(state, model, { trayOpen = false }, Modifier) }
             }
         }
     }
@@ -458,8 +464,11 @@ private fun FocusIndicator(feedback: FocusFeedback, onFinished: () -> Unit) {
 private fun PreviewArea(state: CameraUiState, model: CameraViewModel, view: PreviewView, granted: Boolean, frame: IntRect, modifier: Modifier, permission: () -> Unit, retry: () -> Unit, appSettings: () -> Unit) {
     Box(modifier.background(Color.Black).testTag("viewfinder"), contentAlignment = Alignment.Center) {
         if (granted) {
+            // The picture fades up from black when the camera starts or restarts, instead of popping in.
+            val veil by animateFloatAsState(if (state.ready) 0f else 1f, if (state.ready) GrainMotion.enter(360) else snap(), label = "preview-veil")
             Box(Modifier.viewfinderFrame(frame).testTag("viewfinder-frame")) {
                 AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "相機即時預覽，可點擊對焦、左右滑動或雙指變焦" })
+                if (veil > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = veil }.background(Color.Black))
                 if (state.grid && state.ready) Canvas(Modifier.fillMaxSize()) {
                     for (i in 1..2) {
                         drawLine(Color.White.copy(alpha = .2f), Offset(size.width * i / 3, 0f), Offset(size.width * i / 3, size.height), 1.dp.toPx())
@@ -574,7 +583,9 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             enabled, openGallery)
     }
     val flip: @Composable () -> Unit = { GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, glass = true, click = model::toggleFront) }
-    if (landscape) Column(modifier.background(Color.Black).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp, vertical = 8.dp),
+    // The ISO row and mode capsule fade under the controls panel as it rises.
+    val underPanel by animateFloatAsState(if (trayOpen) 0f else 1f, if (trayOpen) GrainMotion.exit(120) else GrainMotion.enter(240), label = "dock-under-panel")
+    if (landscape) Column(modifier.openIn(1f).background(Color.Black).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
         ModeCapsule(state, model, enabled)
         more()
@@ -583,10 +594,10 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             gallery(); flip()
         }
         CameraStatusLine(state.message)
-    } else Column(modifier.then(swipe).testTag("camera-dock").padding(horizontal = 22.dp).padding(bottom = 4.dp),
+    } else Column(modifier.openIn(1f).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp).padding(bottom = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         // The ISO row and mode capsule keep their place under the controls panel, so opening it never moves the viewfinder.
-        Column(Modifier.graphicsLayer { alpha = if (trayOpen) 0f else 1f }.then(if (trayOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
+        Column(Modifier.graphicsLayer { alpha = underPanel }.then(if (trayOpen) Modifier.clearAndSetSemantics { } else Modifier)) {
             controls()
             Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
                 ModeCapsule(state, model, enabled)
@@ -651,15 +662,17 @@ private fun ControlsPanel(state: CameraUiState, model: CameraViewModel, close: (
                     model.saveOriginal(!state.saveOriginal)
                 }
             }
-            if (ratios) Row(Modifier.padding(top = 10.dp).fillMaxWidth().background(Color.White.copy(alpha = .1f), CircleShape).padding(4.dp)) {
-                FrameAspect.entries.forEach { aspect ->
-                    val chosen = state.frameAspect == aspect
-                    Surface(onClick = { model.aspect(aspect) }, enabled = enabled, shape = CircleShape,
-                        color = if (chosen) Color.White.copy(alpha = .2f) else Color.Transparent,
-                        modifier = Modifier.weight(1f).height(40.dp).testTag("frame-aspect-${aspect.name}").semantics { selected = chosen }) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(aspect.label, Modifier.cameraControlRotation(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge,
-                                color = if (chosen) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .4f))
+            AnimatedVisibility(ratios, enter = GrainMotion.expandIn(), exit = GrainMotion.shrinkOut()) {
+                Row(Modifier.padding(top = 10.dp).fillMaxWidth().background(Color.White.copy(alpha = .1f), CircleShape).padding(4.dp)) {
+                    FrameAspect.entries.forEach { aspect ->
+                        val chosen = state.frameAspect == aspect
+                        Surface(onClick = { model.aspect(aspect) }, enabled = enabled, shape = CircleShape,
+                            color = if (chosen) Color.White.copy(alpha = .2f) else Color.Transparent,
+                            modifier = Modifier.weight(1f).height(40.dp).testTag("frame-aspect-${aspect.name}").semantics { selected = chosen }) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(aspect.label, Modifier.cameraControlRotation(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge,
+                                    color = if (chosen) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (enabled) 1f else .4f))
+                            }
                         }
                     }
                 }
@@ -802,7 +815,7 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                     TextButton(onClick = { deviceInfo = !deviceInfo }, modifier = Modifier.testTag("device-info-toggle")) {
                         Text("裝置資訊 ${if (deviceInfo) "▴" else "▾"}")
                     }
-                    if (deviceInfo) {
+                    AnimatedVisibility(deviceInfo, enter = GrainMotion.expandIn(), exit = GrainMotion.shrinkOut()) { Column {
                         Text("Grain ${tw.luma.camera.BuildConfig.VERSION_NAME} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
                             style = MaterialTheme.typography.bodySmall)
                         val wb = when (caps.whiteBalanceBackend) {
@@ -816,10 +829,10 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                             state.actual.manualWbApplied == false -> "與設定不一致"
                             else -> "等待鏡頭"
                         }}"
-                        Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n色溫控制：$wb$wbResult",
+                        Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n色溫控制：$wb$wbResult\n變焦範圍：${ZoomControls.short(state.minZoom)}×–${ZoomControls.short(state.maxZoom)}×",
                             Modifier.padding(vertical = 12.dp).testTag("device-info"), style = MaterialTheme.typography.bodyMedium)
                         Text("照片：Pictures/Grain\n編輯：Pictures/Grain Edits\n影片：Movies/Grain\n轉檔影片：Movies/Grain Edits", style = MaterialTheme.typography.bodySmall)
-                    }
+                    } }
                 }
             }
         }

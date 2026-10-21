@@ -1,13 +1,14 @@
 package tw.luma.camera.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -177,7 +178,12 @@ internal fun NativeCameraControls(
                 val fold by rememberUpdatedState(onPresetsOpen)
                 // The presets fold back into one button a moment after the last pick, unless the fine slider is open.
                 LaunchedEffect(unfolded, selected, zoom) { if (unfolded && !selected) { delay(2_000); fold(false) } }
-                if (unfolded) {
+                // The button grows into the capsule of presets and shrinks back into it.
+                AnimatedContent(unfolded, contentAlignment = Alignment.Center, label = "zoom-presets", transitionSpec = {
+                    (fadeIn(GrainMotion.enter(220)) + scaleIn(GrainMotion.enter(), initialScale = .8f)) togetherWith
+                        fadeOut(GrainMotion.exit(100)) using SizeTransform(clip = false)
+                }) { open ->
+                if (open) {
                     val chosenIndex = ZoomControls.activePreset(presets, zoom)
                     Row(Modifier.height(48.dp).background(GrainSurfaces.glass, CircleShape).border(1.dp, GrainSurfaces.glassEdge, CircleShape)
                         .padding(horizontal = 4.dp).testTag("zoom-presets"), verticalAlignment = Alignment.CenterVertically) {
@@ -215,14 +221,14 @@ internal fun NativeCameraControls(
                         }
                     }
                 }
+                }
             }
             if (showStrip) ControlStrip(state, active, select, Modifier.onSizeChanged { stripHeight = it.height })
         }
         if (popupControl != null && popupControl.supported(state)) {
             val enabled = state.liveControlsEnabled && active == popupControl
             AnimatedVisibility(visible = active != null && state.liveControlsEnabled,
-                enter = fadeIn(tween(100)) + slideInVertically(tween(100, easing = LinearOutSlowInEasing)) { it / 12 },
-                exit = fadeOut(tween(90)) + slideOutVertically(tween(90, easing = LinearOutSlowInEasing)) { it / 16 },
+                enter = GrainMotion.riseIn(), exit = GrainMotion.sinkOut(),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = anchorHeight + 6.dp).width(popupWidth)) {
                 Surface(shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = panelOpacity),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = .08f))) {
