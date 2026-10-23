@@ -26,7 +26,7 @@ class DualCameraTest {
     @Test fun devicesShowTheTwoIds() {
         assertEquals("0＋1", DualCamera.label(back to front))
     }
-    @Test fun smallPictureSitsInTheTopLeftWithEqualGapsInsideTheFrame() {
+    @Test fun smallPictureSitsInTheTopRightWithEqualGapsInsideTheFrame() {
         for ((width, height) in listOf(9 to 16, 3 to 4, 1 to 1, 16 to 9)) {
             val inset = DualCamera.inset(width, height)
             // Normalized coordinates span 2 across, and +y points up.
@@ -35,7 +35,8 @@ class DualCameraTest {
             val right = (inset.offsetX + inset.scale + 1) / 2 * width
             val bottom = (1 - (inset.offsetY - inset.scale)) / 2 * height
             assertTrue(left > 0 && top > 0 && right < width && bottom < height)
-            assertEquals("Same gap above and beside in a $width:$height frame", left, top, 1e-4f * width)
+            assertTrue("Right half of the frame", left > width / 2f)
+            assertEquals("Same gap above and beside in a $width:$height frame", width - right, top, 1e-4f * width)
             assertEquals(DualCamera.SCALE * width, right - left, 1e-4f * width)
             assertTrue("A third of the frame or less", abs((right - left) / width - (bottom - top) / height) < 1e-4f)
         }
