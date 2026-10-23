@@ -28,6 +28,9 @@ class LutSurfaceProcessor(private val targets: Int = CameraEffect.PREVIEW, priva
     private val originalTransform = FloatArray(16)
     private val transformed = FloatArray(16)
     @Volatile var settings = FilterSettings()
+    /** Frames drawn so far; a camera that stops sending them leaves this still. */
+    @Volatile var frames = 0L
+        private set
 
     val effect = object : CameraEffect(targets, executor, this, Consumer { onError(it) }) {}
 
@@ -61,6 +64,7 @@ class LutSurfaceProcessor(private val targets: Int = CameraEffect.PREVIEW, priva
                                 if (output.targets and CameraEffect.VIDEO_CAPTURE != 0) egl!!.timestamp(window, frame.timestamp)
                                 grainTrace(if (output.targets and CameraEffect.VIDEO_CAPTURE != 0) "Grain.video.present" else "Grain.preview.present") { egl!!.swap(window) }
                             }
+                            frames++
                         }
                     } catch (e: Throwable) {
                         active = null

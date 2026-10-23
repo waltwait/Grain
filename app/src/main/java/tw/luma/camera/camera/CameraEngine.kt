@@ -16,13 +16,18 @@ import android.os.SystemClock
 import android.util.Rational
 import android.view.Surface
 import androidx.camera.camera2.interop.Camera2CameraControl
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.core.Camera
+import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.CompositionSettings
+import androidx.camera.core.ConcurrentCamera
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.MirrorMode
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
 import androidx.camera.core.ViewPort
@@ -39,13 +44,14 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import tw.luma.camera.gl.LutSurfaceProcessor
 import java.io.File
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 
-@androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
+@androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class, androidx.camera.core.ExperimentalMirrorMode::class])
 class CameraEngine(
     private val context: Context,
     private val lifecycle: LifecycleOwner,
@@ -56,8 +62,15 @@ class CameraEngine(
     private val onError: (String) -> Unit,
     private val onVideoQuality: (String) -> Unit = {},
     private val onControlError: (String) -> Unit = onError,
+    /** The two camera ids this phone can record together, or "" when it lists no front and back pair. */
+    private val onDualLenses: (String) -> Unit = {},
+    /** The phone listed the pair but could not run it. */
+    private val onDualFailed: () -> Unit = {},
 ) : AutoCloseable {
     private val main = ContextCompat.getMainExecutor(context)
+    private val delays = android.os.Handler(android.os.Looper.getMainLooper())
+    // Recording together, both cameras report capture results; only this one, the big picture, drives the controls.
+    @Volatile private var dualMainId: String? = null
     private var provider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
@@ -84,8 +97,12 @@ class CameraEngine(
     var applying: Boolean = false
         private set
 
-    /** [landscape] is the viewfinder's on-screen shape; the frame and every output are cropped to [aspect] in it. */
-    fun bind(front: Boolean, video: Boolean = false, aspect: FrameAspect = FrameAspect.PHOTO_DEFAULT, landscape: Boolean = false) {
+    /**
+     * [landscape] is the viewfinder's on-screen shape; the frame and every output are cropped to [aspect] in it.
+     * With [dual] a video records the back and front cameras together where the phone allows it: the [front] one is
+     * the big picture or the small one in the corner, and the film is laid over both at once.
+     */
+    fun bind(front: Boolean, video: Boolean = false, aspect: FrameAspect = FrameAspect.PHOTO_DEFAULT, landscape: Boolean = false, dual: Boolean = false) {
         focusSequence++
         val token = ++generation
         camera = null
@@ -94,6 +111,8 @@ class CameraEngine(
         waitingForWhiteBalance = false
         hasAppliedSettings = false
         lastResultAt = 0L
+        dualMainId = null
+        delays.removeCallbacksAndMessages(null)
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             if (!closed && token == generation) {
@@ -101,10 +120,19 @@ class CameraEngine(
                     val p = future.get(); provider = p; p.unbindAll()
                     val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                     check(p.hasCamera(selector)) { "找不到${if (front) "前" else "後"}鏡頭" }
+                    val lenses = dualLenses(p)
+                    onDualLenses(lenses?.let(DualCamera::label) ?: "")
+                    val together = lenses?.takeIf { dual && video }?.let { (back, frontLens) -> if (front) frontLens to back else back to frontLens }
+                    dualMainId = together?.first?.id
+                    // Both pictures are composed before the film, so a 1080p preview is also the recording's detail.
+                    val previewSize = if (together != null) android.util.Size(1920, 1080) else android.util.Size(1280, 720)
                     val builder = Preview.Builder().setResolutionSelector(ResolutionSelector.Builder()
-                        .setResolutionStrategy(ResolutionStrategy(android.util.Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
+                        .setResolutionStrategy(ResolutionStrategy(previewSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
+                    // The recording copies the composed preview, so the front picture is shown unmirrored, as it is saved.
+                    if (together != null) builder.setMirrorMode(MirrorMode.MIRROR_MODE_OFF)
                     Camera2Interop.Extender(builder).setSessionCaptureCallback(object : CameraCaptureSession.CaptureCallback() {
                         override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
+                            dualMainId?.let { only -> if (runCatching { session.device.id }.getOrNull() != only) return }
                             val now = SystemClock.elapsedRealtime()
                             if (now - lastResultAt <= 300) return
                             lastResultAt = now
@@ -128,10 +156,28 @@ class CameraEngine(
                     }
                     val (width, height) = aspect.screenShape(landscape)
                     group.setViewPort(ViewPort.Builder(Rational(width, height), view.display?.rotation ?: Surface.ROTATION_0).build())
-                    camera = p.bindToLifecycle(lifecycle, selector, group.build())
+                    val useCases = group.build()
+                    camera = if (together == null) p.bindToLifecycle(lifecycle, selector, useCases) else {
+                        val (big, small) = together
+                        val inset = DualCamera.inset(width, height)
+                        try {
+                            p.bindToLifecycle(listOf(
+                                ConcurrentCamera.SingleCameraConfig(selector(big), useCases, CompositionSettings.DEFAULT, lifecycle),
+                                ConcurrentCamera.SingleCameraConfig(selector(small), useCases, CompositionSettings.Builder()
+                                    .setScale(inset.scale, inset.scale).setOffset(inset.offsetX, inset.offsetY).build(), lifecycle),
+                            )).cameras.first()
+                        } catch (_: Exception) {
+                            // Listed but refused: recording together is switched off and the screen binds one camera again.
+                            p.unbindAll(); dualMainId = null; onDualFailed(); return@runCatching
+                        }
+                    }
+                    val dualBound = together != null
+                    if (dualBound) watchDual(token)
                     caps = CameraCapabilities.read(camera!!.cameraInfo, context)
                     val zoom = camera!!.cameraInfo.zoomState.value
-                    onReady(caps, camera!!.cameraInfo.hasFlashUnit(), zoom?.minZoomRatio ?: 1f, zoom?.maxZoomRatio ?: 1f)
+                    // Together, a phone only promises 1× and up, so the ultra-wide stop is left out.
+                    val minZoom = (zoom?.minZoomRatio ?: 1f).let { if (dualBound) maxOf(1f, it) else it }
+                    onReady(caps, camera!!.cameraInfo.hasFlashUnit(), minZoom, maxOf(minZoom, zoom?.maxZoomRatio ?: 1f))
                     // The crop is what gets encoded, so 3:2 from a 1440×1080 stream reads 960p rather than 1080p.
                     onVideoQuality(videoCapture?.resolutionInfo?.let { info ->
                         val crop = info.cropRect.takeUnless { it.isEmpty }
@@ -140,6 +186,30 @@ class CameraEngine(
                 }.onFailure { onError(it.message ?: "相機啟動失敗") }
             }
         }, main)
+    }
+
+    /** The back and front cameras this phone lists for running at once, or null when it lists no such pair. */
+    private fun dualLenses(p: ProcessCameraProvider): Pair<DualCamera.Lens, DualCamera.Lens>? {
+        if (Build.VERSION.SDK_INT < 30 || !context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_CONCURRENT)) return null
+        fun id(info: CameraInfo) = Camera2CameraInfo.from(info).cameraId
+        fun main(selector: CameraSelector) = runCatching { id(p.getCameraInfo(selector)) }.getOrNull()
+        return runCatching {
+            DualCamera.pick(p.availableConcurrentCameraInfos.map { set -> set.map { DualCamera.Lens(id(it), it.lensFacing) } },
+                main(CameraSelector.DEFAULT_BACK_CAMERA), main(CameraSelector.DEFAULT_FRONT_CAMERA))
+        }.getOrNull()
+    }
+
+    /** Names the facing too: CameraX tells two cameras apart for concurrent use by the facings their selectors ask for. */
+    private fun selector(lens: DualCamera.Lens) = CameraSelector.Builder().requireLensFacing(lens.facing)
+        .addCameraFilter { infos -> infos.filter { Camera2CameraInfo.from(it).cameraId == lens.id } }.build()
+
+    /** A second camera that never starts leaves the composed picture without frames; give up on recording together then. */
+    private fun watchDual(token: Int) {
+        val drawn = processor.frames
+        delays.postDelayed({
+            if (!closed && token == generation && processor.frames == drawn &&
+                lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) onDualFailed()
+        }, 5_000)
     }
 
     private fun captureResult(request: CaptureRequest, result: TotalCaptureResult, now: Long) {
@@ -337,7 +407,7 @@ class CameraEngine(
         })
     }
 
-    override fun close() { closed = true; generation++; recording?.stop(); provider?.unbindAll(); camera = null; imageCapture = null; videoCapture = null; processor.close() }
+    override fun close() { closed = true; generation++; delays.removeCallbacksAndMessages(null); recording?.stop(); provider?.unbindAll(); camera = null; imageCapture = null; videoCapture = null; processor.close() }
 }
 
 enum class FocusOutcome { FOCUSED, NOT_FOCUSED, METERED, UNAVAILABLE }

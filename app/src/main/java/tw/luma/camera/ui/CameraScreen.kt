@@ -188,7 +188,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
-    DisposableEffect(view, lifecycle, permitted, state.front, state.mode, bindAspect, viewfinderLandscape, retry) {
+    DisposableEffect(view, lifecycle, permitted, state.front, state.mode, bindAspect, viewfinderLandscape, state.dualWanted, retry) {
         focusFeedback = null
         exposureAnchor = null
         exposureFeedback = null
@@ -201,7 +201,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
             val targets = CameraEffect.PREVIEW or if (state.mode == CaptureMode.VIDEO) CameraEffect.VIDEO_CAPTURE else 0
             val processor = LutSurfaceProcessor(targets) { error -> ContextCompat.getMainExecutor(context).execute { model.cameraError(error.message ?: "GPU 預覽失敗") } }
             val next = CameraEngine(context, lifecycle, view, processor, model::ready, model::actual, model::cameraError,
-                model::videoQuality, model::message)
+                model::videoQuality, model::message, model::dualLenses, model::dualFailed)
             next.setCaptureRotation(currentRotation)
             owned = next; engine = next; processor.settings = state.filter
             var multiTouch = false
@@ -288,7 +288,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                 if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) exposureDragging = false
                 true
             }
-            view.post { model.state.value.let { next.bind(it.front, it.mode == CaptureMode.VIDEO, bindAspect, landscapeFrame) } }
+            view.post { model.state.value.let { next.bind(it.front, it.mode == CaptureMode.VIDEO, bindAspect, landscapeFrame, it.dualWanted) } }
         }
         onDispose { owned?.close(); view.setOnTouchListener(null); view.keepScreenOn = false; engine = null; focusFeedback = null }
     }
@@ -582,7 +582,9 @@ private fun CameraDock(state: CameraUiState, model: CameraViewModel, shutter: ()
             state.captureFeedback.phase == tw.luma.camera.camera.PhotoPhase.SAVING || state.recordingStatus == RecordingStatus.STOPPING,
             enabled, openGallery)
     }
-    val flip: @Composable () -> Unit = { GlassIcon("flip", "切換前後鏡頭", enabled && state.ready, glass = true, click = model::toggleFront) }
+    // Recording together, the same button swaps which camera fills the frame.
+    val flip: @Composable () -> Unit = { GlassIcon("flip", if (state.dualWanted && state.dualAvailable) "互換大小畫面" else "切換前後鏡頭",
+        enabled && state.ready, glass = true, click = model::toggleFront) }
     // The ISO row and mode capsule fade under the controls panel as it rises.
     val underPanel by animateFloatAsState(if (trayOpen) 0f else 1f, if (trayOpen) GrainMotion.exit(120) else GrainMotion.enter(240), label = "dock-under-panel")
     if (landscape) Column(modifier.openIn(1f).background(Color.Black).then(swipe).testTag("camera-dock").padding(horizontal = 22.dp, vertical = 8.dp),
@@ -657,6 +659,9 @@ private fun ControlsPanel(state: CameraUiState, model: CameraViewModel, close: (
                 } else PanelTile("mic", "錄音", if (state.recordWithAudio) "開" else "關", !state.recording, Modifier.weight(1f)) {
                     model.recordWithAudio(!state.recordWithAudio)
                 }
+                // Only on phones that list a front and back pair; elsewhere there is nothing to switch.
+                if (!photo && state.dualAvailable) PanelTile("dual", "前後同錄", if (state.dual) "開" else "關", enabled,
+                    Modifier.weight(1f).testTag("dual-toggle").semantics { selected = state.dual }) { model.dual(!state.dual) }
                 PanelTile("grid", "格線", if (state.grid) "開" else "關", true, Modifier.weight(1f)) { model.toggleGrid() }
                 if (photo) PanelTile("original", "存原圖", if (state.saveOriginal) "開" else "關", !state.busy, Modifier.weight(1f)) {
                     model.saveOriginal(!state.saveOriginal)
@@ -733,6 +738,10 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
             "back" -> { line(.66f,.2f,.34f,.5f); line(.34f,.5f,.66f,.8f) }
             "dots" -> for (x in listOf(.36f, .64f)) for (y in listOf(.2f, .5f, .8f)) drawCircle(tint, w*.09f, Offset(w*x,h*y))
             "ratio" -> drawRoundRect(tint, Offset(w*.25f,h*.14f), androidx.compose.ui.geometry.Size(w*.5f,h*.72f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
+            "dual" -> {
+                drawRoundRect(tint, Offset(w*.22f,h*.1f), androidx.compose.ui.geometry.Size(w*.56f,h*.8f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
+                drawRoundRect(tint, Offset(w*.31f,h*.2f), androidx.compose.ui.geometry.Size(w*.2f,h*.27f), androidx.compose.ui.geometry.CornerRadius(w*.05f))
+            }
             "grid" -> {
                 drawRoundRect(tint, Offset(w*.12f,h*.12f), androidx.compose.ui.geometry.Size(w*.76f,h*.76f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
                 line(.37f,.12f,.37f,.88f); line(.63f,.12f,.63f,.88f); line(.12f,.37f,.88f,.37f); line(.12f,.63f,.88f,.63f)
@@ -829,7 +838,11 @@ private fun ControlsSheet(panel: String, state: CameraUiState, model: CameraView
                             state.actual.manualWbApplied == false -> "與設定不一致"
                             else -> "等待鏡頭"
                         }}"
-                        Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n色溫控制：$wb$wbResult\n變焦範圍：${ZoomControls.short(state.minZoom)}×–${ZoomControls.short(state.maxZoom)}×",
+                        Text("鏡頭 ID：${caps.id.ifBlank { "尚未連接" }}\n手動快門／ISO：${if (caps.manualSensor) "支援" else "未提供"}\n光圈：${if (caps.apertures.isEmpty()) "未回報" else if (caps.apertures.size == 1) "固定 f/${caps.apertures[0]}" else caps.apertures.joinToString { "f/$it" }}\n色溫控制：$wb$wbResult\n變焦範圍：${ZoomControls.short(state.minZoom)}×–${ZoomControls.short(state.maxZoom)}×\n前後同錄：${when (state.dualLenses) {
+                            null -> "尚未檢查"
+                            "" -> "不支援"
+                            else -> "支援 · 鏡頭 ${state.dualLenses}"
+                        }}",
                             Modifier.padding(vertical = 12.dp).testTag("device-info"), style = MaterialTheme.typography.bodyMedium)
                         Text("照片：Pictures/Grain\n編輯：Pictures/Grain Edits\n影片：Movies/Grain\n轉檔影片：Movies/Grain Edits", style = MaterialTheme.typography.bodySmall)
                     } }
