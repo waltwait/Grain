@@ -12,7 +12,7 @@ object DualCamera {
 
     /** The small picture's share of the frame's width and height. */
     const val SCALE = .3f
-    /** Its gap to the frame's top and left edges, as a share of the frame's width. */
+    /** Its gap to the frame's top and right edges, as a share of the frame's width. */
     private const val MARGIN = .045f
 
     /**
@@ -28,9 +28,9 @@ object DualCamera {
     /** Shown in device details: the two camera ids recorded together. */
     fun label(pair: Pair<Lens, Lens>): String = "${pair.first.id}＋${pair.second.id}"
 
-    /** The small picture in the top-left corner of a [width] × [height] frame, the same gap from both edges. */
+    /** The small picture in the top-right corner of a [width] × [height] frame, the same gap from both edges. */
     fun inset(width: Int, height: Int): Inset {
         val gap = 2 * MARGIN
-        return Inset(SCALE, -1 + gap + SCALE, 1 - gap * width / height - SCALE)
+        return Inset(SCALE, 1 - gap - SCALE, 1 - gap * width / height - SCALE)
     }
 }
