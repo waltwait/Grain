@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -83,9 +84,16 @@ data class CameraUiState(
     val savedMime: String = "image/jpeg",
     val photoAspect: FrameAspect = FrameAspect.PHOTO_DEFAULT,
     val videoAspect: FrameAspect = FrameAspect.VIDEO_DEFAULT,
+    /** Videos record the back and front cameras together, where [dualLenses] says the phone can. */
+    val dual: Boolean = false,
+    /** The two camera ids the phone lists for running at once; "" when it lists none, null before the camera first starts. */
+    val dualLenses: String? = null,
 ) {
     val recording get() = recordingStatus != RecordingStatus.IDLE
     val frameAspect get() = if (mode == CaptureMode.VIDEO) videoAspect else photoAspect
+    val dualAvailable get() = !dualLenses.isNullOrEmpty()
+    /** What the camera is asked for; it records together only on a phone that lists a front and back pair. */
+    val dualWanted get() = dual && mode == CaptureMode.VIDEO
     val liveControlsEnabled get() = ready && !busy && recordingStatus != RecordingStatus.STARTING && recordingStatus != RecordingStatus.STOPPING
 }
 
@@ -111,6 +119,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         _state.update { it.copy(saveOriginal = prefs.getBoolean("saveOriginal", false), grid = prefs.getBoolean("grid", true), recordWithAudio = prefs.getBoolean("recordWithAudio", true),
+            dual = prefs.getBoolean("dual", false),
             photoAspect = FrameAspect.parse(prefs.getString("photoAspect", null), FrameAspect.PHOTO_DEFAULT),
             videoAspect = FrameAspect.parse(prefs.getString("videoAspect", null), FrameAspect.VIDEO_DEFAULT)) }
         loadLatestMedia()
@@ -194,6 +203,22 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         if (it.liveControlsEnabled && zoom != it.capture.zoom) it.copy(capture = it.capture.copy(zoom = zoom)) else it
     } }
     fun recordWithAudio(enabled: Boolean) { if (!_state.value.recording) { _state.update { it.copy(recordWithAudio = enabled) }; prefs.edit().putBoolean("recordWithAudio", enabled).apply() } }
+    /** Switching between one camera and two rebinds the camera, so it waits until a clip is saved. */
+    fun dual(enabled: Boolean) {
+        val current = _state.value
+        if (current.busy || current.recording || enabled == current.dual) return
+        _state.update {
+            if (it.mode == CaptureMode.VIDEO) it.copy(dual = enabled, ready = false, actual = ActualCapture(), cameraError = null)
+            else it.copy(dual = enabled)
+        }
+        prefs.edit { putBoolean("dual", enabled) }
+    }
+    fun dualLenses(value: String) { _state.update { if (it.dualLenses == value) it else it.copy(dualLenses = value) } }
+    /** The phone listed the pair but could not run it: back to one camera, which the screen then binds. */
+    fun dualFailed() {
+        _state.update { it.copy(dual = false, ready = false, actual = ActualCapture(), message = "這支手機無法同時開前後鏡頭") }
+        prefs.edit { putBoolean("dual", false) }
+    }
     fun videoQuality(value: String) { _state.update { it.copy(videoQuality = value) } }
     fun toggleGrid() { _state.update { it.copy(grid = !it.grid) }; prefs.edit().putBoolean("grid", _state.value.grid).apply() }
     fun saveOriginal(enabled: Boolean) { _state.update { it.copy(saveOriginal = enabled) }; prefs.edit().putBoolean("saveOriginal", enabled).apply() }

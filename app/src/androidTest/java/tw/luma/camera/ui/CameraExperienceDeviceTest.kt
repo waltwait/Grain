@@ -428,6 +428,51 @@ class CameraExperienceDeviceTest {
         }
     }
 
+    @Test fun dualRecordingFilmsBothPicturesInOneClip() {
+        ready()
+        val model = model()
+        val before = model.state.value
+        var saved: android.net.Uri? = null
+        try {
+            ui.runOnIdle { model.recordWithAudio(false); model.selectLut("builtin-2") }
+            ui.onNodeWithTag("mode-video").performClick()
+            ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.VIDEO }
+            org.junit.Assume.assumeTrue("Needs a phone that lists a front and back camera pair", model.state.value.dualAvailable)
+            ui.onNodeWithTag("controls-tray-toggle").performClick()
+            if (!model.state.value.dual) ui.onNodeWithTag("dual-toggle").performClick()
+            ui.onNodeWithTag("dual-toggle").assertIsSelected()
+            ui.onNodeWithTag("controls-tray-close").performClick()
+            ui.waitUntil(30_000) { model.state.value.ready }
+            assertTrue("Together a phone only promises 1× and up", model.state.value.minZoom >= 1f)
+            ui.onNodeWithTag("shutter").performClick()
+            ui.waitUntil(20_000) { model.state.value.recordingStatus == RecordingStatus.RECORDING && model.state.value.recordingNs >= 2_000_000_000L }
+            ui.onNodeWithTag("shutter").performClick()
+            ui.waitUntil(20_000) { !model.state.value.recording && model.state.value.savedUri != before.savedUri && model.state.value.savedMime == "video/mp4" }
+            saved = model.state.value.savedUri
+            assertTrue("The second camera kept running", model.state.value.dual)
+            MediaMetadataRetriever().use { retriever ->
+                retriever.setDataSource(ui.activity, requireNotNull(saved))
+                assertTrue(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)!!.toLong() >= 1500)
+                val frame = requireNotNull(retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC))
+                try {
+                    // The small picture spans 4.5–34.5% of the frame from one corner, so a corner point of this grid lands in it.
+                    for (y in 1..4) for (x in 1..4) {
+                        val color = frame.getPixel(frame.width*x/5, frame.height*y/5)
+                        assertTrue("The monochrome LUT must cover both pictures", abs(Color.red(color)-Color.green(color)) <= 6 && abs(Color.green(color)-Color.blue(color)) <= 6)
+                    }
+                } finally { frame.recycle() }
+            }
+        } finally {
+            saved?.let { ui.activity.contentResolver.delete(it, null, null) }
+            ui.runOnIdle {
+                model.dual(before.dual); model.recordWithAudio(before.recordWithAudio)
+                model.selectLut(before.selectedLut); model.changeFilter { before.filter }
+                model.mode(CaptureMode.PHOTO)
+            }
+            ready()
+        }
+    }
+
     @Test fun galleryFiltersAndReturnsToLiveCamera() {
         ready()
         ui.onNodeWithTag("open-gallery").performClick()
