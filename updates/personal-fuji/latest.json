@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.21",
-  "versionCode": 54,
+  "versionName": "0.7.22",
+  "versionCode": 55,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.21/Grain-0.7.21-personal-fuji.apk",
-  "apkSize": 15366556,
-  "apkSha256": "a7914e8be8089d5368a536b6b45121e3079de9a687793e9345d880bb347c05dc",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.22/Grain-0.7.22-personal-fuji.apk",
+  "apkSize": 15366552,
+  "apkSha256": "5af9429e914d6324bc1934f433ac4710bc714c74cf639f4f135ef6493aab52fe",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 錄影新增「前後同錄」：在錄影的控制面板打開後，後鏡頭占滿畫面、前鏡頭在左上角小窗，兩個畫面一起套同一卷底片，存成一支影片。只有手機開放同時使用前後鏡頭時才會出現這個選項；打不開時會自動回到單鏡頭。\n- 前後同錄時，翻轉鈕改成互換大小畫面；前鏡頭在預覽和成品裡都不鏡像，看到的就是錄到的。\n- 第一版先固定小窗位置，前後同錄時沒有 .6 超廣角。\n- 「裝置資訊」多一行，顯示這支手機能不能前後同錄。"
+  "notes": "- 前後同錄的小窗移到畫面右上角，預覽和存下的影片都一樣。"
 }
