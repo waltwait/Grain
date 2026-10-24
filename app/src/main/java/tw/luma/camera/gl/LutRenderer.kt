@@ -102,7 +102,39 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
             uniform vec3 uMin, uMax, uWhiteBalance;
             uniform int uAdjustWhiteBalance;
             uniform mat3 uGamut;
+            uniform float uSkin, uSkinInside;
+            uniform vec4 uSkinRect;
+            uniform vec2 uSkinRadius;
             varying vec2 vUv;
+            // Near 1 for skin: a window around skin's blue and red difference, away from black and clipped white.
+            float skinTone(vec3 c) {
+                float y = dot(c, vec3(0.299, 0.587, 0.114));
+                float cb = dot(c, vec3(-0.168736, -0.331264, 0.5));
+                float cr = dot(c, vec3(0.5, -0.418688, -0.081312));
+                return (1.0 - smoothstep(0.07, 0.11, abs(cb + 0.1))) * (1.0 - smoothstep(0.06, 0.09, abs(cr - 0.1)))
+                    * smoothstep(0.08, 0.2, y) * (1.0 - smoothstep(0.92, 0.99, y));
+            }
+            // An edge-keeping blur over two rings of eight: neighbours unlike this pixel, like an eyelash or a lip line, barely count.
+            vec3 softenSkin(vec3 c, vec2 uv) {
+                float mask = skinTone(c);
+                if (mask <= 0.0) return c;
+                vec3 sum = c;
+                float total = 1.0;
+                for (int i = 0; i < 8; i++) {
+                    float a = float(i) * 0.785398;
+                    vec2 dir = vec2(cos(a), sin(a));
+                    for (int ring = 1; ring <= 2; ring++) {
+                        vec2 p = uv + dir * uSkinRadius * (float(ring) * 0.5);
+                        if (uSkinInside > 0.5) p = clamp(p, uSkinRect.xy, uSkinRect.zw);
+                        vec3 s = texture2D(uImage, p).rgb;
+                        vec3 d = s - c;
+                        float w = exp(-dot(d, d) * 80.0) * (ring == 1 ? 1.0 : 0.6);
+                        sum += s * w;
+                        total += w;
+                    }
+                }
+                return mix(c, sum / total, uSkin * mask);
+            }
             vec3 decodeSrgb(vec3 v) { return mix(v / 12.92, pow((v + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), v)); }
             vec3 encodeSrgb(vec3 v) { v = max(v, vec3(0.0)); return mix(v * 12.92, 1.055 * pow(v, vec3(1.0/2.4)) - 0.055, step(vec3(0.0031308), v)); }
             vec3 encodeLog(vec3 v) {
@@ -117,6 +149,11 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
             }
             void main() {
                 vec3 original = texture2D(uImage, vUv).rgb;
+                // Skin is softened before the film, so the front picture still shares the back one's colour.
+                if (uSkin > 0.0) {
+                    bool within = all(greaterThanEqual(vUv, uSkinRect.xy)) && all(lessThanEqual(vUv, uSkinRect.zw));
+                    if (within == (uSkinInside > 0.5)) original = softenSkin(original, vUv);
+                }
                 vec3 adjusted = original;
                 if (uBrightness != 0.0 || uAdjustWhiteBalance != 0) {
                     vec3 linear = decodeSrgb(original) * exp2(uBrightness);
@@ -185,8 +222,9 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
         uploaded = lut
     }
 
+    /** [skin] softens skin in the front camera's part of a back-and-front frame; null leaves the picture as it is. */
     fun draw(image: Int, width: Int, height: Int, settings: FilterSettings, transform: FloatArray = identity,
-        viewportX: Int = 0, viewportY: Int = 0) {
+        viewportX: Int = 0, viewportY: Int = 0, skin: SkinPass? = null) {
         if (uploaded !== settings.lut) grainTrace("Grain.lut.upload") { upload(settings.lut) }
         GLES30.glViewport(viewportX, viewportY, width, height)
         GLES30.glUseProgram(program)
@@ -211,6 +249,12 @@ class LutRenderer(private val external: Boolean) : AutoCloseable {
             GLES30.glUniform3fv(uniform("uMax"), 1, settings.lut?.domainMax ?: defaultMax, 0)
             GLES30.glUniformMatrix3fv(uniform("uGamut"), 1, false, ColorMatrices.forEncoding(settings.encoding), 0)
             appliedSettings = settings
+        }
+        GLES30.glUniform1f(uniform("uSkin"), skin?.strength ?: 0f)
+        if (skin != null) {
+            GLES30.glUniform1f(uniform("uSkinInside"), if (skin.inside) 1f else 0f)
+            GLES30.glUniform4fv(uniform("uSkinRect"), 1, skin.rect, 0)
+            GLES30.glUniform2fv(uniform("uSkinRadius"), 1, skin.radius, 0)
         }
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
         GLES30.glDisableVertexAttribArray(position); GLES30.glDisableVertexAttribArray(uv)

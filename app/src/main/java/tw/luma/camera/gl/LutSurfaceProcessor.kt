@@ -28,6 +28,8 @@ class LutSurfaceProcessor(private val targets: Int = CameraEffect.PREVIEW, priva
     private val originalTransform = FloatArray(16)
     private val transformed = FloatArray(16)
     @Volatile var settings = FilterSettings()
+    /** Where the front camera is in a back-and-front frame, to soften skin there; null draws the picture as it is. */
+    @Volatile var skin: SkinArea? = null
     /** Frames drawn so far; a camera that stops sending them leaves this still. */
     @Volatile var frames = 0L
         private set
@@ -57,10 +59,12 @@ class LutSurfaceProcessor(private val targets: Int = CameraEffect.PREVIEW, priva
                             grainTrace("Grain.preview.acquire") { frame.updateTexImage() }
                             frame.getTransformMatrix(originalTransform)
                             val snapshot = settings
+                            // The area is in the composed frame, which the input buffer holds through its own transform.
+                            val softened = skin?.inBuffer(originalTransform)
                             for ((output, window) in outputs) {
                                 egl!!.makeCurrent(window)
                                 output.updateTransformMatrix(transformed, originalTransform)
-                                grainTrace("Grain.preview.draw") { renderer!!.draw(id, output.size.width, output.size.height, snapshot, transformed) }
+                                grainTrace("Grain.preview.draw") { renderer!!.draw(id, output.size.width, output.size.height, snapshot, transformed, skin = softened) }
                                 if (output.targets and CameraEffect.VIDEO_CAPTURE != 0) egl!!.timestamp(window, frame.timestamp)
                                 grainTrace(if (output.targets and CameraEffect.VIDEO_CAPTURE != 0) "Grain.video.present" else "Grain.preview.present") { egl!!.swap(window) }
                             }

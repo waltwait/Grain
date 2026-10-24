@@ -88,6 +88,8 @@ data class CameraUiState(
     val dual: Boolean = false,
     /** The two camera ids the phone lists for running at once; "" when it lists none, null before the camera first starts. */
     val dualLenses: String? = null,
+    /** Recording together, the front camera's skin is lightly softened. */
+    val softSkin: Boolean = true,
 ) {
     val recording get() = recordingStatus != RecordingStatus.IDLE
     val frameAspect get() = if (mode == CaptureMode.VIDEO) videoAspect else photoAspect
@@ -119,7 +121,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         _state.update { it.copy(saveOriginal = prefs.getBoolean("saveOriginal", false), grid = prefs.getBoolean("grid", true), recordWithAudio = prefs.getBoolean("recordWithAudio", true),
-            dual = prefs.getBoolean("dual", false),
+            dual = prefs.getBoolean("dual", false), softSkin = prefs.getBoolean("softSkin", true),
             photoAspect = FrameAspect.parse(prefs.getString("photoAspect", null), FrameAspect.PHOTO_DEFAULT),
             videoAspect = FrameAspect.parse(prefs.getString("videoAspect", null), FrameAspect.VIDEO_DEFAULT)) }
         loadLatestMedia()
@@ -214,6 +216,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         prefs.edit { putBoolean("dual", enabled) }
     }
     fun dualLenses(value: String) { _state.update { if (it.dualLenses == value) it else it.copy(dualLenses = value) } }
+    /** Only the shader changes, so this works mid-clip too. */
+    fun softSkin(enabled: Boolean) { _state.update { it.copy(softSkin = enabled) }; prefs.edit { putBoolean("softSkin", enabled) } }
     /** The phone listed the pair but could not run it: back to one camera, which the screen then binds. */
     fun dualFailed() {
         _state.update { it.copy(dual = false, ready = false, actual = ActualCapture(), message = "這支手機無法同時開前後鏡頭") }

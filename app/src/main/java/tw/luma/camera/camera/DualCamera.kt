@@ -1,6 +1,7 @@
 package tw.luma.camera.camera
 
 import androidx.camera.core.CameraSelector
+import tw.luma.camera.gl.SkinArea
 
 /** Front and back recording at once, on phones that list the two lenses for concurrent use. */
 object DualCamera {
@@ -32,5 +33,17 @@ object DualCamera {
     fun inset(width: Int, height: Int): Inset {
         val gap = 2 * MARGIN
         return Inset(SCALE, 1 - gap - SCALE, 1 - gap * width / height - SCALE)
+    }
+
+    /**
+     * Where the front camera is in a [width] × [height] composed frame: the inset when it is the small picture
+     * ([frontSmall]), or the rest of the frame when it is the big one. Its skin blur reaches 1% of that picture's width.
+     */
+    fun skinArea(width: Int, height: Int, frontSmall: Boolean): SkinArea {
+        val inset = inset(width, height)
+        val reach = .01f * if (frontSmall) inset.scale else 1f
+        return SkinArea((inset.offsetX - inset.scale + 1) / 2, (inset.offsetY - inset.scale + 1) / 2,
+            (inset.offsetX + inset.scale + 1) / 2, (inset.offsetY + inset.scale + 1) / 2, frontSmall,
+            reach, reach * width / height)
     }
 }
