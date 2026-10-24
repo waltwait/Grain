@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.22",
-  "versionCode": 55,
+  "versionName": "0.7.23",
+  "versionCode": 56,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.22/Grain-0.7.22-personal-fuji.apk",
-  "apkSize": 15366552,
-  "apkSha256": "5af9429e914d6324bc1934f433ac4710bc714c74cf639f4f135ef6493aab52fe",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.23/Grain-0.7.23-personal-fuji.apk",
+  "apkSize": 15366556,
+  "apkSha256": "70b455c506a03f7f90532f165f2a6d764123ffb9ee6f725279382c6926d2a7bf",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 前後同錄的小窗移到畫面右上角，預覽和存下的影片都一樣。"
+  "notes": "- 前後同錄新增「柔膚」：只柔化前鏡頭畫面裡的皮膚，眼睛、髮絲這些邊緣保持清楚，再和後鏡頭一起套同一卷底片。開前後同錄時才會出現在控制面板，預設開，錄影中也能切換。"
 }
