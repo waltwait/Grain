@@ -47,6 +47,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import tw.luma.camera.gl.LutSurfaceProcessor
+import tw.luma.camera.gl.SkinArea
 import java.io.File
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
@@ -71,6 +72,9 @@ class CameraEngine(
     private val delays = android.os.Handler(android.os.Looper.getMainLooper())
     // Recording together, both cameras report capture results; only this one, the big picture, drives the controls.
     @Volatile private var dualMainId: String? = null
+    // Where the front camera sits while recording together, and whether its skin is softened there.
+    private var frontArea: SkinArea? = null
+    private var softSkin = true
     private var provider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
@@ -112,6 +116,8 @@ class CameraEngine(
         hasAppliedSettings = false
         lastResultAt = 0L
         dualMainId = null
+        frontArea = null
+        processor.skin = null
         delays.removeCallbacksAndMessages(null)
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
@@ -172,7 +178,11 @@ class CameraEngine(
                         }
                     }
                     val dualBound = together != null
-                    if (dualBound) watchDual(token)
+                    if (dualBound) {
+                        watchDual(token)
+                        frontArea = DualCamera.skinArea(width, height, frontSmall = !front)
+                        setSoftSkin(softSkin)
+                    }
                     caps = CameraCapabilities.read(camera!!.cameraInfo, context)
                     val zoom = camera!!.cameraInfo.zoomState.value
                     // Together, a phone only promises 1× and up, so the ultra-wide stop is left out.
@@ -370,6 +380,9 @@ class CameraEngine(
     }
 
     fun setFilter(filter: tw.luma.camera.gl.FilterSettings) { processor.settings = filter }
+
+    /** Softens the front camera's skin while recording together; takes effect on the next frame, even mid-clip. */
+    fun setSoftSkin(enabled: Boolean) { softSkin = enabled; processor.skin = frontArea?.takeIf { enabled } }
 
     /** Snapshot at the shutter/start action. Do not rotate Preview or an active video stream. */
     fun setCaptureRotation(rotation: Int) { require(rotation in Surface.ROTATION_0..Surface.ROTATION_270); captureRotation = rotation }

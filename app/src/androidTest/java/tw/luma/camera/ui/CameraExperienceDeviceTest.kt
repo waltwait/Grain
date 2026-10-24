@@ -441,6 +441,9 @@ class CameraExperienceDeviceTest {
             ui.onNodeWithTag("controls-tray-toggle").performClick()
             if (!model.state.value.dual) ui.onNodeWithTag("dual-toggle").performClick()
             ui.onNodeWithTag("dual-toggle").assertIsSelected()
+            // Softening the front camera's skin comes with recording together and starts on.
+            if (!model.state.value.softSkin) ui.onNodeWithTag("soft-skin-toggle").performClick()
+            ui.onNodeWithTag("soft-skin-toggle").assertIsSelected()
             ui.onNodeWithTag("controls-tray-close").performClick()
             ui.waitUntil(30_000) { model.state.value.ready }
             assertTrue("Together a phone only promises 1× and up", model.state.value.minZoom >= 1f)
@@ -465,7 +468,7 @@ class CameraExperienceDeviceTest {
         } finally {
             saved?.let { ui.activity.contentResolver.delete(it, null, null) }
             ui.runOnIdle {
-                model.dual(before.dual); model.recordWithAudio(before.recordWithAudio)
+                model.dual(before.dual); model.softSkin(before.softSkin); model.recordWithAudio(before.recordWithAudio)
                 model.selectLut(before.selectedLut); model.changeFilter { before.filter }
                 model.mode(CaptureMode.PHOTO)
             }

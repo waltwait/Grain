@@ -26,6 +26,19 @@ class DualCameraTest {
     @Test fun devicesShowTheTwoIds() {
         assertEquals("0＋1", DualCamera.label(back to front))
     }
+    @Test fun skinIsSoftenedWhereTheFrontCameraIs() {
+        val inset = DualCamera.inset(9, 16)
+        val small = DualCamera.skinArea(9, 16, frontSmall = true)
+        // Texture coordinates run 0–1 with y up, the inset's normalized coordinates −1–1.
+        assertEquals((inset.offsetX - inset.scale + 1) / 2, small.left, 1e-6f)
+        assertEquals((inset.offsetY + inset.scale + 1) / 2, small.top, 1e-6f)
+        assertTrue(small.inside && small.right < 1f && small.top < 1f && small.left > .5f && small.bottom > .5f)
+        val big = DualCamera.skinArea(9, 16, frontSmall = false)
+        assertFalse("A big front picture is softened around the inset", big.inside)
+        assertEquals(small.copy(inside = false, radiusX = big.radiusX, radiusY = big.radiusY), big)
+        assertEquals("The blur reaches the same share of either picture", big.radiusX * DualCamera.SCALE, small.radiusX, 1e-6f)
+        assertEquals("Round in pixels", small.radiusX * 9 / 16, small.radiusY, 1e-6f)
+    }
     @Test fun smallPictureSitsInTheTopRightWithEqualGapsInsideTheFrame() {
         for ((width, height) in listOf(9 to 16, 3 to 4, 1 to 1, 16 to 9)) {
             val inset = DualCamera.inset(width, height)

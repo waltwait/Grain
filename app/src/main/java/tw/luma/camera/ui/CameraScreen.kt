@@ -306,6 +306,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     BackHandler(enabled = trayOpen) { trayOpen = false }
     LaunchedEffect(engine, state.capture, state.ready) { if (state.ready) engine?.apply(state.capture) }
     LaunchedEffect(engine, state.filter) { engine?.setFilter(state.filter) }
+    LaunchedEffect(engine, state.softSkin) { engine?.setSoftSkin(state.softSkin) }
     SideEffect { view.keepScreenOn = state.recording }
     BackHandler(enabled = state.recording && activeControl == null && panel == null) { model.stopVideo(engine) }
     LaunchedEffect(state.message) { state.message?.let { delay(5000); model.clearMessage(it) } }
@@ -662,6 +663,9 @@ private fun ControlsPanel(state: CameraUiState, model: CameraViewModel, close: (
                 // Only on phones that list a front and back pair; elsewhere there is nothing to switch.
                 if (!photo && state.dualAvailable) PanelTile("dual", "前後同錄", if (state.dual) "開" else "關", enabled,
                     Modifier.weight(1f).testTag("dual-toggle").semantics { selected = state.dual }) { model.dual(!state.dual) }
+                // Softening touches only the front camera's picture, so it appears with recording together.
+                if (!photo && state.dualAvailable && state.dual) PanelTile("skin", "柔膚", if (state.softSkin) "開" else "關", true,
+                    Modifier.weight(1f).testTag("soft-skin-toggle").semantics { selected = state.softSkin }) { model.softSkin(!state.softSkin) }
                 PanelTile("grid", "格線", if (state.grid) "開" else "關", true, Modifier.weight(1f)) { model.toggleGrid() }
                 if (photo) PanelTile("original", "存原圖", if (state.saveOriginal) "開" else "關", !state.busy, Modifier.weight(1f)) {
                     model.saveOriginal(!state.saveOriginal)
@@ -738,6 +742,10 @@ internal fun CameraGlyph(name: String, modifier: Modifier, tint: Color = Color.W
             "back" -> { line(.66f,.2f,.34f,.5f); line(.34f,.5f,.66f,.8f) }
             "dots" -> for (x in listOf(.36f, .64f)) for (y in listOf(.2f, .5f, .8f)) drawCircle(tint, w*.09f, Offset(w*x,h*y))
             "ratio" -> drawRoundRect(tint, Offset(w*.25f,h*.14f), androidx.compose.ui.geometry.Size(w*.5f,h*.72f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
+            "skin" -> {
+                drawCircle(tint, w*.3f, Offset(w*.44f,h*.56f), style = stroke)
+                line(.8f,.1f,.8f,.38f); line(.66f,.24f,.94f,.24f)
+            }
             "dual" -> {
                 drawRoundRect(tint, Offset(w*.22f,h*.1f), androidx.compose.ui.geometry.Size(w*.56f,h*.8f), androidx.compose.ui.geometry.CornerRadius(w*.1f), style=stroke)
                 drawRoundRect(tint, Offset(w*.31f,h*.2f), androidx.compose.ui.geometry.Size(w*.2f,h*.27f), androidx.compose.ui.geometry.CornerRadius(w*.05f))
