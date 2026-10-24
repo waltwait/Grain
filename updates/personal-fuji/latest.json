@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.23",
-  "versionCode": 56,
+  "versionName": "0.7.24",
+  "versionCode": 57,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.23/Grain-0.7.23-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.24/Grain-0.7.24-personal-fuji.apk",
   "apkSize": 15366556,
-  "apkSha256": "70b455c506a03f7f90532f165f2a6d764123ffb9ee6f725279382c6926d2a7bf",
+  "apkSha256": "9f8e861b1f1d9a18da68fcf739647d6fac15a15be7ced2a80f76322b1fc3828f",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 前後同錄新增「柔膚」：只柔化前鏡頭畫面裡的皮膚，眼睛、髮絲這些邊緣保持清楚，再和後鏡頭一起套同一卷底片。開前後同錄時才會出現在控制面板，預設開，錄影中也能切換。"
+  "notes": "- 「版本與更新」頁的更新說明不再被截成兩行，每一條都完整顯示。\n- 有新版時，版本號、檔案大小和更新說明合成一張卡片；下載中會顯示已下載與總大小。\n- 「下載新版／安裝」按鈕固定在畫面底部，更新說明再長也不會被推出畫面。"
 }
