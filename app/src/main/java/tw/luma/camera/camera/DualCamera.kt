@@ -1,6 +1,7 @@
 package tw.luma.camera.camera
 
 import androidx.camera.core.CameraSelector
+import androidx.exifinterface.media.ExifInterface
 import tw.luma.camera.gl.SkinArea
 
 /** Front and back recording at once, on phones that list the two lenses for concurrent use. */
@@ -33,6 +34,20 @@ object DualCamera {
     fun inset(width: Int, height: Int): Inset {
         val gap = 2 * MARGIN
         return Inset(SCALE, 1 - gap - SCALE, 1 - gap * width / height - SCALE)
+    }
+
+    /**
+     * Clockwise degrees that turn a composed frame upright. The frame is upright for the screen at [displayRotation];
+     * the photo should be upright for how the phone was held at the shutter, [captureRotation] (both `Surface.ROTATION_*`).
+     */
+    fun photoRotation(displayRotation: Int, captureRotation: Int): Int = ((displayRotation - captureRotation) * 90 + 360) % 360
+
+    /** The EXIF orientation tag for [degrees] clockwise. */
+    fun exifOrientation(degrees: Int): Int = when (degrees) {
+        90 -> ExifInterface.ORIENTATION_ROTATE_90
+        180 -> ExifInterface.ORIENTATION_ROTATE_180
+        270 -> ExifInterface.ORIENTATION_ROTATE_270
+        else -> ExifInterface.ORIENTATION_NORMAL
     }
 
     /**

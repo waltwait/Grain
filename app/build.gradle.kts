@@ -42,8 +42,8 @@ android {
         applicationId = "tw.luma.camera"
         minSdk = 29
         targetSdk = 37
-        versionCode = 57
-        versionName = "0.7.24"
+        versionCode = 58
+        versionName = "0.7.25"
         buildConfigField("String", "UPDATE_FEED_URL", updateFeedField("release"))
         buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

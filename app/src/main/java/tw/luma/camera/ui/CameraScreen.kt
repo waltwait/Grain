@@ -20,7 +20,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
-import androidx.camera.core.CameraEffect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
@@ -127,8 +126,13 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var shutterHeight by remember { mutableStateOf<Int?>(null) }
     var trayOpen by rememberSaveable { mutableStateOf(false) }
     var zoomPresetsOpen by remember { mutableStateOf(false) }
-    // Photos are always taken 4:3 and cut to their ratio when saved, so a photo ratio never rebinds the camera.
-    val bindAspect = if (state.mode == CaptureMode.VIDEO) state.videoAspect else FrameAspect.RATIO_4_3
+    // Photos are always taken 4:3 and cut to their ratio when saved, so a photo ratio never rebinds the camera; taken
+    // back and front, a photo is the composed frame, which is composed in its ratio so the inset stays inside it.
+    val bindAspect = when {
+        state.mode == CaptureMode.VIDEO -> state.videoAspect
+        state.dualPhoto -> state.photoAspect
+        else -> FrameAspect.RATIO_4_3
+    }
     val currentEngine by rememberUpdatedState(engine)
     val currentRotation by rememberUpdatedState(orientation.targetRotation)
     val currentDensity by rememberUpdatedState(LocalDensity.current.density)
@@ -198,8 +202,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
         var owned: CameraEngine? = null
         val landscapeFrame = viewfinderLandscape
         if (permitted && landscapeFrame != null) {
-            val targets = CameraEffect.PREVIEW or if (state.mode == CaptureMode.VIDEO) CameraEffect.VIDEO_CAPTURE else 0
-            val processor = LutSurfaceProcessor(targets) { error -> ContextCompat.getMainExecutor(context).execute { model.cameraError(error.message ?: "GPU 預覽失敗") } }
+            val processor = LutSurfaceProcessor { error -> ContextCompat.getMainExecutor(context).execute { model.cameraError(error.message ?: "GPU 預覽失敗") } }
             val next = CameraEngine(context, lifecycle, view, processor, model::ready, model::actual, model::cameraError,
                 model::videoQuality, model::message, model::dualLenses, model::dualFailed)
             next.setCaptureRotation(currentRotation)
@@ -651,20 +654,23 @@ private fun ControlsPanel(state: CameraUiState, model: CameraViewModel, close: (
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PanelTile("ratio", "比例", state.frameAspect.label, enabled, Modifier.weight(1f).testTag("frame-aspect"), selected = ratios) { ratios = !ratios }
-                if (photo) {
+                // Taken back and front, a photo is a composed frame with no flash to fire, so the tile makes room.
+                val together = state.dualAvailable && state.dualWanted
+                if (photo && !together) {
                     val usable = FlashControl.usable(state.hasFlash, state.capture.manual)
                     val flash = when (FlashControl.shown(state.capture.flash, usable)) { FlashMode.AUTO -> "自動"; FlashMode.ON -> "開"; FlashMode.OFF -> "關" }
                     PanelTile("flash", "閃光燈", flash, FlashControl.enabled(usable, state.busy, state.recording), Modifier.weight(1f)) {
                         model.changeCapture { it.copy(flash = it.flash.next()) }
                     }
-                } else PanelTile("mic", "錄音", if (state.recordWithAudio) "開" else "關", !state.recording, Modifier.weight(1f)) {
+                } else if (!photo) PanelTile("mic", "錄音", if (state.recordWithAudio) "開" else "關", !state.recording, Modifier.weight(1f)) {
                     model.recordWithAudio(!state.recordWithAudio)
                 }
-                // Only on phones that list a front and back pair; elsewhere there is nothing to switch.
-                if (!photo && state.dualAvailable) PanelTile("dual", "前後同錄", if (state.dual) "開" else "關", enabled,
-                    Modifier.weight(1f).testTag("dual-toggle").semantics { selected = state.dual }) { model.dual(!state.dual) }
-                // Softening touches only the front camera's picture, so it appears with recording together.
-                if (!photo && state.dualAvailable && state.dual) PanelTile("skin", "柔膚", if (state.softSkin) "開" else "關", true,
+                // Only on phones that list a front and back pair; elsewhere there is nothing to switch. Photos and videos
+                // each keep their own switch.
+                if (state.dualAvailable) PanelTile("dual", if (photo) "前後同拍" else "前後同錄", if (state.dualWanted) "開" else "關", enabled,
+                    Modifier.weight(1f).testTag("dual-toggle").semantics { selected = state.dualWanted }) { model.dual(!state.dualWanted) }
+                // Softening touches only the front camera's picture, so it appears with both cameras on.
+                if (together) PanelTile("skin", "柔膚", if (state.softSkin) "開" else "關", true,
                     Modifier.weight(1f).testTag("soft-skin-toggle").semantics { selected = state.softSkin }) { model.softSkin(!state.softSkin) }
                 PanelTile("grid", "格線", if (state.grid) "開" else "關", true, Modifier.weight(1f)) { model.toggleGrid() }
                 if (photo) PanelTile("original", "存原圖", if (state.saveOriginal) "開" else "關", !state.busy, Modifier.weight(1f)) {

@@ -1,6 +1,8 @@
 package tw.luma.camera.camera
 
+import android.view.Surface
 import androidx.camera.core.CameraSelector.LENS_FACING_BACK
+import androidx.exifinterface.media.ExifInterface
 import androidx.camera.core.CameraSelector.LENS_FACING_FRONT
 import org.junit.Assert.*
 import org.junit.Test
@@ -22,6 +24,18 @@ class DualCameraTest {
     @Test fun noPairWithoutBothFacings() {
         assertNull(DualCamera.pick(emptyList(), "0", "1"))
         assertNull(DualCamera.pick(listOf(listOf(back, wide), listOf(front, selfieWide)), "0", "1"))
+    }
+    @Test fun photosTurnUprightForHowThePhoneWasHeld() {
+        // The fixed upright camera screen composes an upright frame; held sideways, the photo turns with the phone.
+        assertEquals(0, DualCamera.photoRotation(Surface.ROTATION_0, Surface.ROTATION_0))
+        assertEquals(270, DualCamera.photoRotation(Surface.ROTATION_0, Surface.ROTATION_90))
+        assertEquals(180, DualCamera.photoRotation(Surface.ROTATION_0, Surface.ROTATION_180))
+        assertEquals(90, DualCamera.photoRotation(Surface.ROTATION_0, Surface.ROTATION_270))
+        // A screen already turned with the phone composes the frame that way.
+        assertEquals(0, DualCamera.photoRotation(Surface.ROTATION_90, Surface.ROTATION_90))
+        assertEquals(ExifInterface.ORIENTATION_ROTATE_270, DualCamera.exifOrientation(270))
+        assertEquals(ExifInterface.ORIENTATION_ROTATE_90, DualCamera.exifOrientation(90))
+        assertEquals(ExifInterface.ORIENTATION_NORMAL, DualCamera.exifOrientation(0))
     }
     @Test fun devicesShowTheTwoIds() {
         assertEquals("0＋1", DualCamera.label(back to front))
