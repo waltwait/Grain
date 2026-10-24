@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.24",
-  "versionCode": 57,
+  "versionName": "0.7.25",
+  "versionCode": 58,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.24/Grain-0.7.24-personal-fuji.apk",
-  "apkSize": 15366556,
-  "apkSha256": "9f8e861b1f1d9a18da68fcf739647d6fac15a15be7ced2a80f76322b1fc3828f",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.25/Grain-0.7.25-personal-fuji.apk",
+  "apkSize": 15382940,
+  "apkSha256": "ca46a149fb014f1fbff46b388170fd38abda9a828058ad88c278923a7a6a3705",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 「版本與更新」頁的更新說明不再被截成兩行，每一條都完整顯示。\n- 有新版時，版本號、檔案大小和更新說明合成一張卡片；下載中會顯示已下載與總大小。\n- 「下載新版／安裝」按鈕固定在畫面底部，更新說明再長也不會被推出畫面。"
+  "notes": "- 照片模式也能前後同拍：在照片的控制面板打開「前後同拍」，按快門會存下和畫面一模一樣的合成照片，右上角小窗、柔膚和底片都在。照片和錄影的開關分開。\n- 前後同拍的照片約 200–280 萬畫素，比一般照片小；打開時沒有閃光燈。"
 }
