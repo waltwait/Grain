@@ -20,7 +20,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
@@ -67,48 +66,65 @@ fun AppUpdateScreen(model: AppUpdateViewModel, back: () -> Unit) {
             BackIconButton(onClick = close, modifier = Modifier.testTag("update-back"))
             Text("版本與更新", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         }
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        // The notes scroll on their own; the action stays at the bottom, so a long list never pushes it off screen.
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Text("Grain", fontFamily = NewsreaderBrand, style = MaterialTheme.typography.headlineLarge)
             Text("目前版本 " + BuildConfig.VERSION_NAME, color = MaterialTheme.colorScheme.onSurfaceVariant)
             state.info?.let { info ->
-                Text(if (state.available) "新版 " + info.versionName else "已是最新版", style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.testTag("update-version"))
-                tw.luma.camera.update.UpdatePrompt.notesToShow(state.available, info.notes)?.let {
-                    Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                }
+                if (state.available) Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = GrainSurfaces.raised) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("新版 " + info.versionName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.testTag("update-version"))
+                        Text(tw.luma.camera.update.UpdatePrompt.sizeLabel(info.apkSize), style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("update-size"))
+                        tw.luma.camera.update.UpdatePrompt.notesToShow(true, info.notes)?.let { notes ->
+                            Column(Modifier.testTag("update-notes"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                tw.luma.camera.update.UpdatePrompt.noteLines(notes).forEach { line ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("•", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+                                        Text(line, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else Text("已是最新版", style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("update-version"))
             }
             if (state.downloading) {
                 LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth().testTag("update-progress").semantics { contentDescription = "下載進度" })
-                Text((state.progress * 100).roundToInt().toString() + "%", style = MaterialTheme.typography.bodySmall)
+                Text(state.info?.let { tw.luma.camera.update.UpdatePrompt.progressLabel(state.progress, it.apkSize) }
+                    ?: (state.progress * 100).roundToInt().toString() + "%", style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = model::cancel) { Text("取消下載") }
             }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("update-error")) }
-            if (!state.downloading) {
-                Button(onClick = {
-                    when {
-                        BuildConfig.UPDATE_FEED_URL.isBlank() -> {
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW,
-                                    "https://github.com/waltwait/Grain/releases/latest".toUri()))
-                            }.onFailure { model.error("無法開啟 GitHub 下載頁") }
-                        }
-                        state.download != null && state.available -> {
-                            if (context.packageManager.canRequestPackageInstalls()) model.prepareInstall()
-                            else {
-                                permissionPending = true
-                                runCatching { permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, ("package:" + context.packageName).toUri())) }
-                                    .onFailure { permissionPending = false; model.error("無法開啟安裝來源設定") }
-                            }
-                        }
-                        state.available -> model.download()
-                        else -> model.check()
+        }
+        if (!state.downloading) Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Button(onClick = {
+                when {
+                    BuildConfig.UPDATE_FEED_URL.isBlank() -> {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW,
+                                "https://github.com/waltwait/Grain/releases/latest".toUri()))
+                        }.onFailure { model.error("無法開啟 GitHub 下載頁") }
                     }
-                }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("update-primary")) {
-                    if (state.busy) CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = if (state.verifying) "正在驗證更新檔" else "正在檢查更新" }, strokeWidth = 2.dp)
-                    else Text(when { state.download != null && state.available -> "安裝"; state.available -> "下載新版"; else -> "檢查更新" })
+                    state.download != null && state.available -> {
+                        if (context.packageManager.canRequestPackageInstalls()) model.prepareInstall()
+                        else {
+                            permissionPending = true
+                            runCatching { permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, ("package:" + context.packageName).toUri())) }
+                                .onFailure { permissionPending = false; model.error("無法開啟安裝來源設定") }
+                        }
+                    }
+                    state.available -> model.download()
+                    else -> model.check()
                 }
-                if (state.info != null && state.available) TextButton(onClick = model::check, enabled = !state.busy) { Text("重新檢查") }
+            }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("update-primary")) {
+                if (state.busy) CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = if (state.verifying) "正在驗證更新檔" else "正在檢查更新" }, strokeWidth = 2.dp)
+                else Text(when { state.download != null && state.available -> "安裝"; state.available -> "下載新版"; else -> "檢查更新" })
             }
+            if (state.info != null && state.available) TextButton(onClick = model::check, enabled = !state.busy) { Text("重新檢查") }
         }
     }
 }
