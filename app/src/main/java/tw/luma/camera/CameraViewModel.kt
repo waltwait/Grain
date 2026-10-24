@@ -86,6 +86,8 @@ data class CameraUiState(
     val videoAspect: FrameAspect = FrameAspect.VIDEO_DEFAULT,
     /** Videos record the back and front cameras together, where [dualLenses] says the phone can. */
     val dual: Boolean = false,
+    /** Photos take the back and front cameras together; kept apart from videos, since such a photo is only about 2 MP. */
+    val dualPhoto: Boolean = false,
     /** The two camera ids the phone lists for running at once; "" when it lists none, null before the camera first starts. */
     val dualLenses: String? = null,
     /** Recording together, the front camera's skin is lightly softened. */
@@ -94,8 +96,8 @@ data class CameraUiState(
     val recording get() = recordingStatus != RecordingStatus.IDLE
     val frameAspect get() = if (mode == CaptureMode.VIDEO) videoAspect else photoAspect
     val dualAvailable get() = !dualLenses.isNullOrEmpty()
-    /** What the camera is asked for; it records together only on a phone that lists a front and back pair. */
-    val dualWanted get() = dual && mode == CaptureMode.VIDEO
+    /** What this mode asks of the camera; it runs both only on a phone that lists a front and back pair. */
+    val dualWanted get() = if (mode == CaptureMode.VIDEO) dual else dualPhoto
     val liveControlsEnabled get() = ready && !busy && recordingStatus != RecordingStatus.STARTING && recordingStatus != RecordingStatus.STOPPING
 }
 
@@ -121,7 +123,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         _state.update { it.copy(saveOriginal = prefs.getBoolean("saveOriginal", false), grid = prefs.getBoolean("grid", true), recordWithAudio = prefs.getBoolean("recordWithAudio", true),
-            dual = prefs.getBoolean("dual", false), softSkin = prefs.getBoolean("softSkin", true),
+            dual = prefs.getBoolean("dual", false), dualPhoto = prefs.getBoolean("dualPhoto", false), softSkin = prefs.getBoolean("softSkin", true),
             photoAspect = FrameAspect.parse(prefs.getString("photoAspect", null), FrameAspect.PHOTO_DEFAULT),
             videoAspect = FrameAspect.parse(prefs.getString("videoAspect", null), FrameAspect.VIDEO_DEFAULT)) }
         loadLatestMedia()
@@ -180,12 +182,14 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     } }
     fun toggleFront() { if (!_state.value.busy && !_state.value.recording) _state.update { it.copy(front = !it.front, ready = false, actual = ActualCapture(), cameraError = null, capture = CaptureSettings()) } }
     fun mode(mode: CaptureMode) { if (!_state.value.busy && !_state.value.recording && mode != _state.value.mode) _state.update { it.copy(mode = mode, ready = false, actual = ActualCapture(), cameraError = null, capture = it.capture.copy(manual = false, flash = FlashMode.OFF)) } }
-    /** Each mode keeps its own ratio. Photos are cut to it when saved, so only a video ratio rebinds the camera. */
+    /** Each mode keeps its own ratio. Photos are cut to it when saved, so only a video or back-and-front photo ratio rebinds the camera. */
     fun aspect(next: FrameAspect) {
         val current = _state.value
         if (current.busy || current.recording || next == current.frameAspect) return
         _state.update {
             if (it.mode == CaptureMode.VIDEO) it.copy(videoAspect = next, ready = false, actual = ActualCapture(), cameraError = null)
+            // A back-and-front photo is composed in its ratio, so that one rebinds too.
+            else if (it.dualPhoto) it.copy(photoAspect = next, ready = false, actual = ActualCapture(), cameraError = null)
             else it.copy(photoAspect = next)
         }
         prefs.edit().putString(if (current.mode == CaptureMode.VIDEO) "videoAspect" else "photoAspect", next.name).apply()
@@ -208,20 +212,21 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     /** Switching between one camera and two rebinds the camera, so it waits until a clip is saved. */
     fun dual(enabled: Boolean) {
         val current = _state.value
-        if (current.busy || current.recording || enabled == current.dual) return
+        if (current.busy || current.recording || enabled == current.dualWanted) return
+        val video = current.mode == CaptureMode.VIDEO
         _state.update {
-            if (it.mode == CaptureMode.VIDEO) it.copy(dual = enabled, ready = false, actual = ActualCapture(), cameraError = null)
-            else it.copy(dual = enabled)
+            val next = if (video) it.copy(dual = enabled) else it.copy(dualPhoto = enabled)
+            next.copy(ready = false, actual = ActualCapture(), cameraError = null)
         }
-        prefs.edit { putBoolean("dual", enabled) }
+        prefs.edit { putBoolean(if (video) "dual" else "dualPhoto", enabled) }
     }
     fun dualLenses(value: String) { _state.update { if (it.dualLenses == value) it else it.copy(dualLenses = value) } }
     /** Only the shader changes, so this works mid-clip too. */
     fun softSkin(enabled: Boolean) { _state.update { it.copy(softSkin = enabled) }; prefs.edit { putBoolean("softSkin", enabled) } }
     /** The phone listed the pair but could not run it: back to one camera, which the screen then binds. */
     fun dualFailed() {
-        _state.update { it.copy(dual = false, ready = false, actual = ActualCapture(), message = "這支手機無法同時開前後鏡頭") }
-        prefs.edit { putBoolean("dual", false) }
+        _state.update { it.copy(dual = false, dualPhoto = false, ready = false, actual = ActualCapture(), message = "這支手機無法同時開前後鏡頭") }
+        prefs.edit { putBoolean("dual", false); putBoolean("dualPhoto", false) }
     }
     fun videoQuality(value: String) { _state.update { it.copy(videoQuality = value) } }
     fun toggleGrid() { _state.update { it.copy(grid = !it.grid) }; prefs.edit().putBoolean("grid", _state.value.grid).apply() }

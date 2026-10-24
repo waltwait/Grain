@@ -20,6 +20,7 @@ import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.core.Camera
+import androidx.camera.core.CameraEffect
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.CompositionSettings
@@ -44,6 +45,7 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import tw.luma.camera.gl.LutSurfaceProcessor
@@ -75,6 +77,8 @@ class CameraEngine(
     // Where the front camera sits while recording together, and whether its skin is softened there.
     private var frontArea: SkinArea? = null
     private var softSkin = true
+    // Photos taken together are read from the composed frame instead of a capture use case.
+    private var photoFromFrame = false
     private var provider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
@@ -116,6 +120,7 @@ class CameraEngine(
         hasAppliedSettings = false
         lastResultAt = 0L
         dualMainId = null
+        photoFromFrame = false
         frontArea = null
         processor.skin = null
         delays.removeCallbacksAndMessages(null)
@@ -128,9 +133,12 @@ class CameraEngine(
                     check(p.hasCamera(selector)) { "找不到${if (front) "前" else "後"}鏡頭" }
                     val lenses = dualLenses(p)
                     onDualLenses(lenses?.let(DualCamera::label) ?: "")
-                    val together = lenses?.takeIf { dual && video }?.let { (back, frontLens) -> if (front) frontLens to back else back to frontLens }
+                    val together = lenses?.takeIf { dual }?.let { (back, frontLens) -> if (front) frontLens to back else back to frontLens }
                     dualMainId = together?.first?.id
-                    // Both pictures are composed before the film, so a 1080p preview is also the recording's detail.
+                    // CameraX composes two cameras only for a preview and a recording, so photos together bind those too.
+                    val recordable = video || together != null
+                    photoFromFrame = together != null && !video
+                    // Both pictures are composed before the film, so a 1080p preview is also the recording's and photo's detail.
                     val previewSize = if (together != null) android.util.Size(1920, 1080) else android.util.Size(1280, 720)
                     val builder = Preview.Builder().setResolutionSelector(ResolutionSelector.Builder()
                         .setResolutionStrategy(ResolutionStrategy(previewSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
@@ -147,8 +155,9 @@ class CameraEngine(
                         }
                     })
                     val preview = builder.build().also { it.setSurfaceProvider(view.surfaceProvider) }
-                    val group = UseCaseGroup.Builder().addUseCase(preview).addEffect(processor.effect)
-                    if (video) {
+                    val group = UseCaseGroup.Builder().addUseCase(preview)
+                        .addEffect(processor.effect(CameraEffect.PREVIEW or if (recordable) CameraEffect.VIDEO_CAPTURE else 0))
+                    if (recordable) {
                         val recorder = Recorder.Builder().setAspectRatio(aspect.videoStream).setQualitySelector(QualitySelector.fromOrderedList(
                             listOf(Quality.FHD, Quality.HD, Quality.SD), FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build()
                         val capture = VideoCapture.withOutput(recorder).also { it.targetRotation = captureRotation }
@@ -187,7 +196,8 @@ class CameraEngine(
                     val zoom = camera!!.cameraInfo.zoomState.value
                     // Together, a phone only promises 1× and up, so the ultra-wide stop is left out.
                     val minZoom = (zoom?.minZoomRatio ?: 1f).let { if (dualBound) maxOf(1f, it) else it }
-                    onReady(caps, camera!!.cameraInfo.hasFlashUnit(), minZoom, maxOf(minZoom, zoom?.maxZoomRatio ?: 1f))
+                    // A photo from the composed frame has no capture request to fire the flash in.
+                    onReady(caps, camera!!.cameraInfo.hasFlashUnit() && !dualBound, minZoom, maxOf(minZoom, zoom?.maxZoomRatio ?: 1f))
                     // The crop is what gets encoded, so 3:2 from a 1440×1080 stream reads 960p rather than 1080p.
                     onVideoQuality(videoCapture?.resolutionInfo?.let { info ->
                         val crop = info.cropRect.takeUnless { it.isEmpty }
@@ -410,6 +420,7 @@ class CameraEngine(
     fun stopVideo() { recording?.stop() }
 
     fun capture(file: File, executor: Executor, callback: (Result<ActualCapture>) -> Unit) {
+        if (photoFromFrame) { captureFrame(file, executor, callback); return }
         val capture = imageCapture
         if (capture == null || closed) { callback(Result.failure(IllegalStateException("相機尚未就緒"))); return }
         if (applying || waitingForWhiteBalance) { callback(Result.failure(IllegalStateException("拍攝參數正在套用，請稍後再拍"))); return }
@@ -418,6 +429,32 @@ class CameraEngine(
             override fun onImageSaved(result: ImageCapture.OutputFileResults) { callback(Result.success(latest)) }
             override fun onError(exception: ImageCaptureException) { callback(Result.failure(exception)) }
         })
+    }
+
+    /**
+     * A back-and-front photo: the next composed frame, softened but before the film, saved as a JPEG whose orientation
+     * tag turns it upright for how the phone was held. The photo pipeline then crops it and applies the film as usual.
+     */
+    private fun captureFrame(file: File, executor: Executor, callback: (Result<ActualCapture>) -> Unit) {
+        if (closed || camera == null) { callback(Result.failure(IllegalStateException("相機尚未就緒"))); return }
+        if (applying || waitingForWhiteBalance) { callback(Result.failure(IllegalStateException("拍攝參數正在套用，請稍後再拍"))); return }
+        val rotation = DualCamera.photoRotation(view.display?.rotation ?: Surface.ROTATION_0, captureRotation)
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun finish(result: Result<ActualCapture>) { if (done.compareAndSet(false, true)) callback(result) }
+        processor.capture { frame -> executor.execute {
+            // After the timeout the caller has moved on and removed the file.
+            if (done.get()) { frame.getOrNull()?.recycle(); return@execute }
+            finish(frame.mapCatching { bitmap ->
+                try {
+                    // Encoded again once filmed, so this copy keeps every detail.
+                    file.outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, it)) { "照片編碼失敗" } }
+                } finally { bitmap.recycle() }
+                ExifInterface(file).apply { setAttribute(ExifInterface.TAG_ORIENTATION, DualCamera.exifOrientation(rotation).toString()); saveAttributes() }
+                latest
+            })
+        } }
+        // A camera that stopped sending frames would leave the shutter waiting.
+        delays.postDelayed({ finish(Result.failure(IllegalStateException("畫面沒有更新，請再拍一次"))) }, 3_000)
     }
 
     override fun close() { closed = true; generation++; delays.removeCallbacksAndMessages(null); recording?.stop(); provider?.unbindAll(); camera = null; imageCapture = null; videoCapture = null; processor.close() }

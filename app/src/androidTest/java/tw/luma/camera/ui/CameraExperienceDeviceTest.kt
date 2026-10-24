@@ -476,6 +476,50 @@ class CameraExperienceDeviceTest {
         }
     }
 
+    @Test fun dualPhotoSavesTheComposedFrameFilmedOnce() {
+        ready()
+        val model = model()
+        val before = model.state.value
+        var saved: android.net.Uri? = null
+        try {
+            ui.runOnIdle { model.mode(CaptureMode.PHOTO); model.saveOriginal(false); model.aspect(FrameAspect.RATIO_4_3); model.selectLut("builtin-2") }
+            ui.waitUntil(30_000) { model.state.value.ready && model.state.value.mode == CaptureMode.PHOTO }
+            org.junit.Assume.assumeTrue("Needs a phone that lists a front and back camera pair", model.state.value.dualAvailable)
+            ui.onNodeWithTag("controls-tray-toggle").performClick()
+            if (!model.state.value.dualPhoto) ui.onNodeWithTag("dual-toggle").performClick()
+            ui.onNodeWithTag("dual-toggle").assertIsSelected()
+            ui.onNodeWithTag("soft-skin-toggle").assertExists()
+            ui.onNodeWithTag("controls-tray-close").performClick()
+            ui.waitUntil(30_000) { model.state.value.ready }
+            assertFalse("A composed frame has no flash to fire", model.state.value.hasFlash)
+            val revision = model.state.value.captureFeedback.savedRevision
+            ui.onNodeWithTag("shutter").performClick()
+            ui.waitUntil(30_000) {
+                val current = model.state.value
+                !current.busy && current.captureFeedback.savedRevision == revision + 1 && current.savedMime == "image/jpeg" && current.savedUri != null
+            }
+            saved = model.state.value.savedUri
+            assertNull(model.state.value.message)
+            val photo = requireNotNull(ui.activity.contentResolver.openInputStream(requireNotNull(saved)).use { android.graphics.BitmapFactory.decodeStream(it) })
+            try {
+                // Upright 3:4 at the composed preview's detail, about 1080p or more on the short side.
+                assertEquals(3f / 4, photo.width.toFloat() / photo.height, .01f)
+                assertTrue(minOf(photo.width, photo.height) >= 1000)
+                for (y in 1..4) for (x in 1..4) {
+                    val color = photo.getPixel(photo.width*x/5, photo.height*y/5)
+                    assertTrue("The monochrome film must cover both pictures", abs(Color.red(color)-Color.green(color)) <= 6 && abs(Color.green(color)-Color.blue(color)) <= 6)
+                }
+            } finally { photo.recycle() }
+        } finally {
+            saved?.let { ui.activity.contentResolver.delete(it, null, null) }
+            ui.runOnIdle {
+                model.dual(before.dualPhoto); model.saveOriginal(before.saveOriginal); model.aspect(before.photoAspect)
+                model.selectLut(before.selectedLut); model.changeFilter { before.filter }; model.mode(before.mode)
+            }
+            ready()
+        }
+    }
+
     @Test fun galleryFiltersAndReturnsToLiveCamera() {
         ready()
         ui.onNodeWithTag("open-gallery").performClick()
