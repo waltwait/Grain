@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.25",
-  "versionCode": 58,
+  "versionName": "0.7.26",
+  "versionCode": 59,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.25/Grain-0.7.25-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.26/Grain-0.7.26-personal-fuji.apk",
   "apkSize": 15382940,
-  "apkSha256": "ca46a149fb014f1fbff46b388170fd38abda9a828058ad88c278923a7a6a3705",
+  "apkSha256": "0065aa6a40fe88d50fdcc69b4b06e0b6312a13d1de11b50493f6ee0cec359809",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 照片模式也能前後同拍：在照片的控制面板打開「前後同拍」，按快門會存下和畫面一模一樣的合成照片，右上角小窗、柔膚和底片都在。照片和錄影的開關分開。\n- 前後同拍的照片約 200–280 萬畫素，比一般照片小；打開時沒有閃光燈。"
+  "notes": "- 觀景窗新增富士相機風格的電子水平儀，拍照與錄影常駐輔助構圖。\n- 傾斜時顯示白色水平線；水平時（±1° 內）平滑對齊並轉為 Grain 品牌金色，伴隨輕微觸覺震動。\n- 直拿與橫拿自動旋轉對應，平放桌面俯拍時自動淡出隱藏。"
 }
