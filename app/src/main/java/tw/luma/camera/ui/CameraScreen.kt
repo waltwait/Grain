@@ -85,6 +85,7 @@ import tw.luma.camera.camera.CameraEngine
 import tw.luma.camera.camera.CameraOrientation
 import tw.luma.camera.camera.FocusOutcome
 import tw.luma.camera.camera.FrameAspect
+import tw.luma.camera.camera.HorizonTracker
 import kotlinx.coroutines.delay
 import tw.luma.camera.camera.shutterLabel
 import tw.luma.camera.gl.LutSurfaceProcessor
@@ -107,7 +108,25 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     val destinations = rememberSaveableStateHolder()
     var galleryOpen by rememberSaveable { mutableStateOf(false) }
     var updatesOpen by rememberSaveable { mutableStateOf(false) }
+    val horizonTracker = remember(context) { HorizonTracker(context) }
+    LaunchedEffect(orientation) { horizonTracker.orientation = orientation }
+    val horizonState by horizonTracker.state.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current
+    val cameraActive = !galleryOpen && !updatesOpen
+    DisposableEffect(horizonTracker, lifecycle, cameraActive) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && cameraActive) horizonTracker.enable()
+            if (event == Lifecycle.Event.ON_PAUSE) horizonTracker.disable()
+        }
+        lifecycle.lifecycle.addObserver(observer)
+        if (cameraActive && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            horizonTracker.enable()
+        }
+        onDispose {
+            lifecycle.lifecycle.removeObserver(observer)
+            horizonTracker.disable()
+        }
+    }
     var permitted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     var permissionRequested by rememberSaveable { mutableStateOf(false) }
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
@@ -337,6 +356,9 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         { cameraPermission.launch(Manifest.permission.CAMERA) }, { model.retry(); retry++ },
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
                     ViewfinderCaptureFeedback(state.captureFeedback.capturedPhotoId, Modifier.viewfinderFrame(frame))
+                    if (permitted && state.ready && state.cameraError == null) {
+                        FujiLevelIndicator(horizonState, Modifier.viewfinderFrame(frame))
+                    }
                     // Touch points come from the preview view, so the indicators share its frame.
                     if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { feedback ->
                         key(feedback.request) {
