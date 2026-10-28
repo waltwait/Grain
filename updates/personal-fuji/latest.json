@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.26",
-  "versionCode": 59,
+  "versionName": "0.7.27",
+  "versionCode": 60,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.26/Grain-0.7.26-personal-fuji.apk",
-  "apkSize": 15382940,
-  "apkSha256": "0065aa6a40fe88d50fdcc69b4b06e0b6312a13d1de11b50493f6ee0cec359809",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.27/Grain-0.7.27-personal-fuji.apk",
+  "apkSize": 15382936,
+  "apkSha256": "d25a54a52e139e90735742a083fe52fdfa3cb66d891fc8befa340b9980e1d110",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 觀景窗新增富士相機風格的電子水平儀，拍照與錄影常駐輔助構圖。\n- 傾斜時顯示白色水平線；水平時（±1° 內）平滑對齊並轉為 Grain 品牌金色，伴隨輕微觸覺震動。\n- 直拿與橫拿自動旋轉對應，平放桌面俯拍時自動淡出隱藏。"
+  "notes": "- 水平儀升級為富士 X 系列風格 2D 雙軸設計：採用左右對稱鏤空雙翼、外框卡尺刻度與中央微十字準心，對焦時不遮擋正中央主體。\n- 新增前後俯仰角（Pitch）指示，拍建築或風景時可同時對齊雙軸全金水平，防止透視變形；大幅俯仰拍攝時仰角桿自動淡出，僅保留左右水平雙翼。\n- 加入自適應防手震濾波、遲滯鎖定區間與觸覺震動冷卻，消除臨界角度微晃閃爍與重複誤震，並優化觀景窗重繪效能以降低耗電與發熱。"
 }
