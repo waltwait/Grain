@@ -110,7 +110,6 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
     var updatesOpen by rememberSaveable { mutableStateOf(false) }
     val horizonTracker = remember(context) { HorizonTracker(context) }
     LaunchedEffect(orientation) { horizonTracker.orientation = orientation }
-    val horizonState by horizonTracker.state.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current
     val cameraActive = !galleryOpen && !updatesOpen
     DisposableEffect(horizonTracker, lifecycle, cameraActive) {
@@ -357,7 +356,7 @@ fun CameraScreen(model: CameraViewModel, orientation: CameraOrientation = Camera
                         { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) })
                     ViewfinderCaptureFeedback(state.captureFeedback.capturedPhotoId, Modifier.viewfinderFrame(frame))
                     if (permitted && state.ready && state.cameraError == null) {
-                        FujiLevelIndicator(horizonState, Modifier.viewfinderFrame(frame))
+                        FujiLevelIndicator(horizonTracker.state, Modifier.viewfinderFrame(frame))
                     }
                     // Touch points come from the preview view, so the indicators share its frame.
                     if (permitted && state.ready && state.cameraError == null) focusFeedback?.let { feedback ->

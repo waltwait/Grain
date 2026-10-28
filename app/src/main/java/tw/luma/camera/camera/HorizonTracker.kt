@@ -8,6 +8,7 @@ import android.hardware.SensorManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.abs
 
 class HorizonTracker(context: Context) : SensorEventListener {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
@@ -21,8 +22,10 @@ class HorizonTracker(context: Context) : SensorEventListener {
 
     var orientation: CameraOrientation = CameraOrientation.UPRIGHT
         set(value) {
-            field = value
-            updateState()
+            if (field != value) {
+                field = value
+                updateState(force = true)
+            }
         }
 
     private val _state = MutableStateFlow(HorizonState())
@@ -49,18 +52,37 @@ class HorizonTracker(context: Context) : SensorEventListener {
             smoothedY = rawY
             smoothedZ = rawZ
             initialized = true
+            updateState(force = true)
         } else {
-            smoothedX = HorizonMath.smooth(smoothedX, rawX, 0.25f)
-            smoothedY = HorizonMath.smooth(smoothedY, rawY, 0.25f)
-            smoothedZ = HorizonMath.smooth(smoothedZ, rawZ, 0.25f)
+            smoothedX = HorizonMath.adaptiveSmooth(smoothedX, rawX)
+            smoothedY = HorizonMath.adaptiveSmooth(smoothedY, rawY)
+            smoothedZ = HorizonMath.adaptiveSmooth(smoothedZ, rawZ)
+            updateState(force = false)
         }
-
-        updateState()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
-    private fun updateState() {
-        _state.value = HorizonMath.calculate(smoothedX, smoothedY, smoothedZ, orientation)
+    private fun updateState(force: Boolean) {
+        val current = _state.value
+        val next = HorizonMath.calculate(
+            gx = smoothedX,
+            gy = smoothedY,
+            gz = smoothedZ,
+            orientation = orientation,
+            wasRollLevel = current.isLevel,
+            wasPitchLevel = current.isPitchLevel,
+        )
+        if (force || shouldEmit(current, next)) {
+            _state.value = next
+        }
+    }
+
+    private fun shouldEmit(old: HorizonState, next: HorizonState): Boolean {
+        if (old.isLevel != next.isLevel || old.isPitchLevel != next.isPitchLevel) return true
+        if (abs(old.alpha - next.alpha) >= 0.01f || abs(old.pitchAlpha - next.pitchAlpha) >= 0.01f) return true
+        if (abs(old.rollDegrees - next.rollDegrees) >= 0.04f) return true
+        if (abs(old.pitchDegrees - next.pitchDegrees) >= 0.04f) return true
+        return false
     }
 }
