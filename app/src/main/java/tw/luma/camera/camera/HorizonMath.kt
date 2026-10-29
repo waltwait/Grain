@@ -60,9 +60,10 @@ object HorizonMath {
             else -> (planeR - MIN_PLANE_GRAVITY) / (FULL_PLANE_GRAVITY - MIN_PLANE_GRAVITY)
         }
 
-        // Angle in degrees of the gravity vector in screen coordinates (-180..180)
-        // gx points right, gy points up. When upright, gy > 0.
-        val rawDegrees = Math.toDegrees(atan2(gx.toDouble(), gy.toDouble())).toFloat()
+        // Angle in degrees of the gravity vector in screen coordinates (-180..180).
+        // On Android, device X points right, Y points up.
+        // Clockwise physical rotation tilts upward contact force toward -X, so -gx tracks clockwise roll.
+        val rawDegrees = Math.toDegrees(atan2(-gx.toDouble(), gy.toDouble())).toFloat()
         val targetDegrees = orientation.sensorDegrees.toFloat()
 
         var rollDelta = (rawDegrees - targetDegrees) % 360f
