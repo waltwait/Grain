@@ -128,13 +128,13 @@ internal fun FujiLevelIndicator(state: HorizonState, modifier: Modifier = Modifi
     )
 
     val density = LocalDensity.current
-    val refInnerPx = with(density) { 43.dp.toPx() }
-    val refOuterPx = with(density) { 58.dp.toPx() }
-    val refCapHalfHeightPx = with(density) { 2.4.dp.toPx() }
-    val wingOuterPx = with(density) { 38.dp.toPx() }
+    val refInnerPx = with(density) { 65.dp.toPx() }
+    val refOuterPx = with(density) { 86.dp.toPx() }
+    val refCapHalfHeightPx = with(density) { 2.6.dp.toPx() }
+    val wingOuterPx = with(density) { 58.dp.toPx() }
     val reticleInnerPx = with(density) { 1.8.dp.toPx() }
     val reticleOuterPx = with(density) { 4.6.dp.toPx() }
-    val pitchHalfWidthPx = with(density) { 6.2.dp.toPx() }
+    val pitchHalfWidthPx = with(density) { 6.5.dp.toPx() }
     val maxPitchOffsetPx = with(density) { 14.dp.toPx() }
     val strokePx = with(density) { 1.5.dp.toPx() }
     val thinStrokePx = with(density) { 1.2.dp.toPx() }
