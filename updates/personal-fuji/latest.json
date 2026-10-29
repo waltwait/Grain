@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.27",
-  "versionCode": 60,
+  "versionName": "0.7.28",
+  "versionCode": 61,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.27/Grain-0.7.27-personal-fuji.apk",
-  "apkSize": 15382936,
-  "apkSha256": "d25a54a52e139e90735742a083fe52fdfa3cb66d891fc8befa340b9980e1d110",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.28/Grain-0.7.28-personal-fuji.apk",
+  "apkSize": 15382940,
+  "apkSha256": "a41b436f710b61126225c40b5e089c3df55fa8ce4bd9f6f717562b6f5c4c818e",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 水平儀升級為富士 X 系列風格 2D 雙軸設計：採用左右對稱鏤空雙翼、外框卡尺刻度與中央微十字準心，對焦時不遮擋正中央主體。\n- 新增前後俯仰角（Pitch）指示，拍建築或風景時可同時對齊雙軸全金水平，防止透視變形；大幅俯仰拍攝時仰角桿自動淡出，僅保留左右水平雙翼。\n- 加入自適應防手震濾波、遲滯鎖定區間與觸覺震動冷卻，消除臨界角度微晃閃爍與重複誤震，並優化觀景窗重繪效能以降低耗電與發熱。"
+  "notes": "- 觀景窗 2D 電子水平儀左右水平線加長：動態雙翼拉長約 1.7 倍，兩側參考卡尺同步向外延展，使手持傾斜的角度變化更醒目直覺。\n- 直拍與橫拍切換皆享有寬幅水平標尺，中央對焦窗口維持乾淨不遮擋主體。"
 }
