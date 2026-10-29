@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.7.28",
-  "versionCode": 61,
+  "versionName": "0.8.0",
+  "versionCode": 62,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.7.28/Grain-0.7.28-personal-fuji.apk",
-  "apkSize": 15382940,
-  "apkSha256": "a41b436f710b61126225c40b5e089c3df55fa8ce4bd9f6f717562b6f5c4c818e",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.8.0/Grain-0.8.0-personal-fuji.apk",
+  "apkSize": 15382936,
+  "apkSha256": "5e3d7b7430311b2356253e3ae3ad41d620beaddcbb73b1a1585400e5d6ed0ac1",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 觀景窗 2D 電子水平儀左右水平線加長：動態雙翼拉長約 1.7 倍，兩側參考卡尺同步向外延展，使手持傾斜的角度變化更醒目直覺。\n- 直拍與橫拍切換皆享有寬幅水平標尺，中央對焦窗口維持乾淨不遮擋主體。"
+  "notes": "- 修復橫向握持拍照或錄影時，電子水平儀無法對齊與點亮金色的問題；更正橫向旋轉時的感測器座標映射，橫向構圖可立即精準吸附並轉為 Grain 品牌金。\n- 橫拍與直拍皆完整支援 2D 雙軸水平與前後俯仰（Pitch）指示，輔助建築與風景構圖防止透視變形。"
 }
