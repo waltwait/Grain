@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "packageName": "tw.luma.camera",
-  "versionName": "0.8.0",
-  "versionCode": 62,
+  "versionName": "0.8.1",
+  "versionCode": 63,
   "minSdk": 29,
   "channel": "personal-fuji",
   "bundledFujiCount": 10,
-  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.8.0/Grain-0.8.0-personal-fuji.apk",
+  "apkUrl": "https://github.com/waltwait/Grain/releases/download/v0.8.1/Grain-0.8.1-personal-fuji.apk",
   "apkSize": 15382936,
-  "apkSha256": "5e3d7b7430311b2356253e3ae3ad41d620beaddcbb73b1a1585400e5d6ed0ac1",
+  "apkSha256": "af650ebde00aab26ec2e8ea97abd69dacff4366da3f105d2631ec23ec000c76d",
   "signingCertificateSha256": "e6c756c9525fbdad8035a1beb79eed96eb53243e9b537e3be94ab46c0c1217c8",
-  "notes": "- 修復橫向握持拍照或錄影時，電子水平儀無法對齊與點亮金色的問題；更正橫向旋轉時的感測器座標映射，橫向構圖可立即精準吸附並轉為 Grain 品牌金。\n- 橫拍與直拍皆完整支援 2D 雙軸水平與前後俯仰（Pitch）指示，輔助建築與風景構圖防止透視變形。"
+  "notes": "- 「影片轉檔」改用檔案選擇器，可選 .mov、.mkv、.webm、.avi 等格式，不再列出 MP4。\n- 在相簿點開影片會直接開始播放。"
 }
