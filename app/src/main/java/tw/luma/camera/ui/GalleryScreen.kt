@@ -75,6 +75,7 @@ import tw.luma.camera.gallery.FilmIndex
 import tw.luma.camera.gallery.GallerySearch
 import tw.luma.camera.gallery.SearchKey
 import androidx.compose.foundation.shape.CircleShape
+import tw.luma.camera.editor.ConvertibleVideos
 import tw.luma.camera.editor.PhotoEditorViewModel
 import tw.luma.camera.editor.VideoEditorViewModel
 import tw.luma.camera.editor.PhotoBatchProgress
@@ -120,13 +121,15 @@ internal fun GalleryScreen(model: GalleryViewModel, close: () -> Unit,
             else -> videoEditor.reject("照片和影片請分開選")
         }
     }
-    val videoConvertImport = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoBatchProgress.MAX_PHOTOS)) { uris ->
+    // The photo picker can filter by one type only, so conversion uses the file picker to list mov, mkv, webm, avi… without MP4.
+    // It has no pick limit; convert() refuses more than the batch maximum.
+    val videoConvertImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         importEditor.discard()
         videoEditor.convert(uris, onSaved)
     }
     val chooseMedia = { mediaImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
-    val chooseConvertVideo = { videoConvertImport.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
+    val chooseConvertVideo = { videoConvertImport.launch(ConvertibleVideos.MIME_TYPES) }
     LaunchedEffect(entries) { importEditor.setLuts(entries); videoEditor.setLuts(entries) }
     // Unfinished drafts survive tab switches, but a fully exported import starts fresh once the editor tab is left.
     LaunchedEffect(tabPager.settledPage) {
@@ -488,7 +491,8 @@ private fun GalleryVideo(item: GalleryItem, resumeMs: Long, savePosition: (Long)
     val player = remember(item.uri) { ExoPlayer.Builder(context).build().apply {
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         setHandleAudioBecomingNoisy(true)
-        setMediaItem(MediaItem.fromUri(item.uri)); seekTo(resumeMs); prepare()
+        // Only the settled page composes this, so opening a clip plays it; leaving the app pauses it and it does not restart on return.
+        setMediaItem(MediaItem.fromUri(item.uri)); seekTo(resumeMs); playWhenReady = true; prepare()
     } }
     val save by rememberUpdatedState(savePosition)
     var error by remember(player) { mutableStateOf<String?>(null) }
